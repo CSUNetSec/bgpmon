@@ -1,13 +1,16 @@
 package bgp
 
 import (
+	"errors"
+
 	"github.com/hamersaw/bgpmon/module"
 	"github.com/hamersaw/bgpmon/session"
 )
 
-func NewPrefixHijackModule(conf string, ios session.IOSessions) module.Moduler {
-	return nil
+func NewPrefixHijackModule(conf string, ios session.IOSessions) (module.Moduler, error) {
+	return nil, errors.New("TODO - start prefix hijack module - create sessions")
 }
+
 /*import (
 	"encoding/json"
 	"net"

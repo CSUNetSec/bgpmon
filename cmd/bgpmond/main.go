@@ -8,37 +8,45 @@ import (
 
 	"github.com/hamersaw/bgpmon/log"
 	"github.com/hamersaw/bgpmon/module"
-	//"github.com/hamersaw/bgpmon/module/bgp"
-	//"github.com/hamersaw/bgpmon/module/gobgp"
+	"github.com/hamersaw/bgpmon/module/bgp"
+	"github.com/hamersaw/bgpmon/module/gobgp"
 	pb "github.com/hamersaw/bgpmon/proto/bgpmond"
 	"github.com/hamersaw/bgpmon/session"
 
+	"github.com/BurntSushi/toml"
 	"github.com/google/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
-var debugOut, errorOut, ipAddress string
-var port int
+var configFile string
+var config BgpmondConfig
+
+type BgpmondConfig struct {
+	Address string
+	DebugOut string
+	ErrorOut string
+}
 
 func init() {
-	flag.StringVar(&debugOut, "debug_out", "discard", "debug output stream")
-	flag.StringVar(&errorOut, "error_out", "discard", "error output stream")
-	flag.StringVar(&ipAddress, "ip_address", "", "IP Address for GRPC server")
-	flag.IntVar(&port, "port", 12289, "Port for GRPC server")
+	flag.StringVar(&configFile, "config_file", "", "bgpmond toml configuration file")
 }
 
 func main() {
 	flag.Parse()
 
-	debugClose, errorClose, err := log.Init(debugOut, errorOut)
+	if _, err := toml.DecodeFile(configFile, &config); err != nil {
+		panic(err)
+	}
+
+	debugClose, errorClose, err := log.Init(config.DebugOut, config.ErrorOut)
 	if err != nil {
 		panic(err)
 	}
 	defer debugClose()
 	defer errorClose()
 
-	listen, err := net.Listen("tcp", fmt.Sprintf("%s:%d", ipAddress, port))
+	listen, err := net.Listen("tcp", config.Address)
 	if err != nil {
 		panic(err)
 	}
@@ -58,6 +66,48 @@ type Server struct {
 	modules  map[string]module.Moduler  //map from uuid to running module interface
 }
 
+/*
+ * Module RPC Calls
+ */
+func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (*pb.StartModuleResult, error) {
+	result := new(pb.StartModuleResult)
+	var mod module.Moduler
+	var err error
+
+	switch config.Type {
+	case pb.StartModuleConfig_GOBGP_LINK:
+		goBGPLinkConfig := config.GetGobgpLinkModule()
+		mod, err = gobgp.NewGoBGPLinkModule(goBGPLinkConfig.Address, session.IOSessions { nil, nil })
+	case pb.StartModuleConfig_PREFIX_HIJACK:
+		prefixHijackConfig := config.GetPrefixHijackModule()
+		mod, err = bgp.NewPrefixHijackModule(prefixHijackConfig.Prefix, session.IOSessions { nil, nil })
+	default:
+		result.Success = false
+		result.ErrorMessage = "unimplemented module type"
+		return result, nil
+	}
+
+	if err == nil {
+		moduleID := newID()
+		s.modules[moduleID] = mod
+
+		result.Success = true
+		result.ModuleId = moduleID
+	} else {
+		result.Success = false
+		result.ErrorMessage = fmt.Sprintf("%v", err)
+	}
+
+	return result, nil
+}
+
+func (s Server) StopModule(ctx context.Context, config *pb.StopModuleConfig) (*pb.StopModuleResult, error) {
+	return nil, nil
+}
+
+/*
+ * Session RPC Calls
+ */
 func (s Server) CloseSession(ctx context.Context, config *pb.CloseSessionConfig) (result *pb.CloseSessionResult, err error) {
 	err = errors.New("unimplemented")
 	return
@@ -65,37 +115,31 @@ func (s Server) CloseSession(ctx context.Context, config *pb.CloseSessionConfig)
 
 func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (*pb.OpenSessionResult, error) {
 	result := new(pb.OpenSessionResult)
-	sessionID := newID()
+	var sess session.Session
+	var err error
+
 	switch config.Type {
 	case pb.OpenSessionConfig_CASSANDRA:
 		casConfig := config.GetCassandraSession()
-		casSession, err := session.NewCassandraSession(casConfig.Username, casConfig.Password, casConfig.Hosts)
-		if err != nil {
-			result.Success = false
-			result.ErrorMessage = fmt.Sprintf("%v", err)
-			break
-		}
-
-		s.sessions[sessionID] = casSession
-
-		result.Success = true;
-		result.SessionId = sessionID
+		sess, err = session.NewCassandraSession(casConfig.Username, casConfig.Password, casConfig.Hosts)
 	case pb.OpenSessionConfig_FILE:
 		fileConfig := config.GetFileSession()
-		fileSession, err := session.NewFileSession(fileConfig.Filename)
-		if err != nil {
-			result.Success = false
-			result.ErrorMessage = fmt.Sprintf("%v", err)
-			break
-		}
-
-		s.sessions[sessionID] = fileSession
-
-		result.Success = true;
-		result.SessionId = sessionID
+		sess, err = session.NewFileSession(fileConfig.Filename)
 	default:
 		result.Success = false;
 		result.ErrorMessage = "unimplemented session type"
+		return result, nil
+	}
+
+	if err == nil {
+		sessionID := newID()
+		s.sessions[sessionID] = sess
+
+		result.Success = true
+		result.SessionId = sessionID
+	} else {
+		result.Success = false
+		result.ErrorMessage = fmt.Sprintf("*v", err)
 	}
 
 	return result, nil

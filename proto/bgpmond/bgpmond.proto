@@ -4,6 +4,8 @@ package bgpmond;
 
 service Bgpmond {
 	rpc CloseSession(CloseSessionConfig) returns (CloseSessionResult) {}
+	rpc StartModule(StartModuleConfig) returns (StartModuleResult) {}
+	rpc StopModule(StopModuleConfig) returns (StopModuleResult) {}
 	rpc OpenSession(OpenSessionConfig) returns (OpenSessionResult) {}
 }
 

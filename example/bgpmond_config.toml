@@ -1,0 +1,3 @@
+Address = ":12289"
+DebugOut = "stdout"
+ErrorOut = "stdout"
