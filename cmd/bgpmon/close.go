@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 
+	pb "github.com/hamersaw/bgpmon/proto/bgpmond"
+
 	cli "github.com/jawher/mow.cli"
+	"golang.org/x/net/context"
 )
 
 func Close(cmd *cli.Cmd) {
@@ -11,6 +14,20 @@ func Close(cmd *cli.Cmd) {
 	id := cmd.StringArg("ID", "", "id of bgpmond session")
 
 	cmd.Action = func() {
-		fmt.Println("TODO disconnecting session with id:", id)
+		client, err := getRPCClient()
+		if err != nil {
+			panic(err)
+		}
+
+		//config := new(pb.OpenSessionConfig)
+		config := &pb.CloseSessionConfig { *id }
+
+		ctx := context.Background()
+		res, err := client.CloseSession(ctx, config)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println(res)
 	}
 }
