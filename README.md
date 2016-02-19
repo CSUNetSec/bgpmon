@@ -2,10 +2,8 @@
 
 ##TODO
 - StartModule / StopModule
-
-- CloseSession
-- implement NewCassandraSession
-- implement NewFileSession
+	implement for prefix hijack module
+	implement for gobgp link
 
 - Bgpmond TOML configuration file
-	add implementation stuffs
+	add all kinds of options

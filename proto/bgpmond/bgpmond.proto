@@ -4,6 +4,8 @@ package bgpmond;
 
 service Bgpmond {
 	rpc CloseSession(CloseSessionConfig) returns (CloseSessionResult) {}
+	rpc ListModules(Empty) returns (ListModulesResult) {}
+	rpc ListSessions(Empty) returns (ListSessionsResult) {}
 	rpc StartModule(StartModuleConfig) returns (StartModuleResult) {}
 	rpc StopModule(StopModuleConfig) returns (StopModuleResult) {}
 	rpc OpenSession(OpenSessionConfig) returns (OpenSessionResult) {}
@@ -28,9 +30,11 @@ message CloseSessionResult {
  * List Messages
  */
 message ListModulesResult {
+	repeated string module_ids = 1;
 }
 
 message ListSessionsResult {
+	repeated string session_ids = 1;
 }
 
 /*

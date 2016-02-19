@@ -19,7 +19,6 @@ func Close(cmd *cli.Cmd) {
 			panic(err)
 		}
 
-		//config := new(pb.OpenSessionConfig)
 		config := &pb.CloseSessionConfig { *id }
 
 		ctx := context.Background()

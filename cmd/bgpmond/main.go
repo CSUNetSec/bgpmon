@@ -101,16 +101,57 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 	return result, nil
 }
 
+func (s Server) ListModules(ctx context.Context, config *pb.Empty) (*pb.ListModulesResult, error) {
+	moduleIDs := []string{}
+	for moduleID, _ := range s.modules {
+		moduleIDs = append(moduleIDs, moduleID)
+	}
+
+	result := pb.ListModulesResult { moduleIDs }
+	return &result, nil
+
+	return nil, errors.New("unimplemented")
+}
+
 func (s Server) StopModule(ctx context.Context, config *pb.StopModuleConfig) (*pb.StopModuleResult, error) {
-	return nil, nil
+	result := new(pb.StopModuleResult)
+	mod, ok := s.modules[config.ModuleId]
+	if !ok {
+		result.Success = false
+		result.ErrorMessage = "module ID not found"
+	} else {
+		mod.Cleanup()
+		delete(s.modules, config.ModuleId)
+		result.Success = true
+	}
+	return result, nil
 }
 
 /*
  * Session RPC Calls
  */
-func (s Server) CloseSession(ctx context.Context, config *pb.CloseSessionConfig) (result *pb.CloseSessionResult, err error) {
-	err = errors.New("unimplemented")
-	return
+func (s Server) CloseSession(ctx context.Context, config *pb.CloseSessionConfig) (*pb.CloseSessionResult, error) {
+	result := new(pb.CloseSessionResult)
+	sess, ok := s.sessions[config.SessionId]
+	if !ok {
+		result.Success = false
+		result.ErrorMessage = "session ID not found"
+	} else {
+		sess.Close()
+		delete(s.sessions, config.SessionId)
+		result.Success = true
+	}
+	return result, nil
+}
+
+func (s Server) ListSessions(ctx context.Context, config *pb.Empty) (*pb.ListSessionsResult, error) {
+	sessionIDs := []string{}
+	for sessionID, _ := range s.sessions {
+		sessionIDs = append(sessionIDs, sessionID)
+	}
+
+	result := pb.ListSessionsResult { sessionIDs }
+	return &result, nil
 }
 
 func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (*pb.OpenSessionResult, error) {

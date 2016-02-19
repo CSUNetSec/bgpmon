@@ -9,5 +9,6 @@ type IOSessions struct {
 }
 
 type Session interface {
+	Close() error
 	Write(string) error
 }
