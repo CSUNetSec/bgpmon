@@ -1,0 +1,199 @@
+// Copyright 2015, dsp@2f30.org, hamersaw@gmail.com
+// All rights reserved.
+// License follows repo LICENSE file
+
+syntax = "proto3";
+
+package bgpmond;
+
+service Bgpmond {
+  // Connects to a db cluster.
+  // Obtains the result of the attempt.
+  rpc Connect(ConnectConf) returns (ConnectResult) {}
+
+  // Streams BGP messages to the backend supported by the session matching the 
+  // session string.
+  // Obtains a status of the write
+  rpc Write(stream MonitorMessage) returns (WriteResult) {}
+
+  // Obtains a list of the modules that the servers supports
+  rpc ModuleList(Empty) returns (ModuleListResult) {}
+  
+  // Starts a Module with the specified name and options.
+  // Options are parsed on the server side and should be a valid JSON string
+  // On the returned message an identifier to control the module is provided.
+  rpc ModuleStart(ModuleStartConf) returns (ModuleStartResult) {}
+
+  // Sends commands to a running module identified by an ID
+  rpc ModuleSignal(ModuleSignalConf) returns (ModuleSignalResult) {}
+}
+
+//Empty message just for null arguments 
+message Empty {
+}
+
+// A message containing a module ID and a command with possible arguments to it
+message ModuleSignalConf {
+  string module_id = 1;
+  string signal_command = 2;
+  repeated string command_arguments = 3;
+}
+
+// The result of a ModuleSignal with status of execution and argument output.
+message ModuleSignalResult {
+  string module_id = 1;
+  bool signal_success = 2;
+  string signal_result = 3;
+}
+
+// A message describing a database or peer connection configuration.
+message ConnectConf {
+
+  enum ConType {
+    CASSANDRA = 0;
+    BGPD = 1;
+    FILE = 2;
+  }
+  // Type of Connection. example: "cassandra", or "bgpd"
+  ConType type = 1;
+
+  // The IP strings of the hosts to connect
+  repeated string host = 2;
+
+  // Filenames for the file type
+  string filenames = 3; 
+
+  // string for possible username on the connection
+  string username = 4;
+
+  // string for password
+  string password = 5;
+
+  // string of the existing session id to write the data to
+  string session_id = 6;
+} 
+
+//The result of a connect operation. contains the session string
+message ConnectResult {
+  // success flag
+  bool connect_success = 1;
+
+  // status or error string
+  string connect_result = 2;
+
+  // session string for any operation on that connection
+  string session_string = 3;
+}
+
+// contains the strings of the module names
+message ModuleListResult {
+  repeated string module_names = 1;
+}
+
+message ModuleStartConf {
+  string module_name = 1;
+  string module_config = 2;
+  repeated string module_in_sessions = 3;
+  repeated string module_out_sessions = 4;
+}
+
+message ModuleStartResult {
+  bool start_success = 1;
+  string id = 2;
+  string status = 3;
+}
+
+// Some sort of payload to be written or read from a session
+message MonitorMessage {
+
+  // Possible message types
+  enum Type {
+    AS_LOCATION = 0;
+    BGP_UPDATE = 1;
+    IP_LOCATION = 2;
+    PREFIX_LOCATION = 4;
+  }
+
+  // type string
+  Type message_type = 1;
+  
+  ASLocationMessage as_location_msg = 2;
+  BGPUpdateMessage bgp_update_msg = 3;
+  IPLocationMessage ip_location_msg = 4;
+  PrefixLocationMessage prefix_location_msg = 5;
+  
+  // our own metadata submessage
+  MetadataMessage metadata = 6;
+}
+
+message ASLocationMessage {
+  uint32 as_number = 1;
+  Location location = 2;
+}
+
+message BGPUpdateMessage {
+  bytes payload = 1;
+}
+
+message IPLocationMessage {
+  string ip_address = 1;
+  Location location = 2;
+}
+
+message PrefixLocationMessage {
+  string prefix_ip_address = 1;
+  uint32 prefix_mask = 2;
+  Location location = 3;
+}
+
+message Location {
+  string measure_date = 1;
+  string country_code = 2;
+  string state_code = 3;
+  string city = 4;
+  float latitude = 5;
+  float longitude = 6;
+}
+
+// Result of a Db Write operation
+message WriteResult {
+  // success flag
+  bool write_success = 1;
+
+  // Number of records written
+  uint64 number_of_records = 2;
+  
+  // status or error string
+  string write_result = 3;
+}
+
+// our own metadata context for source and geolocation
+message MetadataMessage {
+
+  // Source string 
+  enum Source {
+    MRTFile = 0;
+    BMPStream = 1;
+    BGPStream = 2;
+  }
+
+  Source source = 1;
+  
+  // MRT filename
+  string mrt_filename = 2;
+
+  // MRT collector ID
+  string mrt_collector_id = 3;
+
+  // MRT timestamp
+  int64 mrt_timestamp = 4;
+  
+  // BGP peer ip
+  bytes peer_ip = 5;
+
+  // BGP local ip
+  bytes local_ip = 6;
+
+  // number of message in collection (stream or file)
+  uint64 msg_number = 7;
+}

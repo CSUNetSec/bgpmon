@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package bgpmond;
+
+service Bgpmond {
+	rpc CloseSession(CloseSessionConfig) returns (CloseSessionResult) {}
+	rpc OpenSession(OpenSessionConfig) returns (OpenSessionResult) {}
+}
+
+message Empty {
+}
+
+/*
+ * Close Messages
+ */
+message CloseSessionConfig {
+	string session_id = 1;
+}
+
+message CloseSessionResult {
+	bool success = 1;
+	string error_message = 2;
+}
+
+/*
+ * List Messages
+ */
+message ListModulesResult {
+}
+
+message ListSessionsResult {
+}
+
+/*
+ * Start Messages
+ */
+message StartModuleConfig {
+	enum Type {
+		GOBGP_LINK = 0;
+		PREFIX_HIJACK = 1;
+	}
+
+	Type type = 1;
+	GoBGPLinkModule gobgp_link_module = 2;
+	PrefixHijackModule prefix_hijack_module = 3;
+}
+
+message GoBGPLinkModule {
+	string address = 1;
+}
+
+message PrefixHijackModule {
+	string prefix = 1;
+}
+
+message StartModuleResult {
+	bool success = 1;
+	string error_message = 2;
+	string module_id = 3;
+}
+
+/*
+ * Stop Message
+ */
+message StopModuleConfig {
+	string module_id = 1;
+}
+
+message StopModuleResult {
+	bool success = 1;
+	string error_message = 2;
+}
+
+/*
+ * Open Messages
+ */
+message OpenSessionConfig {
+	enum Type {
+		CASSANDRA = 0;
+		FILE = 1;
+	}
+
+	Type type = 1;
+	CassandraSession cassandra_session = 2;
+	FileSession file_session = 3;
+}
+
+message CassandraSession {
+	string username = 1;
+	string password = 2;
+	repeated string hosts = 3;
+}
+
+message FileSession {
+	string filename = 1;
+}
+
+message OpenSessionResult {
+	bool success = 1;
+	string error_message = 2;
+	string session_id = 3;
+}
