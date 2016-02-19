@@ -2,13 +2,15 @@ package bgp
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/hamersaw/bgpmon/module"
 	"github.com/hamersaw/bgpmon/session"
 )
 
-func NewPrefixHijackModule(conf string, ios session.IOSessions) (module.Moduler, error) {
-	return nil, errors.New("TODO - start prefix hijack module - create sessions")
+func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds uint32, timeoutSeconds uint32, inSessions []session.Session) (module.Moduler, error) {
+	fmt.Println("creating prefix hijack module with params", prefix, asNumbers, periodicSeconds, timeoutSeconds)
+	return nil, errors.New("TODO - start prefix hijack module")
 }
 
 /*import (

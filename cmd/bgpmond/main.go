@@ -77,10 +77,20 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 	switch config.Type {
 	case pb.StartModuleConfig_GOBGP_LINK:
 		goBGPLinkConfig := config.GetGobgpLinkModule()
-		mod, err = gobgp.NewGoBGPLinkModule(goBGPLinkConfig.Address, session.IOSessions { nil, nil })
+		outSessions, err := s.getSessions(goBGPLinkConfig.OutSessionId)
+		if err != nil {
+			break
+		}
+
+		mod, err = gobgp.NewGoBGPLinkModule(goBGPLinkConfig.Address, outSessions)
 	case pb.StartModuleConfig_PREFIX_HIJACK:
 		prefixHijackConfig := config.GetPrefixHijackModule()
-		mod, err = bgp.NewPrefixHijackModule(prefixHijackConfig.Prefix, session.IOSessions { nil, nil })
+		inSessions, err := s.getSessions(prefixHijackConfig.InSessionId)
+		if err != nil {
+			break
+		}
+
+		mod, err = bgp.NewPrefixHijackModule(prefixHijackConfig.Prefix, prefixHijackConfig.AsNumber, prefixHijackConfig.PeriodicSeconds, prefixHijackConfig.TimeoutSeconds, inSessions)
 	default:
 		result.Success = false
 		result.ErrorMessage = "unimplemented module type"
@@ -188,4 +198,18 @@ func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (
 
 func newID() string {
 	return uuid.New()
+}
+
+func (s Server) getSessions(sessionIDs []string) ([]session.Session, error) {
+	sessions := []session.Session{}
+	for _, sessionID := range sessionIDs {
+		sess, ok := s.sessions[sessionID]
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("session with id '%s' does not exist", sessionID))
+		}
+
+		sessions = append(sessions, sess)
+	}
+
+	return sessions, nil
 }

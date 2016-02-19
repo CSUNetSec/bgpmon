@@ -30,11 +30,11 @@ message CloseSessionResult {
  * List Messages
  */
 message ListModulesResult {
-	repeated string module_ids = 1;
+	repeated string module_id = 1;
 }
 
 message ListSessionsResult {
-	repeated string session_ids = 1;
+	repeated string session_id = 1;
 }
 
 /*
@@ -53,10 +53,15 @@ message StartModuleConfig {
 
 message GoBGPLinkModule {
 	string address = 1;
+	repeated string out_session_id = 2;
 }
 
 message PrefixHijackModule {
 	string prefix = 1;
+	repeated uint32 as_number = 2;
+	uint32 periodic_seconds = 3;
+	uint32 timeout_seconds = 4;
+	repeated string in_session_id = 5;
 }
 
 message StartModuleResult {
@@ -106,3 +111,7 @@ message OpenSessionResult {
 	string error_message = 2;
 	string session_id = 3;
 }
+
+/*
+ * Write Messages
+ */
