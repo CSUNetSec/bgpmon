@@ -10,7 +10,7 @@ import (
 	"github.com/hamersaw/bgpmon/module"
 	"github.com/hamersaw/bgpmon/module/bgp"
 	"github.com/hamersaw/bgpmon/module/gobgp"
-	pb "github.com/hamersaw/bgpmon/proto/bgpmond"
+	pb "github.com/hamersaw/bgpmon/protobuf"
 	"github.com/hamersaw/bgpmon/session"
 
 	"github.com/BurntSushi/toml"

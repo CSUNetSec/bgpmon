@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	pb "github.com/hamersaw/bgpmon/proto/bgpmond"
+	pb "github.com/hamersaw/bgpmon/protobuf"
 
 	cli "github.com/jawher/mow.cli"
 	"golang.org/x/net/context"

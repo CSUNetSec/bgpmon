@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	pb "github.com/hamersaw/bgpmon/proto/bgpmond"
+	pb "github.com/hamersaw/bgpmon/protobuf"
 
 	cli "github.com/jawher/mow.cli"
 	"google.golang.org/grpc"
