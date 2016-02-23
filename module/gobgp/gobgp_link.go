@@ -8,7 +8,10 @@ import (
 	"github.com/hamersaw/bgpmon/session"
 )
 
-func NewGoBGPLinkModule(address string, sessions []session.Session) (module.Moduler, error) {
+type GoBGPLinkConfig struct {
+}
+
+func NewGoBGPLinkModule(address string, sessions []session.Session, config GoBGPLinkConfig) (module.Moduler, error) {
 	fmt.Println("starting gobgp link module with arguments", address)
 	return nil, errors.New("TODO - start gobgp module - create io sessions")
 }

@@ -8,8 +8,12 @@ import (
 	"github.com/hamersaw/bgpmon/session"
 )
 
-func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds uint32, timeoutSeconds uint32, inSessions []session.Session) (module.Moduler, error) {
-	fmt.Println("creating prefix hijack module with params", prefix, asNumbers, periodicSeconds, timeoutSeconds)
+type PrefixHijackConfig struct {
+	Keyspaces []string
+}
+
+func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds uint32, timeoutSeconds uint32, inSessions []session.Session, config PrefixHijackConfig) (module.Moduler, error) {
+	fmt.Println("creating prefix hijack module with params", prefix, asNumbers, periodicSeconds, timeoutSeconds, config.Keyspaces)
 	return nil, errors.New("TODO - start prefix hijack module")
 }
 

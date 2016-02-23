@@ -1,3 +1,8 @@
 Address = ":12289"
 DebugOut = "stdout"
 ErrorOut = "stderr"
+
+[Modules.PrefixHijack]
+Keyspaces = ["csu_bgp_derived", "test_derived"]
+
+[Modules.GoBGPLink]

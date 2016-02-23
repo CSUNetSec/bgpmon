@@ -1,9 +1,11 @@
 # bgpmon
 
 ##TODO
-- StartModule / StopModule
-	implement for prefix hijack module
-	implement for gobgp link
-
+- implement modules on server side
+	gobgp-link
+	prefix-hijack
+- figure out how to write data
+	it's going to be a battle
+	an uphil one
 - Bgpmond TOML configuration file
-	add all kinds of options
+	writing data configuration

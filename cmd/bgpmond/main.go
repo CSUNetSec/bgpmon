@@ -20,12 +20,18 @@ import (
 )
 
 var configFile string
-var config BgpmondConfig
+var bgpmondConfig BgpmondConfig
 
 type BgpmondConfig struct {
 	Address string
 	DebugOut string
 	ErrorOut string
+	Modules ModuleConfig
+}
+
+type ModuleConfig struct {
+	PrefixHijack bgp.PrefixHijackConfig
+	GoBGPLink gobgp.GoBGPLinkConfig
 }
 
 func init() {
@@ -35,18 +41,18 @@ func init() {
 func main() {
 	flag.Parse()
 
-	if _, err := toml.DecodeFile(configFile, &config); err != nil {
+	if _, err := toml.DecodeFile(configFile, &bgpmondConfig); err != nil {
 		panic(err)
 	}
 
-	debugClose, errorClose, err := log.Init(config.DebugOut, config.ErrorOut)
+	debugClose, errorClose, err := log.Init(bgpmondConfig.DebugOut, bgpmondConfig.ErrorOut)
 	if err != nil {
 		panic(err)
 	}
 	defer debugClose()
 	defer errorClose()
 
-	listen, err := net.Listen("tcp", config.Address)
+	listen, err := net.Listen("tcp", bgpmondConfig.Address)
 	if err != nil {
 		panic(err)
 	}
@@ -76,21 +82,21 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 
 	switch config.Type {
 	case pb.StartModuleConfig_GOBGP_LINK:
-		goBGPLinkConfig := config.GetGobgpLinkModule()
-		outSessions, err := s.getSessions(goBGPLinkConfig.OutSessionId)
+		rpcConfig := config.GetGobgpLinkModule()
+		outSessions, err := s.getSessions(rpcConfig.OutSessionId)
 		if err != nil {
 			break
 		}
 
-		mod, err = gobgp.NewGoBGPLinkModule(goBGPLinkConfig.Address, outSessions)
+		mod, err = gobgp.NewGoBGPLinkModule(rpcConfig.Address, outSessions, bgpmondConfig.Modules.GoBGPLink)
 	case pb.StartModuleConfig_PREFIX_HIJACK:
-		prefixHijackConfig := config.GetPrefixHijackModule()
-		inSessions, err := s.getSessions(prefixHijackConfig.InSessionId)
+		rpcConfig := config.GetPrefixHijackModule()
+		inSessions, err := s.getSessions(rpcConfig.InSessionId)
 		if err != nil {
 			break
 		}
 
-		mod, err = bgp.NewPrefixHijackModule(prefixHijackConfig.Prefix, prefixHijackConfig.AsNumber, prefixHijackConfig.PeriodicSeconds, prefixHijackConfig.TimeoutSeconds, inSessions)
+		mod, err = bgp.NewPrefixHijackModule(rpcConfig.Prefix, rpcConfig.AsNumber, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack)
 	default:
 		result.Success = false
 		result.ErrorMessage = "unimplemented module type"
