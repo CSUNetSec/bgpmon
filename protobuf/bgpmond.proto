@@ -6,6 +6,7 @@ service Bgpmond {
 	rpc CloseSession(CloseSessionConfig) returns (CloseSessionResult) {}
 	rpc ListModules(Empty) returns (ListModulesResult) {}
 	rpc ListSessions(Empty) returns (ListSessionsResult) {}
+	rpc RunModule(RunModuleConfig)returns (RunModuleResult) {}
 	rpc StartModule(StartModuleConfig) returns (StartModuleResult) {}
 	rpc StopModule(StopModuleConfig) returns (StopModuleResult) {}
 	rpc OpenSession(OpenSessionConfig) returns (OpenSessionResult) {}
@@ -15,40 +16,11 @@ message Empty {
 }
 
 /*
- * Close Messages
+ * Module Messages
  */
-message CloseSessionConfig {
-	string session_id = 1;
-}
-
-message CloseSessionResult {
-	bool success = 1;
-	string error_message = 2;
-}
-
-/*
- * List Messages
- */
-message ListModulesResult {
-	repeated string module_id = 1;
-}
-
-message ListSessionsResult {
-	repeated string session_id = 1;
-}
-
-/*
- * Start Messages
- */
-message StartModuleConfig {
-	enum Type {
-		GOBGP_LINK = 0;
-		PREFIX_HIJACK = 1;
-	}
-
-	Type type = 1;
-	GoBGPLinkModule gobgp_link_module = 2;
-	PrefixHijackModule prefix_hijack_module = 3;
+enum ModuleType {
+	GOBGP_LINK = 0;
+	PREFIX_HIJACK = 1;
 }
 
 message GoBGPLinkModule {
@@ -64,15 +36,36 @@ message PrefixHijackModule {
 	repeated string in_session_id = 5;
 }
 
+/*
+ * Module Command Messages
+ */
+message ListModulesResult {
+	repeated string module_id = 1;
+}
+
+message RunModuleConfig {
+	ModuleType type = 1;
+	PrefixHijackModule prefix_hijack_module = 2;
+}
+
+message RunModuleResult {
+	bool success = 1;
+	string error_message = 2;
+	string module_message = 3;
+}
+
+message StartModuleConfig {
+	ModuleType type = 1;
+	GoBGPLinkModule gobgp_link_module = 2;
+	PrefixHijackModule prefix_hijack_module = 3;
+}
+
 message StartModuleResult {
 	bool success = 1;
 	string error_message = 2;
 	string module_id = 3;
 }
 
-/*
- * Stop Message
- */
 message StopModuleConfig {
 	string module_id = 1;
 }
@@ -83,17 +76,11 @@ message StopModuleResult {
 }
 
 /*
- * Open Messages
+ * Session Messages
  */
-message OpenSessionConfig {
-	enum Type {
-		CASSANDRA = 0;
-		FILE = 1;
-	}
-
-	Type type = 1;
-	CassandraSession cassandra_session = 2;
-	FileSession file_session = 3;
+enum SessionType {
+	CASSANDRA = 0;
+	FILE = 1;
 }
 
 message CassandraSession {
@@ -106,6 +93,28 @@ message FileSession {
 	string filename = 1;
 }
 
+/*
+ * Session Command Messages 
+ */
+message CloseSessionConfig {
+	string session_id = 1;
+}
+
+message CloseSessionResult {
+	bool success = 1;
+	string error_message = 2;
+}
+
+message ListSessionsResult {
+	repeated string session_id = 1;
+}
+
+message OpenSessionConfig {
+	SessionType type = 1;
+	CassandraSession cassandra_session = 2;
+	FileSession file_session = 3;
+}
+
 message OpenSessionResult {
 	bool success = 1;
 	string error_message = 2;
@@ -115,3 +124,48 @@ message OpenSessionResult {
 /*
  * Write Messages
  */
+message WriteConfig {
+	enum Type {
+		AS_NUMBER_LOCATION = 0;
+		BGP_UPDATE = 1;
+		IP_ADDRESS_LOCATION = 2;
+		PREFIX_LOCATION = 3;
+	}
+
+	Type type = 1;
+	ASNumberLocation as_number_location = 2;
+	BGPUpdateMessage bgp_update_message = 3;
+	IPAddressLocation ip_address_location = 4;
+	PrefixLocation prefix_location = 5;
+}
+
+message ASNumberLocation {
+	uint32 ASNumber = 1;
+	string measure_date = 2;
+	Location location = 3;
+}
+
+message BGPUpdateMessage {
+	
+}
+
+message IPAddressLocation {
+	string ip_address = 1;
+	string measure_date = 2;
+	Location location = 3;
+}
+
+message Location {
+	string country_code = 1;
+	string state_code = 2;
+	string city = 3;
+	double latitude = 4;
+	double longitude = 5;
+}
+
+message PrefixLocation {
+	string prefix_ip_address = 1;
+	uint32 prefix_mask = 2;
+	string measure_date = 3;
+	Location location = 4;
+}

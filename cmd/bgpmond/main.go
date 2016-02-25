@@ -27,11 +27,17 @@ type BgpmondConfig struct {
 	DebugOut string
 	ErrorOut string
 	Modules ModuleConfig
+	Sessions SessionConfig
 }
 
 type ModuleConfig struct {
 	PrefixHijack bgp.PrefixHijackConfig
 	GoBGPLink gobgp.GoBGPLinkConfig
+}
+
+type SessionConfig struct {
+	Cassandra session.CassandraConfig
+	File session.FileConfig
 }
 
 func init() {
@@ -75,13 +81,17 @@ type Server struct {
 /*
  * Module RPC Calls
  */
+func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.RunModuleResult, error) {
+	return nil, errors.New("unimplemented")
+}
+
 func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (*pb.StartModuleResult, error) {
 	result := new(pb.StartModuleResult)
 	var mod module.Moduler
 	var err error
 
 	switch config.Type {
-	case pb.StartModuleConfig_GOBGP_LINK:
+	case pb.ModuleType_GOBGP_LINK:
 		rpcConfig := config.GetGobgpLinkModule()
 		outSessions, err := s.getSessions(rpcConfig.OutSessionId)
 		if err != nil {
@@ -89,7 +99,7 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 		}
 
 		mod, err = gobgp.NewGoBGPLinkModule(rpcConfig.Address, outSessions, bgpmondConfig.Modules.GoBGPLink)
-	case pb.StartModuleConfig_PREFIX_HIJACK:
+	case pb.ModuleType_PREFIX_HIJACK:
 		rpcConfig := config.GetPrefixHijackModule()
 		inSessions, err := s.getSessions(rpcConfig.InSessionId)
 		if err != nil {
@@ -176,12 +186,12 @@ func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (
 	var err error
 
 	switch config.Type {
-	case pb.OpenSessionConfig_CASSANDRA:
-		casConfig := config.GetCassandraSession()
-		sess, err = session.NewCassandraSession(casConfig.Username, casConfig.Password, casConfig.Hosts)
-	case pb.OpenSessionConfig_FILE:
-		fileConfig := config.GetFileSession()
-		sess, err = session.NewFileSession(fileConfig.Filename)
+	case pb.SessionType_CASSANDRA:
+		rpcConfig := config.GetCassandraSession()
+		sess, err = session.NewCassandraSession(rpcConfig.Username, rpcConfig.Password, rpcConfig.Hosts, bgpmondConfig.Sessions.Cassandra)
+	case pb.SessionType_FILE:
+		rpcConfig := config.GetFileSession()
+		sess, err = session.NewFileSession(rpcConfig.Filename, bgpmondConfig.Sessions.File)
 	default:
 		result.Success = false;
 		result.ErrorMessage = "unimplemented session type"

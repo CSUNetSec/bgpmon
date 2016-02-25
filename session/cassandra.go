@@ -1,16 +1,29 @@
 package session
 
 import (
+	"fmt"
 	"errors"
+
+	pb "github.com/hamersaw/bgpmon/protobuf"
 
 	"github.com/gocql/gocql"
 )
 
-type CassandraSession struct {
-	session *gocql.Session
+type CassandraConfig struct {
+	MessageTypes map[string][]InsertConfig
 }
 
-func NewCassandraSession(username, password string, hosts []string) (Session, error) {
+type InsertConfig struct {
+	Statement string
+	Values []string
+}
+
+type CassandraSession struct {
+	session *gocql.Session
+	insertStatements map[pb.WriteConfig_Type][]InsertConfig
+}
+
+func NewCassandraSession(username, password string, hosts []string, config CassandraConfig) (Session, error) {
 	cluster := gocql.NewCluster(hosts...)
 	cluster.Consistency = gocql.LocalOne
 	cluster.ProtoVersion = 4
@@ -23,7 +36,23 @@ func NewCassandraSession(username, password string, hosts []string) (Session, er
 		return nil, err
 	}
 
-	cassSession := CassandraSession { session }
+	insertStatements := make(map[pb.WriteConfig_Type][]InsertConfig)
+	for key, value := range config.MessageTypes {
+		switch key {
+		case "ASNumberLocation":
+			insertStatements[pb.WriteConfig_AS_NUMBER_LOCATION] = value
+		case "BGPUpdateMessage":
+			insertStatements[pb.WriteConfig_BGP_UPDATE] = value
+		case "IPAddressLocation":
+			insertStatements[pb.WriteConfig_IP_ADDRESS_LOCATION] = value
+		case "PrefixLocation":
+			insertStatements[pb.WriteConfig_PREFIX_LOCATION] = value
+		default:
+			return nil, errors.New(fmt.Sprintf("Unknown message type '%s' in cassandra session", key))
+		}
+	}
+
+	cassSession := CassandraSession { session, insertStatements }
 	return cassSession, nil
 }
 

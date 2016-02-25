@@ -23,7 +23,7 @@ func StartGoBGPDLinkModule(cmd *cli.Cmd) {
 		}
 
 		config := new(pb.StartModuleConfig)
-		config.Type = pb.StartModuleConfig_GOBGP_LINK
+		config.Type = pb.ModuleType_GOBGP_LINK
 		config.GobgpLinkModule = &pb.GoBGPLinkModule { *address, strings.Split(*outSessions, ",") }
 
 		ctx := context.Background()
@@ -68,7 +68,7 @@ func StartPrefixHijackModule(cmd *cli.Cmd) {
 		}
 
 		config := new(pb.StartModuleConfig)
-		config.Type = pb.StartModuleConfig_PREFIX_HIJACK
+		config.Type = pb.ModuleType_PREFIX_HIJACK
 		config.PrefixHijackModule = &prefixHijack
 
 		ctx := context.Background()

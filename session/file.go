@@ -4,11 +4,15 @@ import (
 	"errors"
 )
 
+type FileConfig struct {
+
+}
+
 type FileSession struct {
 
 }
 
-func NewFileSession(filename string) (Session, error) {
+func NewFileSession(filename string, config FileConfig) (Session, error) {
 	fileSession := FileSession { }
 	return fileSession, nil
 }
