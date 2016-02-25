@@ -82,7 +82,30 @@ type Server struct {
  * Module RPC Calls
  */
 func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.RunModuleResult, error) {
-	return nil, errors.New("unimplemented")
+	result := new(pb.RunModuleResult)
+	var mod module.Moduler
+	var err error
+
+	switch config.Type {
+	case pb.ModuleType_PREFIX_HIJACK:
+		mod, err = s.createModule(config.GetPrefixHijackModule())
+	default:
+		result.Success = false
+		result.ErrorMessage = "unimplemented module type"
+		return result, nil
+	}
+
+	if err == nil {
+		mod.Run()
+
+		result.Success = true
+		result.ModuleMessage = mod.Status()
+	} else {
+		result.Success = false
+		result.ErrorMessage = fmt.Sprintf("%v", err)
+	}
+
+	return result, nil
 }
 
 func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (*pb.StartModuleResult, error) {
@@ -92,21 +115,9 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 
 	switch config.Type {
 	case pb.ModuleType_GOBGP_LINK:
-		rpcConfig := config.GetGobgpLinkModule()
-		outSessions, err := s.getSessions(rpcConfig.OutSessionId)
-		if err != nil {
-			break
-		}
-
-		mod, err = gobgp.NewGoBGPLinkModule(rpcConfig.Address, outSessions, bgpmondConfig.Modules.GoBGPLink)
+		mod, err = s.createModule(config.GetGobgpLinkModule())
 	case pb.ModuleType_PREFIX_HIJACK:
-		rpcConfig := config.GetPrefixHijackModule()
-		inSessions, err := s.getSessions(rpcConfig.InSessionId)
-		if err != nil {
-			break
-		}
-
-		mod, err = bgp.NewPrefixHijackModule(rpcConfig.Prefix, rpcConfig.AsNumber, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack)
+		mod, err = s.createModule(config.GetPrefixHijackModule())
 	default:
 		result.Success = false
 		result.ErrorMessage = "unimplemented module type"
@@ -125,6 +136,34 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 	}
 
 	return result, nil
+}
+
+func (s Server) createModule(config interface{}) (module.Moduler, error) {
+	var mod module.Moduler
+	var err error
+
+	switch config.(type) {
+	case *pb.GoBGPLinkModule:
+		rpcConfig := config.(*pb.GoBGPLinkModule)
+		outSessions, err := s.getSessions(rpcConfig.OutSessionId)
+		if err != nil {
+			break
+		}
+
+		mod, err = gobgp.NewGoBGPLinkModule(rpcConfig.Address, outSessions, bgpmondConfig.Modules.GoBGPLink)
+	case *pb.PrefixHijackModule:
+		rpcConfig := config.(*pb.PrefixHijackModule)
+		inSessions, err := s.getSessions(rpcConfig.InSessionId)
+		if err != nil {
+			break
+		}
+
+		mod, err = bgp.NewPrefixHijackModule(rpcConfig.Prefix, rpcConfig.AsNumber, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack)
+	default:
+		return nil, errors.New("unimplemented module type")
+	}
+
+	return mod, err
 }
 
 func (s Server) ListModules(ctx context.Context, config *pb.Empty) (*pb.ListModulesResult, error) {

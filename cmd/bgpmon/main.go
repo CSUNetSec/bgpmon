@@ -57,6 +57,10 @@ func main() {
 		cmd.Command("file", "open a session to a file", OpenFile)
 	})
 
+	bgpmon.Command("run", "run a single execution module on bgpmond host", func(cmd *cli.Cmd) {
+		cmd.Command("prefix-hijack", "run a single execution prefix hijack module", RunPrefixHijackModule)
+	})
+
 	bgpmon.Command("start", "start a module on bgpmond host", func(cmd *cli.Cmd) {
 		cmd.Command("gobgpd-link", "start a gobgpd link module", StartGoBGPDLinkModule)
 		cmd.Command("prefix-hijack", "start prefix hijack module", StartPrefixHijackModule)
