@@ -11,15 +11,6 @@ const (
 	COMDIE = iota
 	COMRUN
 	COMSTATUS
-	NUMCOM
-)
-
-var (
-	comstrs = [NUMCOM]string{
-		"DIE",
-		"RUN",
-		"STATUS",
-	}
 )
 
 type Module struct {
@@ -44,13 +35,8 @@ type ModuleCommand struct {
 	Args    []string
 }
 
-func NewModuleCommand(command string, args []string) (*ModuleCommand, error) {
-	for i, v := range comstrs {
-		if command == v {
-			return &ModuleCommand{Command: i, Args: args}, nil
-		}
-	}
-	return nil, errors.New("no such command supported by the module infrastructure")
+func NewModule() Module {
+	return Module{commandChannel: make(chan ModuleCommand)}
 }
 
 func (m *Module) GetCommandChannel() chan ModuleCommand {
@@ -91,7 +77,7 @@ func Init(m Moduler) error {
 					m.Cleanup()
 					return
 				case COMRUN:
-					log.Debl.Printf("COMRUN for module:%+v\n", m)
+					log.Debl.Printf("COMRUN for module:%v\n", m)
 					m.Run()
 				case COMSTATUS:
 					log.Debl.Printf("COMSTATUS for module:%+v\n", m)
@@ -121,13 +107,10 @@ func SchedulePeriodic(m Moduler, periodicSeconds, timeoutSeconds uint32) error {
 		for {
 			select {
 			case <-pchan:
-				log.Debl.Printf("Running module:%+v\n", m)
-				command, _ := NewModuleCommand("COMRUN", nil)
-				cchan <- *command
+				cchan <- ModuleCommand{COMRUN, nil}
 			case <-tchan:
-				log.Debl.Printf("Timeout for module:%+v\n", m)
-				command, _ := NewModuleCommand("COMDIE", nil)
-				cchan <- *command
+				//TODO - what do we do here? shouldn't shut down the application, just stop it's execution
+				//cchan <- ModuleCommand{COMDIE, nil}
 			}
 		}
 	}(m)

@@ -1,8 +1,8 @@
 package bgp
 
 import (
-	"errors"
 	"fmt"
+	"net"
 
 	"github.com/CSUNetSec/bgpmon/log"
 	"github.com/CSUNetSec/bgpmon/module"
@@ -19,19 +19,25 @@ type PrefixHijackModule struct {
 	prefixIPAddress string
 	prefixMask      uint32
 	asNumbers       []uint32
-	preiodicSeconds uint32
+	periodicSeconds uint32
 	timeoutSeconds  uint32
 	inSessions      []session.Session
 	keyspaces       []string
 }
 
 func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds uint32, timeoutSeconds uint32, inSessions []session.Session, config PrefixHijackConfig) (module.Moduler, error) {
-	fmt.Println("creating prefix hijack module with params", prefix, asNumbers, periodicSeconds, timeoutSeconds, config.Keyspaces)
-	return nil, errors.New("TODO - start prefix hijack module")
+	log.Debl.Printf("creating prefix hijack module")
+	_, ipNet, err := net.ParseCIDR(prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	mask, _ := ipNet.Mask.Size()
+	return &PrefixHijackModule{module.NewModule(), ipNet.IP.String(), uint32(mask), asNumbers, periodicSeconds, timeoutSeconds, inSessions, config.Keyspaces}, nil
 }
 
 func (p *PrefixHijackModule) Run() error {
-	log.Debl.Printf("Running prefix hijack module\n")
+	fmt.Printf("Running prefix hijack module\n")
 	return nil
 }
 

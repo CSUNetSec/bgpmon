@@ -1,6 +1,6 @@
 # Basic BGPmonD configuration
 Address = ":12289"
-DebugOut = "stdout"
+DebugOut = "discard"
 ErrorOut = "stderr"
 
 # Configuration for Prefix Hijack Modules

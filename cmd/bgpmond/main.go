@@ -152,8 +152,7 @@ func (s Server) StopModule(ctx context.Context, config *pb.StopModuleConfig) (*p
 	if !ok {
 		return nil, errors.New("module ID not found")
 	} else {
-		command, _ := module.NewModuleCommand("COMDIE", nil)
-		mod.GetCommandChannel() <- *command
+		mod.GetCommandChannel() <- module.ModuleCommand{module.COMDIE, nil}
 		delete(s.modules, config.ModuleId)
 	}
 
