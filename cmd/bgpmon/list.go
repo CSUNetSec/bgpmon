@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	pb "github.com/hamersaw/bgpmon/protobuf"
+	pb "github.com/CSUNetSec/bgpmon/protobuf"
 
 	cli "github.com/jawher/mow.cli"
 	"golang.org/x/net/context"

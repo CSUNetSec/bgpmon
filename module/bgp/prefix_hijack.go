@@ -4,12 +4,25 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hamersaw/bgpmon/module"
-	"github.com/hamersaw/bgpmon/session"
+	"github.com/CSUNetSec/bgpmon/log"
+	"github.com/CSUNetSec/bgpmon/module"
+	"github.com/CSUNetSec/bgpmon/session"
 )
 
+//struct for use in parsing bgpmond toml configuration file
 type PrefixHijackConfig struct {
 	Keyspaces []string
+}
+
+type PrefixHijackModule struct {
+	module.Module
+	prefixIPAddress string
+	prefixMask      uint32
+	asNumbers       []uint32
+	preiodicSeconds uint32
+	timeoutSeconds  uint32
+	inSessions      []session.Session
+	keyspaces       []string
 }
 
 func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds uint32, timeoutSeconds uint32, inSessions []session.Session, config PrefixHijackConfig) (module.Moduler, error) {
@@ -17,15 +30,28 @@ func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds ui
 	return nil, errors.New("TODO - start prefix hijack module")
 }
 
+func (p *PrefixHijackModule) Run() error {
+	log.Debl.Printf("Running prefix hijack module\n")
+	return nil
+}
+
+func (p *PrefixHijackModule) Status() string {
+	return ""
+}
+
+func (p *PrefixHijackModule) Cleanup() {
+	return
+}
+
 /*import (
 	"encoding/json"
 	"net"
 	"time"
 
-	"github.com/hamersaw/bgpmon/log"
-	"github.com/hamersaw/bgpmon/module"
-	"github.com/hamersaw/bgpmon/protocol"
-	"github.com/hamersaw/bgpmon/session"
+	"github.com/CSUNetSec/bgpmon/log"
+	"github.com/CSUNetSec/bgpmon/module"
+	"github.com/CSUNetSec/bgpmon/protocol"
+	"github.com/CSUNetSec/bgpmon/session"
 
 	"github.com/gocql/gocql"
 )

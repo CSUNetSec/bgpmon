@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hamersaw/bgpmon/log"
+	"github.com/CSUNetSec/bgpmon/log"
 )
 
 const (

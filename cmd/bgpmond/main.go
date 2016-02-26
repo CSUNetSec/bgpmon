@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/hamersaw/bgpmon/log"
-	"github.com/hamersaw/bgpmon/module"
-	"github.com/hamersaw/bgpmon/module/bgp"
-	"github.com/hamersaw/bgpmon/module/gobgp"
-	pb "github.com/hamersaw/bgpmon/protobuf"
-	"github.com/hamersaw/bgpmon/session"
+	"github.com/CSUNetSec/bgpmon/log"
+	"github.com/CSUNetSec/bgpmon/module"
+	"github.com/CSUNetSec/bgpmon/module/bgp"
+	"github.com/CSUNetSec/bgpmon/module/gobgp"
+	pb "github.com/CSUNetSec/bgpmon/protobuf"
+	"github.com/CSUNetSec/bgpmon/session"
 
 	"github.com/BurntSushi/toml"
 	"github.com/google/uuid"
@@ -100,6 +100,7 @@ func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.
 	}
 
 	mod.GetCommandChannel() <- module.ModuleCommand{module.COMRUN, nil}
+	//TODO need to kill after execution ends
 	return &pb.RunModuleResult{mod.Status()}, nil
 }
 

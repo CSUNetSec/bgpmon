@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hamersaw/bgpmon/module"
-	"github.com/hamersaw/bgpmon/session"
+	"github.com/CSUNetSec/bgpmon/module"
+	"github.com/CSUNetSec/bgpmon/session"
 )
 
 type GoBGPLinkConfig struct {

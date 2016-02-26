@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	pb "github.com/hamersaw/bgpmon/protobuf"
+	pb "github.com/CSUNetSec/bgpmon/protobuf"
 
 	"github.com/gocql/gocql"
 )
