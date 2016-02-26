@@ -19,7 +19,7 @@ func StopModule(cmd *cli.Cmd) {
 			panic(err)
 		}
 
-		config := &pb.StopModuleConfig { *id }
+		config := &pb.StopModuleConfig{*id}
 
 		ctx := context.Background()
 		res, err := client.StopModule(ctx, config)

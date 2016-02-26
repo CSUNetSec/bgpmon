@@ -5,15 +5,13 @@ import (
 )
 
 type FileConfig struct {
-
 }
 
 type FileSession struct {
-
 }
 
 func NewFileSession(filename string, config FileConfig) (Session, error) {
-	fileSession := FileSession { }
+	fileSession := FileSession{}
 	return fileSession, nil
 }
 

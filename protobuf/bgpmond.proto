@@ -3,12 +3,12 @@ syntax = "proto3";
 package bgpmond;
 
 service Bgpmond {
-	rpc CloseSession(CloseSessionConfig) returns (CloseSessionResult) {}
+	rpc CloseSession(CloseSessionConfig) returns (Empty) {}
 	rpc ListModules(Empty) returns (ListModulesResult) {}
 	rpc ListSessions(Empty) returns (ListSessionsResult) {}
 	rpc RunModule(RunModuleConfig)returns (RunModuleResult) {}
 	rpc StartModule(StartModuleConfig) returns (StartModuleResult) {}
-	rpc StopModule(StopModuleConfig) returns (StopModuleResult) {}
+	rpc StopModule(StopModuleConfig) returns (Empty) {}
 	rpc OpenSession(OpenSessionConfig) returns (OpenSessionResult) {}
 }
 
@@ -49,8 +49,6 @@ message RunModuleConfig {
 }
 
 message RunModuleResult {
-	bool success = 1;
-	string error_message = 2;
 	string module_message = 3;
 }
 
@@ -61,18 +59,11 @@ message StartModuleConfig {
 }
 
 message StartModuleResult {
-	bool success = 1;
-	string error_message = 2;
 	string module_id = 3;
 }
 
 message StopModuleConfig {
 	string module_id = 1;
-}
-
-message StopModuleResult {
-	bool success = 1;
-	string error_message = 2;
 }
 
 /*
@@ -100,11 +91,6 @@ message CloseSessionConfig {
 	string session_id = 1;
 }
 
-message CloseSessionResult {
-	bool success = 1;
-	string error_message = 2;
-}
-
 message ListSessionsResult {
 	repeated string session_id = 1;
 }
@@ -116,8 +102,6 @@ message OpenSessionConfig {
 }
 
 message OpenSessionResult {
-	bool success = 1;
-	string error_message = 2;
 	string session_id = 3;
 }
 

@@ -21,6 +21,8 @@ bgpmon list
 	sessions
 	modules
 
+bgpmon run
+
 bgpmon start
 
 bgpmon status

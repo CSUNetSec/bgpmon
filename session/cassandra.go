@@ -1,8 +1,8 @@
 package session
 
 import (
-	"fmt"
 	"errors"
+	"fmt"
 
 	pb "github.com/hamersaw/bgpmon/protobuf"
 
@@ -15,11 +15,11 @@ type CassandraConfig struct {
 
 type InsertConfig struct {
 	Statement string
-	Values []string
+	Values    []string
 }
 
 type CassandraSession struct {
-	session *gocql.Session
+	session          *gocql.Session
 	insertStatements map[pb.WriteConfig_Type][]InsertConfig
 }
 
@@ -27,8 +27,8 @@ func NewCassandraSession(username, password string, hosts []string, config Cassa
 	cluster := gocql.NewCluster(hosts...)
 	cluster.Consistency = gocql.LocalOne
 	cluster.ProtoVersion = 4
-	cluster.RetryPolicy = &gocql.SimpleRetryPolicy { 10 }
-	cluster.Authenticator = gocql.PasswordAuthenticator { Username: username, Password: password }
+	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{10}
+	cluster.Authenticator = gocql.PasswordAuthenticator{Username: username, Password: password}
 	cluster.NumConns = 16
 
 	session, err := cluster.CreateSession()
@@ -52,7 +52,7 @@ func NewCassandraSession(username, password string, hosts []string, config Cassa
 		}
 	}
 
-	cassSession := CassandraSession { session, insertStatements }
+	cassSession := CassandraSession{session, insertStatements}
 	return cassSession, nil
 }
 

@@ -24,7 +24,7 @@ func StartGoBGPDLinkModule(cmd *cli.Cmd) {
 
 		config := new(pb.StartModuleConfig)
 		config.Type = pb.ModuleType_GOBGP_LINK
-		config.GobgpLinkModule = &pb.GoBGPLinkModule { *address, strings.Split(*outSessions, ",") }
+		config.GobgpLinkModule = &pb.GoBGPLinkModule{*address, strings.Split(*outSessions, ",")}
 
 		ctx := context.Background()
 		res, err := client.StartModule(ctx, config)
@@ -42,7 +42,7 @@ func StartPrefixHijackModule(cmd *cli.Cmd) {
 	asNumbers := cmd.StringArg("AS_NUMBERS", "", "comma separated list of valid as numbers that advertise this prefix")
 	periodicSeconds := cmd.IntOpt("periodic_secs", 30, "delay between monitoring checks for a prefix hijack")
 	timeoutSeconds := cmd.IntOpt("timeout_secs", 60, "stop module execution if time exceeds this limit")
-	inSessions :=  cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to use as input")
+	inSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to use as input")
 
 	cmd.Action = func() {
 		client, err := getRPCClient()
@@ -59,12 +59,12 @@ func StartPrefixHijackModule(cmd *cli.Cmd) {
 			asNums = append(asNums, uint32(asNum))
 		}
 
-		prefixHijack := pb.PrefixHijackModule {
-			Prefix: *prefix,
-			AsNumber: asNums,
+		prefixHijack := pb.PrefixHijackModule{
+			Prefix:          *prefix,
+			AsNumber:        asNums,
 			PeriodicSeconds: uint32(*periodicSeconds),
-			TimeoutSeconds: uint32(*timeoutSeconds),
-			InSessionId: strings.Split(*inSessions, ","),
+			TimeoutSeconds:  uint32(*timeoutSeconds),
+			InSessionId:     strings.Split(*inSessions, ","),
 		}
 
 		config := new(pb.StartModuleConfig)

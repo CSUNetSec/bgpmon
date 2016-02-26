@@ -24,7 +24,7 @@ func OpenCassandra(cmd *cli.Cmd) {
 
 		config := new(pb.OpenSessionConfig)
 		config.Type = pb.SessionType_CASSANDRA
-		config.CassandraSession = &pb.CassandraSession { *username, *password, strings.Split(*hosts, ",")}
+		config.CassandraSession = &pb.CassandraSession{*username, *password, strings.Split(*hosts, ",")}
 
 		ctx := context.Background()
 		res, err := client.OpenSession(ctx, config)
@@ -48,7 +48,7 @@ func OpenFile(cmd *cli.Cmd) {
 
 		config := new(pb.OpenSessionConfig)
 		config.Type = pb.SessionType_FILE
-		config.FileSession = &pb.FileSession { *filename }
+		config.FileSession = &pb.FileSession{*filename}
 
 		ctx := context.Background()
 		res, err := client.OpenSession(ctx, config)

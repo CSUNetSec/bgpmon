@@ -1,7 +1,6 @@
 package module
 
 import (
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -24,132 +23,114 @@ var (
 )
 
 type Module struct {
-	Configstr string
-	Timers    TimerConfig
-	comch     chan ModuleCommand
-	Id        string
+	commandChannel chan ModuleCommand
+	runTicker      *time.Ticker
+	timeoutTimer   *time.Timer
+}
+
+type Moduler interface {
+	GetCommandChannel() chan ModuleCommand
+	Run() error
+	Status() string
+	Cleanup()
+	SetRunTicker(*time.Ticker)
+	GetRunTicker() *time.Ticker
+	SetTimeoutTimer(*time.Timer)
+	GetTimeoutTimer() *time.Timer
 }
 
 type ModuleCommand struct {
-	command int
-	args    []string
-	//XXX: for more complicated commands we can add a channel for the result to be returned.
+	Command int
+	Args    []string
 }
 
-func MakeCommand(command string, args []string) (*ModuleCommand, error) {
+func NewModuleCommand(command string, args []string) (*ModuleCommand, error) {
 	for i, v := range comstrs {
 		if command == v {
-			return &ModuleCommand{command: i, args: args}, nil
+			return &ModuleCommand{Command: i, Args: args}, nil
 		}
 	}
 	return nil, errors.New("no such command supported by the module infrastructure")
 }
 
-type TimerConfig struct {
-	TimeoutSecs  int `json:"TimeoutSeconds"`
-	PeriodicSecs int `json:"PeriodicSeconds"`
+func (m *Module) GetCommandChannel() chan ModuleCommand {
+	return m.commandChannel
 }
 
-type Moduler interface {
-	GetComChan() chan ModuleCommand
-	Run() error
-	Status() string
-	Cleanup()
-	getTimers() (int, int)
-	getId() string
-	SetId(string)
+func (m *Module) SetRunTicker(runTicker *time.Ticker) {
+	m.runTicker = runTicker
 }
 
-func (m *Module) ParseTimerConfig(conf string) error {
-	if err := json.Unmarshal([]byte(conf), &m.Timers); err != nil {
-		return err
-	}
-	return nil
+func (m *Module) GetRunTicker() *time.Ticker {
+	return m.runTicker
 }
 
-func (m *Module) GetComChan() chan ModuleCommand {
-	return m.comch
+func (m *Module) SetTimeoutTimer(timeoutTimer *time.Timer) {
+	m.timeoutTimer = timeoutTimer
 }
 
-func (m *Module) getId() string {
-	return m.Id
+func (m *Module) GetTimeoutTimer() *time.Timer {
+	return m.timeoutTimer
 }
 
-func (m *Module) SetId(a string) {
-	m.Id = a
-}
-
-//returns the periodic and timeout settings as integers
-func (m *Module) getTimers() (int, int) {
-	return m.Timers.PeriodicSecs, m.Timers.TimeoutSecs
-}
-
-func NewModule(conf string) Module {
-	return Module{Configstr: conf, comch: make(chan ModuleCommand)}
-}
-
-func Init(a Moduler, rmap *map[string]Moduler) error {
-	var (
-		pchan, tchan <-chan time.Time //this chans have not been initialized yet so select should ignore them
-		tick         *time.Ticker
-		timer        *time.Timer
-	)
-	psec, tsec := a.getTimers()
-	if psec != 0 {
-		tick = time.NewTicker(time.Duration(psec) * time.Second)
-		pchan = tick.C //now pchan is not nil
-	}
-	if tsec != 0 {
-		//although quite extreme, sometimes we might get a COMDIE
-		//while the timer goroutine is running, and this might get us eventually bombed.
-		//keep a ref to the timeout timer to stop it explicitely.
-		timer = time.NewTimer(time.Duration(tsec) * time.Second)
-		tchan = timer.C
-	}
-	(*rmap)[a.getId()] = a //safe the module under an id
-	log.Debl.Printf("Module:%+v, starting under ID:%s\n", a, a.getId())
-	go func(a Moduler) {
-		cchan := a.GetComChan()
+func Init(m Moduler) error {
+	go func(m Moduler) {
+		cchan := m.GetCommandChannel()
 		for {
 			select {
 			case command := <-cchan:
-				switch command.command {
+				switch command.Command {
 				case COMDIE:
-					log.Debl.Printf("COMDIE for module:%+v\n", a)
-					if tick != nil {
-						tick.Stop()
+					log.Debl.Printf("COMDIE for module:%+v\n", m)
+					if m.GetRunTicker() != nil {
+						m.GetRunTicker().Stop()
 					}
-					if timer != nil {
-						timer.Stop()
+					if m.GetTimeoutTimer != nil {
+						m.GetTimeoutTimer().Stop()
 					}
-					delete(*rmap, a.getId())
-					log.Debl.Printf("running map of server that called the module:%+v", *rmap)
-					a.Cleanup()
+					m.Cleanup()
 					return
 				case COMRUN:
-					log.Debl.Printf("COMRUN for module:%+v\n", a)
-					a.Run()
+					log.Debl.Printf("COMRUN for module:%+v\n", m)
+					m.Run()
 				case COMSTATUS:
-					log.Debl.Printf("COMSTATUS for module:%+v\n", a)
-					a.Status()
+					log.Debl.Printf("COMSTATUS for module:%+v\n", m)
+					m.Status()
 				default:
-					log.Errl.Printf("Command chan for module:%+v got undefined command number:%v", a, command)
+					log.Errl.Printf("Command chan for module:%+v got undefined command number:%v", m, command)
 
 				}
-			case <-pchan:
-				log.Debl.Printf("Running module:%+v\n", a)
-				a.Run()
-			case <-tchan:
-				log.Debl.Printf("Timeout for module:%+v\n", a)
-				if tick != nil {
-					tick.Stop()
-				}
-				delete(*rmap, a.getId())
-				log.Debl.Printf("running map of server that called the module:%+v", *rmap)
-				a.Cleanup()
-				return
 			}
 		}
-	}(a)
+	}(m)
+
+	return nil
+}
+
+func SchedulePeriodic(m Moduler, periodicSeconds, timeoutSeconds uint32) error {
+	runTicker := time.NewTicker(time.Duration(periodicSeconds) * time.Second)
+	m.SetRunTicker(runTicker)
+	pchan := runTicker.C
+
+	timeoutTimer := time.NewTimer(time.Duration(timeoutSeconds) * time.Second)
+	m.SetTimeoutTimer(timeoutTimer)
+	tchan := timeoutTimer.C
+
+	go func(m Moduler) {
+		cchan := m.GetCommandChannel()
+		for {
+			select {
+			case <-pchan:
+				log.Debl.Printf("Running module:%+v\n", m)
+				command, _ := NewModuleCommand("COMRUN", nil)
+				cchan <- *command
+			case <-tchan:
+				log.Debl.Printf("Timeout for module:%+v\n", m)
+				command, _ := NewModuleCommand("COMDIE", nil)
+				cchan <- *command
+			}
+		}
+	}(m)
+
 	return nil
 }

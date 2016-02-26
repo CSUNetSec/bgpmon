@@ -23,21 +23,21 @@ var configFile string
 var bgpmondConfig BgpmondConfig
 
 type BgpmondConfig struct {
-	Address string
+	Address  string
 	DebugOut string
 	ErrorOut string
-	Modules ModuleConfig
+	Modules  ModuleConfig
 	Sessions SessionConfig
 }
 
 type ModuleConfig struct {
 	PrefixHijack bgp.PrefixHijackConfig
-	GoBGPLink gobgp.GoBGPLinkConfig
+	GoBGPLink    gobgp.GoBGPLinkConfig
 }
 
 type SessionConfig struct {
 	Cassandra session.CassandraConfig
-	File session.FileConfig
+	File      session.FileConfig
 }
 
 func init() {
@@ -63,9 +63,9 @@ func main() {
 		panic(err)
 	}
 
-	bgpmondServer := Server {
+	bgpmondServer := Server{
 		sessions: make(map[string]session.Session),
-		modules: make(map[string]module.Moduler),
+		modules:  make(map[string]module.Moduler),
 	}
 
 	grpcServer := grpc.NewServer()
@@ -82,88 +82,58 @@ type Server struct {
  * Module RPC Calls
  */
 func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.RunModuleResult, error) {
-	result := new(pb.RunModuleResult)
 	var mod module.Moduler
 	var err error
 
 	switch config.Type {
 	case pb.ModuleType_PREFIX_HIJACK:
 		mod, err = s.createModule(config.GetPrefixHijackModule())
+		if err != nil {
+			break
+		}
 	default:
-		result.Success = false
-		result.ErrorMessage = "unimplemented module type"
-		return result, nil
+		return nil, errors.New("unimplemented module type")
 	}
 
-	if err == nil {
-		mod.Run()
-
-		result.Success = true
-		result.ModuleMessage = mod.Status()
-	} else {
-		result.Success = false
-		result.ErrorMessage = fmt.Sprintf("%v", err)
+	if err != nil {
+		return nil, err
 	}
 
-	return result, nil
+	mod.GetCommandChannel() <- module.ModuleCommand{module.COMRUN, nil}
+	return &pb.RunModuleResult{mod.Status()}, nil
 }
 
 func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (*pb.StartModuleResult, error) {
-	result := new(pb.StartModuleResult)
 	var mod module.Moduler
 	var err error
 
 	switch config.Type {
 	case pb.ModuleType_GOBGP_LINK:
 		mod, err = s.createModule(config.GetGobgpLinkModule())
+		if err != nil {
+			break
+		}
+
+		mod.GetCommandChannel() <- module.ModuleCommand{module.COMRUN, nil}
 	case pb.ModuleType_PREFIX_HIJACK:
-		mod, err = s.createModule(config.GetPrefixHijackModule())
-	default:
-		result.Success = false
-		result.ErrorMessage = "unimplemented module type"
-		return result, nil
-	}
-
-	if err == nil {
-		moduleID := newID()
-		s.modules[moduleID] = mod
-
-		result.Success = true
-		result.ModuleId = moduleID
-	} else {
-		result.Success = false
-		result.ErrorMessage = fmt.Sprintf("%v", err)
-	}
-
-	return result, nil
-}
-
-func (s Server) createModule(config interface{}) (module.Moduler, error) {
-	var mod module.Moduler
-	var err error
-
-	switch config.(type) {
-	case *pb.GoBGPLinkModule:
-		rpcConfig := config.(*pb.GoBGPLinkModule)
-		outSessions, err := s.getSessions(rpcConfig.OutSessionId)
+		rpcConfig := config.GetPrefixHijackModule()
+		mod, err = s.createModule(rpcConfig)
 		if err != nil {
 			break
 		}
 
-		mod, err = gobgp.NewGoBGPLinkModule(rpcConfig.Address, outSessions, bgpmondConfig.Modules.GoBGPLink)
-	case *pb.PrefixHijackModule:
-		rpcConfig := config.(*pb.PrefixHijackModule)
-		inSessions, err := s.getSessions(rpcConfig.InSessionId)
-		if err != nil {
-			break
-		}
-
-		mod, err = bgp.NewPrefixHijackModule(rpcConfig.Prefix, rpcConfig.AsNumber, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack)
+		module.SchedulePeriodic(mod, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds)
 	default:
 		return nil, errors.New("unimplemented module type")
 	}
 
-	return mod, err
+	if err != nil {
+		return nil, err
+	}
+
+	moduleID := newID()
+	s.modules[moduleID] = mod
+	return &pb.StartModuleResult{moduleID}, nil
 }
 
 func (s Server) ListModules(ctx context.Context, config *pb.Empty) (*pb.ListModulesResult, error) {
@@ -172,41 +142,37 @@ func (s Server) ListModules(ctx context.Context, config *pb.Empty) (*pb.ListModu
 		moduleIDs = append(moduleIDs, moduleID)
 	}
 
-	result := pb.ListModulesResult { moduleIDs }
-	return &result, nil
-
-	return nil, errors.New("unimplemented")
+	return &pb.ListModulesResult{moduleIDs}, nil
 }
 
-func (s Server) StopModule(ctx context.Context, config *pb.StopModuleConfig) (*pb.StopModuleResult, error) {
-	result := new(pb.StopModuleResult)
+func (s Server) StopModule(ctx context.Context, config *pb.StopModuleConfig) (*pb.Empty, error) {
 	mod, ok := s.modules[config.ModuleId]
+
 	if !ok {
-		result.Success = false
-		result.ErrorMessage = "module ID not found"
+		return nil, errors.New("module ID not found")
 	} else {
-		mod.Cleanup()
+		command, _ := module.NewModuleCommand("COMDIE", nil)
+		mod.GetCommandChannel() <- *command
 		delete(s.modules, config.ModuleId)
-		result.Success = true
 	}
-	return result, nil
+
+	return &pb.Empty{}, nil
 }
 
 /*
  * Session RPC Calls
  */
-func (s Server) CloseSession(ctx context.Context, config *pb.CloseSessionConfig) (*pb.CloseSessionResult, error) {
-	result := new(pb.CloseSessionResult)
+func (s Server) CloseSession(ctx context.Context, config *pb.CloseSessionConfig) (*pb.Empty, error) {
 	sess, ok := s.sessions[config.SessionId]
+
 	if !ok {
-		result.Success = false
-		result.ErrorMessage = "session ID not found"
+		return nil, errors.New("session ID not found")
 	} else {
 		sess.Close()
 		delete(s.sessions, config.SessionId)
-		result.Success = true
 	}
-	return result, nil
+
+	return &pb.Empty{}, nil
 }
 
 func (s Server) ListSessions(ctx context.Context, config *pb.Empty) (*pb.ListSessionsResult, error) {
@@ -215,12 +181,10 @@ func (s Server) ListSessions(ctx context.Context, config *pb.Empty) (*pb.ListSes
 		sessionIDs = append(sessionIDs, sessionID)
 	}
 
-	result := pb.ListSessionsResult { sessionIDs }
-	return &result, nil
+	return &pb.ListSessionsResult{sessionIDs}, nil
 }
 
 func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (*pb.OpenSessionResult, error) {
-	result := new(pb.OpenSessionResult)
 	var sess session.Session
 	var err error
 
@@ -228,31 +192,68 @@ func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (
 	case pb.SessionType_CASSANDRA:
 		rpcConfig := config.GetCassandraSession()
 		sess, err = session.NewCassandraSession(rpcConfig.Username, rpcConfig.Password, rpcConfig.Hosts, bgpmondConfig.Sessions.Cassandra)
+		if err != nil {
+			break
+		}
 	case pb.SessionType_FILE:
 		rpcConfig := config.GetFileSession()
 		sess, err = session.NewFileSession(rpcConfig.Filename, bgpmondConfig.Sessions.File)
+		if err != nil {
+			break
+		}
 	default:
-		result.Success = false;
-		result.ErrorMessage = "unimplemented session type"
-		return result, nil
+		return nil, errors.New("unimplemented session type")
 	}
 
-	if err == nil {
-		sessionID := newID()
-		s.sessions[sessionID] = sess
-
-		result.Success = true
-		result.SessionId = sessionID
-	} else {
-		result.Success = false
-		result.ErrorMessage = fmt.Sprintf("*v", err)
+	if err != nil {
+		return nil, err
 	}
 
-	return result, nil
+	sessionID := newID()
+	s.sessions[sessionID] = sess
+	return &pb.OpenSessionResult{sessionID}, nil
 }
+
+/*
+ * Miscellaneous Functions
+ */
 
 func newID() string {
 	return uuid.New()
+}
+
+func (s Server) createModule(config interface{}) (module.Moduler, error) {
+	var mod module.Moduler
+
+	switch config.(type) {
+	case *pb.GoBGPLinkModule:
+		rpcConfig := config.(*pb.GoBGPLinkModule)
+		outSessions, err := s.getSessions(rpcConfig.OutSessionId)
+		if err != nil {
+			return nil, err
+		}
+
+		mod, err = gobgp.NewGoBGPLinkModule(rpcConfig.Address, outSessions, bgpmondConfig.Modules.GoBGPLink)
+		if err != nil {
+			return nil, err
+		}
+	case *pb.PrefixHijackModule:
+		rpcConfig := config.(*pb.PrefixHijackModule)
+		inSessions, err := s.getSessions(rpcConfig.InSessionId)
+		if err != nil {
+			return nil, err
+		}
+
+		mod, err = bgp.NewPrefixHijackModule(rpcConfig.Prefix, rpcConfig.AsNumber, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, errors.New("unimplemented module type")
+	}
+
+	module.Init(mod)
+	return mod, nil
 }
 
 func (s Server) getSessions(sessionIDs []string) ([]session.Session, error) {
