@@ -12,9 +12,10 @@ import (
 )
 
 func StartGoBGPDLinkModule(cmd *cli.Cmd) {
-	cmd.Spec = "ADDRESS SESSION_IDS"
+	cmd.Spec = "ADDRESS SESSION_IDS [--module_id]"
 	address := cmd.StringArg("ADDRESS", "", "address of gobgpd instance")
 	outSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids use as output")
+	moduleID := cmd.StringOpt("module_id", getUUID(), "id of new module")
 
 	cmd.Action = func() {
 		client, err := getRPCClient()
@@ -24,6 +25,7 @@ func StartGoBGPDLinkModule(cmd *cli.Cmd) {
 
 		config := new(pb.StartModuleConfig)
 		config.Type = pb.ModuleType_GOBGP_LINK
+		config.ModuleId = *moduleID
 		config.GobgpLinkModule = &pb.GoBGPLinkModule{*address, strings.Split(*outSessions, ",")}
 
 		ctx := context.Background()
@@ -37,12 +39,13 @@ func StartGoBGPDLinkModule(cmd *cli.Cmd) {
 }
 
 func StartPrefixHijackModule(cmd *cli.Cmd) {
-	cmd.Spec = "PREFIX AS_NUMBERS SESSION_IDS [--periodic_secs] [--timeout_secs]"
+	cmd.Spec = "PREFIX AS_NUMBERS SESSION_IDS [--module_id] [--periodic_secs] [--timeout_secs]"
 	prefix := cmd.StringArg("PREFIX", "", "prefix to monitor")
 	asNumbers := cmd.StringArg("AS_NUMBERS", "", "comma separated list of valid as numbers that advertise this prefix")
+	inSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to use as input")
+	moduleID := cmd.StringOpt("module_id", getUUID(), "id of new module")
 	periodicSeconds := cmd.IntOpt("periodic_secs", 30, "delay between monitoring checks for a prefix hijack")
 	timeoutSeconds := cmd.IntOpt("timeout_secs", 60, "stop module execution if time exceeds this limit")
-	inSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to use as input")
 
 	cmd.Action = func() {
 		client, err := getRPCClient()
@@ -62,13 +65,14 @@ func StartPrefixHijackModule(cmd *cli.Cmd) {
 		prefixHijack := pb.PrefixHijackModule{
 			Prefix:          *prefix,
 			AsNumber:        asNums,
-			PeriodicSeconds: uint32(*periodicSeconds),
-			TimeoutSeconds:  uint32(*timeoutSeconds),
+			PeriodicSeconds: int32(*periodicSeconds),
+			TimeoutSeconds:  int32(*timeoutSeconds),
 			InSessionId:     strings.Split(*inSessions, ","),
 		}
 
 		config := new(pb.StartModuleConfig)
 		config.Type = pb.ModuleType_PREFIX_HIJACK
+		config.ModuleId = *moduleID
 		config.PrefixHijackModule = &prefixHijack
 
 		ctx := context.Background()

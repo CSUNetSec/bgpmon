@@ -1,8 +1,9 @@
 package bgp
 
 import (
-	"fmt"
+	"errors"
 	"net"
+	"time"
 
 	"github.com/CSUNetSec/bgpmon/log"
 	"github.com/CSUNetSec/bgpmon/module"
@@ -16,28 +17,76 @@ type PrefixHijackConfig struct {
 
 type PrefixHijackModule struct {
 	module.Module
-	prefixIPAddress string
-	prefixMask      uint32
+	prefixIPAddress net.IP
+	prefixMask      int
 	asNumbers       []uint32
-	periodicSeconds uint32
-	timeoutSeconds  uint32
-	inSessions      []session.Session
+	periodicSeconds int32
+	timeoutSeconds  int32
+	inSessions      []session.CassandraSession
 	keyspaces       []string
+	status          *PrefixHijackStatus
 }
 
-func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds uint32, timeoutSeconds uint32, inSessions []session.Session, config PrefixHijackConfig) (module.Moduler, error) {
+type PrefixHijackStatus struct {
+	ExecutionCount    uint
+	LastExecutionTime time.Time
+}
+
+func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds, timeoutSeconds int32, inSessions []session.Session, config PrefixHijackConfig) (module.Moduler, error) {
 	log.Debl.Printf("creating prefix hijack module")
+	//parse cidr address
 	_, ipNet, err := net.ParseCIDR(prefix)
 	if err != nil {
 		return nil, err
 	}
 
 	mask, _ := ipNet.Mask.Size()
-	return &PrefixHijackModule{module.NewModule(), ipNet.IP.String(), uint32(mask), asNumbers, periodicSeconds, timeoutSeconds, inSessions, config.Keyspaces}, nil
+
+	//check that all sessions are cassandra sessions
+	inSess := []session.CassandraSession{}
+	for _, sess := range inSessions {
+		casSess, ok := sess.(session.CassandraSession)
+		if !ok {
+			return nil, errors.New("only cassandra sessions are supported for prefix hijack module")
+		}
+
+		inSess = append(inSess, casSess)
+	}
+
+	return &PrefixHijackModule{module.NewModule(), ipNet.IP, mask, asNumbers, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}}, nil
 }
 
 func (p *PrefixHijackModule) Run() error {
-	fmt.Printf("Running prefix hijack module\n")
+	log.Debl.Printf("Running prefix hijack module\n")
+
+	//set detection start and end time
+	endTime := time.Now().UTC()
+	startTime := endTime.Add(time.Duration(-1 * p.periodicSeconds) * time.Second)
+	if startTime.After(p.status.LastExecutionTime) { //set start time to min(LastExecutionTime, time.Now()-periodicSecs)
+		startTime = p.status.LastExecutionTime
+	}
+
+	//determine time buckets to be queried
+	timeBuckets, err := getTimeBuckets(startTime, endTime)
+	if err != nil {
+		return err
+	}
+
+	//parse min and max ip addresses
+	minIPAddress, maxIPAddress, err := getIPRange(p.prefixIPAddress, p.prefixMask)
+	if err != nil {
+		return err
+	}
+
+	//loop through time buckets
+	for _, timeBucket := range timeBuckets {
+		//TODO - loop over sessions/keyspaces/timebuckets/... - need a better way of configuring this
+		log.Debl.Printf("determining prefix hijack for time_bucket:%v min_ip:%v max_ip:%v\n", timeBucket, minIPAddress, maxIPAddress)
+	}
+
+	//update status variables
+	p.status.ExecutionCount++
+	p.status.LastExecutionTime = endTime
 	return nil
 }
 

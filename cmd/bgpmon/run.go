@@ -37,7 +37,7 @@ func RunPrefixHijackModule(cmd *cli.Cmd) {
 			Prefix:          *prefix,
 			AsNumber:        asNums,
 			PeriodicSeconds: 0,
-			TimeoutSeconds:  uint32(*timeoutSeconds),
+			TimeoutSeconds:  int32(*timeoutSeconds),
 			InSessionId:     strings.Split(*inSessions, ","),
 		}
 

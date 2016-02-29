@@ -6,6 +6,7 @@ import (
 
 	pb "github.com/CSUNetSec/bgpmon/protobuf"
 
+	"github.com/google/uuid"
 	cli "github.com/jawher/mow.cli"
 	"google.golang.org/grpc"
 )
@@ -80,6 +81,10 @@ func main() {
 	})
 
 	bgpmon.Run(os.Args)
+}
+
+func getUUID() string {
+	return uuid.New()
 }
 
 func getRPCClient() (pb.BgpmondClient, error) {

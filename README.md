@@ -7,5 +7,3 @@
 - figure out how to write data
 	it's going to be a battle
 	an uphil one
-- Bgpmond TOML configuration file
-	writing data configuration

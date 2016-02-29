@@ -1,7 +1,6 @@
 package module
 
 import (
-	"errors"
 	"time"
 
 	"github.com/CSUNetSec/bgpmon/log"
@@ -93,7 +92,7 @@ func Init(m Moduler) error {
 	return nil
 }
 
-func SchedulePeriodic(m Moduler, periodicSeconds, timeoutSeconds uint32) error {
+func SchedulePeriodic(m Moduler, periodicSeconds, timeoutSeconds int32) error {
 	runTicker := time.NewTicker(time.Duration(periodicSeconds) * time.Second)
 	m.SetRunTicker(runTicker)
 	pchan := runTicker.C

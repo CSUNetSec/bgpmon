@@ -14,7 +14,6 @@ import (
 	"github.com/CSUNetSec/bgpmon/session"
 
 	"github.com/BurntSushi/toml"
-	"github.com/google/uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -105,6 +104,10 @@ func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.
 }
 
 func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (*pb.StartModuleResult, error) {
+	if _, ok := s.modules[config.ModuleId]; ok {
+		return nil, errors.New("module id already exists")
+	}
+
 	var mod module.Moduler
 	var err error
 
@@ -132,9 +135,8 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 		return nil, err
 	}
 
-	moduleID := newID()
-	s.modules[moduleID] = mod
-	return &pb.StartModuleResult{moduleID}, nil
+	s.modules[config.ModuleId] = mod
+	return &pb.StartModuleResult{config.ModuleId}, nil
 }
 
 func (s Server) ListModules(ctx context.Context, config *pb.Empty) (*pb.ListModulesResult, error) {
@@ -185,6 +187,10 @@ func (s Server) ListSessions(ctx context.Context, config *pb.Empty) (*pb.ListSes
 }
 
 func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (*pb.OpenSessionResult, error) {
+	if _, ok := s.sessions[config.SessionId]; ok {
+		return nil, errors.New("session id already exists")
+	}
+
 	var sess session.Session
 	var err error
 
@@ -209,18 +215,13 @@ func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (
 		return nil, err
 	}
 
-	sessionID := newID()
-	s.sessions[sessionID] = sess
-	return &pb.OpenSessionResult{sessionID}, nil
+	s.sessions[config.SessionId] = sess
+	return &pb.OpenSessionResult{config.SessionId}, nil
 }
 
 /*
  * Miscellaneous Functions
  */
-
-func newID() string {
-	return uuid.New()
-}
 
 func (s Server) createModule(config interface{}) (module.Moduler, error) {
 	var mod module.Moduler

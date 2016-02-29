@@ -31,8 +31,8 @@ message GoBGPLinkModule {
 message PrefixHijackModule {
 	string prefix = 1;
 	repeated uint32 as_number = 2;
-	uint32 periodic_seconds = 3;
-	uint32 timeout_seconds = 4;
+	int32 periodic_seconds = 3;
+	int32 timeout_seconds = 4;
 	repeated string in_session_id = 5;
 }
 
@@ -54,8 +54,9 @@ message RunModuleResult {
 
 message StartModuleConfig {
 	ModuleType type = 1;
-	GoBGPLinkModule gobgp_link_module = 2;
-	PrefixHijackModule prefix_hijack_module = 3;
+	string module_id = 2;
+	GoBGPLinkModule gobgp_link_module = 3;
+	PrefixHijackModule prefix_hijack_module = 4;
 }
 
 message StartModuleResult {
@@ -97,8 +98,9 @@ message ListSessionsResult {
 
 message OpenSessionConfig {
 	SessionType type = 1;
-	CassandraSession cassandra_session = 2;
-	FileSession file_session = 3;
+	string session_id = 2;
+	CassandraSession cassandra_session = 3;
+	FileSession file_session = 4;
 }
 
 message OpenSessionResult {
