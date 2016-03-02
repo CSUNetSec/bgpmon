@@ -84,7 +84,7 @@ func main() {
 }
 
 func getUUID() string {
-	return uuid.New()
+	return uuid.New().String()
 }
 
 func getRPCClient() (pb.BgpmondClient, error) {
