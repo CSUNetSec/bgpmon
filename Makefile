@@ -3,13 +3,17 @@ all: build
 protobuf/bgpmond.pb.go:
 	protoc --go_out=plugins=grpc:. protobuf/bgpmond.proto
 
-cmd/bgpmon: protobuf/bgpmond.pb.go
-	go build -o bgpmon cmd/bgpmon/*
+bgpmon: protobuf/bgpmond.pb.go
+	cd cmd/bgpmon;\
+	go build -o ../../bgpmon || (echo "running go get"; go get; go get -u; go build -o ../../bgpmon);\
+	cd ../../
 
-cmd/bgpmond: protobuf/bgpmond.pb.go
-	go build -o bgpmond cmd/bgpmond/*
+bgpmond: protobuf/bgpmond.pb.go
+	cd cmd/bgpmond;\
+	go build -o ../../bgpmond || (echo "running go get"; go get; go get -u; go build -o ../../bgpmond);\
+	cd ../../
 
-build: cmd/bgpmon cmd/bgpmond
+build: bgpmon bgpmond
 
 clean:
 	rm -f bgpmon; \
