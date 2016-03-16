@@ -32,8 +32,6 @@ type PrefixHijackStatus struct {
 }
 
 func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds, timeoutSeconds int32, inSessions []session.Session, config PrefixHijackConfig) (*module.Module, error) {
-	log.Debl.Printf("creating prefix hijack module")
-
 	//parse cidr address
 	_, ipNet, err := net.ParseCIDR(prefix)
 	if err != nil {
@@ -47,7 +45,7 @@ func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds, t
 	for _, sess := range inSessions {
 		casSess, ok := sess.(session.CassandraSession)
 		if !ok {
-			return nil, errors.New("only cassandra sessions are supported for prefix hijack module")
+			return nil, errors.New("Only cassandra sessions are supported for prefix hijack module")
 		}
 
 		inSess = append(inSess, casSess)
@@ -81,7 +79,7 @@ func (p PrefixHijackModule) Run() error {
 	//loop through time buckets
 	for _, timeBucket := range timeBuckets {
 		//TODO - loop over sessions/keyspaces/timebuckets/... - need a better way of configuring this
-		log.Debl.Printf("determining prefix hijack for time_bucket:%v min_ip:%v max_ip:%v\n", timeBucket, minIPAddress, maxIPAddress)
+		log.Debl.Printf("TODO - determine prefix hijack for time_bucket:%v min_ip:%v max_ip:%v\n", timeBucket, minIPAddress, maxIPAddress)
 	}
 
 	//update status variables

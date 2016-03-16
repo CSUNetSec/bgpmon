@@ -74,7 +74,7 @@ func main() {
 
 type Server struct {
 	sessions map[string]session.Session //map from uuid to session interface
-	modules  map[string]*module.Module   //map from uuid to running module interface
+	modules  map[string]*module.Module  //map from uuid to running module interface
 }
 
 /*
@@ -91,7 +91,7 @@ func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.
 			break
 		}
 	default:
-		return nil, errors.New("unimplemented module type")
+		return nil, errors.New("Unimplemented module type")
 	}
 
 	if err != nil {
@@ -104,8 +104,9 @@ func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.
 }
 
 func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (*pb.StartModuleResult, error) {
+	log.Debl.Printf("Starting module %s\n", config.ModuleId)
 	if _, ok := s.modules[config.ModuleId]; ok {
-		return nil, errors.New("module id already exists")
+		return nil, errors.New(fmt.Sprintf("Module ID %s already exists", config.ModuleId))
 	}
 
 	var mod *module.Module
@@ -128,7 +129,7 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 
 		mod.SchedulePeriodic(rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds)
 	default:
-		return nil, errors.New("unimplemented module type")
+		return nil, errors.New("Unimplemented module type")
 	}
 
 	if err != nil {
@@ -136,6 +137,7 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 	}
 
 	s.modules[config.ModuleId] = mod
+	log.Debl.Printf("Module %s Started\n", config.ModuleId)
 	return &pb.StartModuleResult{config.ModuleId}, nil
 }
 
@@ -149,15 +151,17 @@ func (s Server) ListModules(ctx context.Context, config *pb.Empty) (*pb.ListModu
 }
 
 func (s Server) StopModule(ctx context.Context, config *pb.StopModuleConfig) (*pb.Empty, error) {
-	mod, ok := s.modules[config.ModuleId]
+	log.Debl.Printf("Stopping module %s\n", config.ModuleId)
 
+	mod, ok := s.modules[config.ModuleId]
 	if !ok {
-		return nil, errors.New("module ID not found")
+		return nil, errors.New(fmt.Sprintf("Module ID %s not found", config.ModuleId))
 	} else {
 		mod.CommandChan <- module.ModuleCommand{module.COMDIE, nil}
 		delete(s.modules, config.ModuleId)
 	}
 
+	log.Debl.Printf("Module %s stopped\n", config.ModuleId)
 	return &pb.Empty{}, nil
 }
 
@@ -165,15 +169,16 @@ func (s Server) StopModule(ctx context.Context, config *pb.StopModuleConfig) (*p
  * Session RPC Calls
  */
 func (s Server) CloseSession(ctx context.Context, config *pb.CloseSessionConfig) (*pb.Empty, error) {
+	log.Debl.Printf("Closing session %s\n", config.SessionId)
 	sess, ok := s.sessions[config.SessionId]
-
 	if !ok {
-		return nil, errors.New("session ID not found")
+		return nil, errors.New(fmt.Sprintf("Session ID %s not found", config.SessionId))
 	} else {
 		sess.Close()
 		delete(s.sessions, config.SessionId)
 	}
 
+	log.Debl.Printf("Session %s closed\n", config.SessionId)
 	return &pb.Empty{}, nil
 }
 
@@ -187,8 +192,9 @@ func (s Server) ListSessions(ctx context.Context, config *pb.Empty) (*pb.ListSes
 }
 
 func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (*pb.OpenSessionResult, error) {
+	log.Debl.Printf("Opening session %s\n", config.SessionId)
 	if _, ok := s.sessions[config.SessionId]; ok {
-		return nil, errors.New("session id already exists")
+		return nil, errors.New(fmt.Sprintf("Session ID %s already exists", config.SessionId))
 	}
 
 	var sess session.Session
@@ -208,7 +214,7 @@ func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (
 			break
 		}
 	default:
-		return nil, errors.New("unimplemented session type")
+		return nil, errors.New("Unimplemented session type")
 	}
 
 	if err != nil {
@@ -216,6 +222,7 @@ func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (
 	}
 
 	s.sessions[config.SessionId] = sess
+	log.Debl.Printf("Session %s opened\n", config.SessionId)
 	return &pb.OpenSessionResult{config.SessionId}, nil
 }
 
