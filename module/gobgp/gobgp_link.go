@@ -11,7 +11,7 @@ import (
 type GoBGPLinkConfig struct {
 }
 
-func NewGoBGPLinkModule(address string, sessions []session.Session, config GoBGPLinkConfig) (module.Moduler, error) {
+func NewGoBGPLinkModule(address string, sessions []session.Session, config GoBGPLinkConfig) (*module.Module, error) {
 	fmt.Println("starting gobgp link module with arguments", address)
 	return nil, errors.New("TODO - start gobgp module - create io sessions")
 }

@@ -16,7 +16,6 @@ type PrefixHijackConfig struct {
 }
 
 type PrefixHijackModule struct {
-	module.Module
 	prefixIPAddress net.IP
 	prefixMask      int
 	asNumbers       []uint32
@@ -32,8 +31,9 @@ type PrefixHijackStatus struct {
 	LastExecutionTime time.Time
 }
 
-func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds, timeoutSeconds int32, inSessions []session.Session, config PrefixHijackConfig) (module.Moduler, error) {
+func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds, timeoutSeconds int32, inSessions []session.Session, config PrefixHijackConfig) (*module.Module, error) {
 	log.Debl.Printf("creating prefix hijack module")
+
 	//parse cidr address
 	_, ipNet, err := net.ParseCIDR(prefix)
 	if err != nil {
@@ -53,10 +53,10 @@ func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds, t
 		inSess = append(inSess, casSess)
 	}
 
-	return &PrefixHijackModule{module.NewModule(), ipNet.IP, mask, asNumbers, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}}, nil
+	return &module.Module{Moduler:PrefixHijackModule{ipNet.IP, mask, asNumbers, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}}}, nil
 }
 
-func (p *PrefixHijackModule) Run() error {
+func (p PrefixHijackModule) Run() error {
 	log.Debl.Printf("Running prefix hijack module\n")
 
 	//set detection start and end time
@@ -90,12 +90,12 @@ func (p *PrefixHijackModule) Run() error {
 	return nil
 }
 
-func (p *PrefixHijackModule) Status() string {
+func (p PrefixHijackModule) Status() string {
 	return ""
 }
 
-func (p *PrefixHijackModule) Cleanup() {
-	return
+func (p PrefixHijackModule) Cleanup() error {
+	return nil
 }
 
 /*import (

@@ -64,7 +64,7 @@ func main() {
 
 	bgpmondServer := Server{
 		sessions: make(map[string]session.Session),
-		modules:  make(map[string]module.Moduler),
+		modules:  make(map[string]*module.Module),
 	}
 
 	grpcServer := grpc.NewServer()
@@ -74,14 +74,14 @@ func main() {
 
 type Server struct {
 	sessions map[string]session.Session //map from uuid to session interface
-	modules  map[string]module.Moduler  //map from uuid to running module interface
+	modules  map[string]*module.Module   //map from uuid to running module interface
 }
 
 /*
  * Module RPC Calls
  */
 func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.RunModuleResult, error) {
-	var mod module.Moduler
+	var mod *module.Module
 	var err error
 
 	switch config.Type {
@@ -98,7 +98,7 @@ func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.
 		return nil, err
 	}
 
-	mod.GetCommandChannel() <- module.ModuleCommand{module.COMRUN, nil}
+	mod.CommandChan <- module.ModuleCommand{module.COMRUN, nil}
 	//TODO need to kill after execution ends
 	return &pb.RunModuleResult{mod.Status()}, nil
 }
@@ -108,7 +108,7 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 		return nil, errors.New("module id already exists")
 	}
 
-	var mod module.Moduler
+	var mod *module.Module
 	var err error
 
 	switch config.Type {
@@ -118,7 +118,7 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 			break
 		}
 
-		mod.GetCommandChannel() <- module.ModuleCommand{module.COMRUN, nil}
+		mod.CommandChan <- module.ModuleCommand{module.COMRUN, nil}
 	case pb.ModuleType_PREFIX_HIJACK:
 		rpcConfig := config.GetPrefixHijackModule()
 		mod, err = s.createModule(rpcConfig)
@@ -126,7 +126,7 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 			break
 		}
 
-		module.SchedulePeriodic(mod, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds)
+		mod.SchedulePeriodic(rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds)
 	default:
 		return nil, errors.New("unimplemented module type")
 	}
@@ -154,7 +154,7 @@ func (s Server) StopModule(ctx context.Context, config *pb.StopModuleConfig) (*p
 	if !ok {
 		return nil, errors.New("module ID not found")
 	} else {
-		mod.GetCommandChannel() <- module.ModuleCommand{module.COMDIE, nil}
+		mod.CommandChan <- module.ModuleCommand{module.COMDIE, nil}
 		delete(s.modules, config.ModuleId)
 	}
 
@@ -223,8 +223,8 @@ func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (
  * Miscellaneous Functions
  */
 
-func (s Server) createModule(config interface{}) (module.Moduler, error) {
-	var mod module.Moduler
+func (s Server) createModule(config interface{}) (*module.Module, error) {
+	var mod *module.Module
 
 	switch config.(type) {
 	case *pb.GoBGPLinkModule:
@@ -253,7 +253,7 @@ func (s Server) createModule(config interface{}) (module.Moduler, error) {
 		return nil, errors.New("unimplemented module type")
 	}
 
-	module.Init(mod)
+	mod.Init()
 	return mod, nil
 }
 
