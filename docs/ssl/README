@@ -1,0 +1,10 @@
+on a node with cassandra installed
+./createcert <password> <hostname0> <hostname1> ...
+where hostnameN is the hostname of the cluster node
+
+this will create:
+ a file called cassandra-HOSTNAME.cer as well as a .keystore-HOSTNAME for every hostname in the arglist
+ a common file .truststore that will have all the certificates added in as a trusted source.
+
+proceed to copy the individual .keystore-HOSTANE as well as the shared .truststore to the relevant nodes.
+make sure that the .keystore-HOSTNAME file is readable only by the cassandra user (typically cassandra)

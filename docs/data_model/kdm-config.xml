@@ -1,0 +1,1267 @@
+<KDMPROJECT>
+  <ERMODEL>
+    <mxGraphModel dx="1" dy="-32" grid="1" guides="1" tooltips="1" connect="1" fold="1" page="0" pageScale="1" pageWidth="826" pageHeight="1169">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="2" value="collector" style="whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="550" y="146" width="100" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="3" value="peer" style="whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="550" y="636" width="100" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="4" value="geo_location" style="whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="200" y="389" width="100" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="5" value="collector_located_at" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="330" y="250" width="160" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="6" value="peer_located_at" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="360" y="507" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="7" value="n" style="edgeStyle=none;exitX=0;exitY=0.75;entryX=0.667;entryY=0.167;entryPerimeter=0" edge="1" source="2" target="5" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="-170" y="96" as="sourcePoint"/>
+            <mxPoint x="-70" y="-4" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="8" value="1" style="edgeStyle=none;exitX=0.333;exitY=0.833;exitPerimeter=0;entryX=0.75;entryY=0" edge="1" source="5" target="4" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="110" y="90" as="sourcePoint"/>
+            <mxPoint x="210" y="-10" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="9" value="n" style="edgeStyle=none;exitX=0.25;exitY=0;entryX=0.667;entryY=0.833;entryPerimeter=0" edge="1" source="3" target="6" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="-170" y="96" as="sourcePoint"/>
+            <mxPoint x="-70" y="-4" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10" value="1" style="edgeStyle=none;exitX=0.333;exitY=0.167;exitPerimeter=0;entryX=0.75;entryY=1" edge="1" source="6" target="4" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="110" y="90" as="sourcePoint"/>
+            <mxPoint x="210" y="-10" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11" value="country" style="ellipse" vertex="1" parent="1">
+          <mxGeometry x="50" y="397" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="12" value="latitude" style="ellipse;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="90" y="501" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="13" value="longitude" style="ellipse;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="160" y="552" width="80" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="14" value="" style="edgeStyle=none;exitX=0.5;exitY=0;entryX=0;entryY=0.75" edge="1" source="12" target="4" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="80" y="99" as="sourcePoint"/>
+            <mxPoint x="180" y="-1" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="15" value="" style="edgeStyle=none;exitX=0.5;exitY=0;entryX=0.25;entryY=1" edge="1" source="13" target="4" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="80" y="99" as="sourcePoint"/>
+            <mxPoint x="180" y="-1" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="16" value="prefix" style="whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="1315" y="391" width="100" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="17" value="bgp_update_message" style="whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="900" y="391" width="150" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="18" value="collected_by" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="740" y="256" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="19" value="sent_from" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="740" y="507" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="20" value="n" style="edgeStyle=none;exitX=0.25;exitY=0;entryX=0.667;entryY=0.833;entryPerimeter=0" edge="1" source="17" target="18" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="-255" y="106" as="sourcePoint"/>
+            <mxPoint x="-155" y="6" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="21" value="1" style="edgeStyle=none;exitX=0.333;exitY=0.167;exitPerimeter=0;entryX=1;entryY=0.75" edge="1" source="18" target="2" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="-280" y="106" as="sourcePoint"/>
+            <mxPoint x="-180" y="6" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="22" value="n" style="edgeStyle=none;exitX=0.25;exitY=1;entryX=0.667;entryY=0.167;entryPerimeter=0" edge="1" source="17" target="19" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="-215" y="101" as="sourcePoint"/>
+            <mxPoint x="851.71" y="512.855" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="23" value="1" style="edgeStyle=none;exitX=0.333;exitY=0.833;exitPerimeter=0;entryX=1;entryY=0.25" edge="1" source="19" target="3" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="-280" y="106" as="sourcePoint"/>
+            <mxPoint x="-180" y="6" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="24" value="" style="edgeStyle=none;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" source="11" target="4" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="80" y="99" as="sourcePoint"/>
+            <mxPoint x="180" y="-1" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="25" value="inserts" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="1110" y="315" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="26" value="n" style="edgeStyle=none;exitX=1;exitY=0.25;entryX=0;entryY=0.5;entryPerimeter=0" edge="1" source="17" target="25" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="-215" y="101" as="sourcePoint"/>
+            <mxPoint x="-115" y="1" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="27" value="m" style="edgeStyle=none;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.25" edge="1" source="25" target="16" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="-215" y="101" as="sourcePoint"/>
+            <mxPoint x="-115" y="1" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="28" value="ip_address" style="ellipse;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="470" y="50" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="29" value="" style="edgeStyle=none;exitX=0.5;exitY=1;entryX=0.25;entryY=0" edge="1" source="28" target="2" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="30" value="ip_address" style="ellipse;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="560" y="730" width="80" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="31" value="" style="edgeStyle=none;exitX=0.5;exitY=0;entryX=0.5;entryY=1" edge="1" source="30" target="3" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="32" value="ip_address" style="ellipse;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="1450" y="332" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="33" value="mask" style="ellipse;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="1450" y="467" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="34" value="" style="edgeStyle=none;exitX=0.5;exitY=0;entryX=1;entryY=0.75" edge="1" source="33" target="16" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="40" y="95" as="sourcePoint"/>
+            <mxPoint x="140" y="-5" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="35" value="" style="edgeStyle=none;exitX=0.5;exitY=1;entryX=1;entryY=0.25" edge="1" source="32" target="16" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="40" y="95" as="sourcePoint"/>
+            <mxPoint x="140" y="-5" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="38" value="id" style="ellipse;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="895" y="509" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="39" value="" style="edgeStyle=none;exitX=0.5;exitY=0;entryX=0.5;entryY=1" edge="1" source="38" target="17" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="40" value="as" style="whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="1315" y="146" width="100" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="41" value="belongs_to_a" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="1300" y="256" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="42" value="1" style="edgeStyle=none;exitX=0.5;exitY=0;exitPerimeter=0;entryX=0.5;entryY=1" edge="1" source="41" target="40" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="43" value="n" style="edgeStyle=none;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0" edge="1" source="41" target="16" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="44" value="as_name" style="ellipse;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="1450" y="111" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="45" value="" style="edgeStyle=none;exitX=0;exitY=0.5;entryX=1;entryY=0.25" edge="1" source="44" target="40" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="46" value="withdraws" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="1115" y="453" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="47" value="n" style="exitX=1;exitY=0.75;entryX=0;entryY=0.5;entryPerimeter=0" edge="1" source="17" target="46" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="48" value="m" style="exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.75" edge="1" source="46" target="16" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="49" value="bytes" style="ellipse" vertex="1" parent="1">
+          <mxGeometry x="775" y="432" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="50" style="exitX=1;exitY=0.5;entryX=0;entryY=0.75" edge="1" source="49" target="17" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="51" value="connected_to" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="535" y="374" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="52" value="n" style="edgeStyle=none;exitX=0.5;exitY=0;exitPerimeter=0;entryX=0.5;entryY=1" edge="1" source="51" target="2" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="53" value="m" style="edgeStyle=none;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0" edge="1" source="51" target="3" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="55" value="collection_time" style="ellipse" vertex="1" parent="1">
+          <mxGeometry x="75" y="313" width="110" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="56" value="" style="edgeStyle=none;exitX=0.5;exitY=1;entryX=0;entryY=0.25" edge="1" source="55" target="4" parent="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="58" value="source" style="ellipse" vertex="1" parent="1">
+          <mxGeometry x="1010" y="289" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="59" style="exitX=0.5;exitY=1;entryX=0.75;entryY=0" edge="1" parent="1" source="58" target="17">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="60" value="message_number" style="ellipse" vertex="1" parent="1">
+          <mxGeometry x="985" y="509" width="130" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="61" style="exitX=0.5;exitY=0;entryX=0.75;entryY=1" edge="1" parent="1" source="60" target="17">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="62" value="collector_name" style="ellipse" vertex="1" parent="1">
+          <mxGeometry x="620" y="50" width="120" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="63" style="exitX=0.5;exitY=1;entryX=0.75;entryY=0" edge="1" parent="1" source="62" target="2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="64" value="as_located_at" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="665" y="-70" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="67" value="m" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0.5;entryY=0" edge="1" parent="1" source="64" target="40">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="68" value="n" style="edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.5;exitPerimeter=0;entryX=0.5;entryY=0" edge="1" parent="1" source="64" target="4">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="69" value="as_number" style="ellipse" vertex="1" parent="1">
+          <mxGeometry x="1450" y="196" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="71" value="" style="edgeStyle=none;exitX=0;exitY=0.5;entryX=1;entryY=0.75" edge="1" parent="1" source="69" target="40">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="72" value="has_path" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="910" y="139" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="73" value="m" style="edgeStyle=none;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0;entryY=0.5" edge="1" parent="1" source="72" target="40">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="74" value="n" style="edgeStyle=none;exitX=0.5;exitY=1;exitPerimeter=0;entryX=0.5;entryY=0" edge="1" parent="1" source="72" target="17">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="75" value="prefix_located_at" style="shape=card;whiteSpace=wrap" vertex="1" parent="1">
+          <mxGeometry x="650" y="790" width="130" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="76" value="m" style="edgeStyle=orthogonalEdgeStyle;exitX=1;exitY=0.5;exitPerimeter=0;entryX=0.5;entryY=1" edge="1" parent="1" source="75" target="16">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="77" value="n" style="edgeStyle=orthogonalEdgeStyle;exitX=0;exitY=0.5;exitPerimeter=0;entryX=0.5;entryY=1" edge="1" parent="1" source="75" target="4">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="78" value="time" style="ellipse" vertex="1" parent="1">
+          <mxGeometry x="775" y="367" width="80" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="80" value="" style="edgeStyle=none;exitX=1;exitY=0.5;entryX=0;entryY=0.25" edge="1" parent="1" source="78" target="17">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint y="100" as="sourcePoint"/>
+            <mxPoint x="100" as="targetPoint"/>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+    <KEYS_JSON>
+{"collector":["collector.ip_address"],"peer":["peer.ip_address"],"geo_location":["geo_location.latitude,geo_location.longitude"],"bgp_update_msg":["bgp_update_msg.id"],"prefix":["prefix.ip_address,prefix.mask"],"as":["as.as_number"],"collector_located_at":["collector.ip_address,geo_location.latitude,geo_location.longitude"],"peer_located_at":["collector.ip_address,geo_location.latitude,geo_location.longitude"],"collected_by":["collector.ip_address,bgp_update_message.id"],"sent_from":["peer.ip_address,bgp_update_message.id"],"inserts":["bgp_update_message.id,prefix.ip_address,prefix.mask"],"withdraws":["bgp_update_message.id,prefix.ip_address,prefix.mask"],"belongs_to-a":["prefix.ip_address,prefix.mask,as.name"],"bgp_update_message":["bgp_update_message.id"]}    </KEYS_JSON>
+  </ERMODEL>
+  <ACCESS_PATTERNS width="1106px" height="542px" left="773px" top="819px">
+    <Q1>
+      <APTYPE>
+simple      </APTYPE>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+bgp_update_message.id          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+value        </VRS>
+      </GR>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+bgp_update_message.time          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+range        </VRS>
+      </GR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+bgp_update_message.time          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+collector.ip_address          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+collector.collector_name          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+peer.ip_address          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+as.as_number          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+bgp_update_message.source          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+bgp_update_message.message_number          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+bgp_update_message.bytes          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <DESCR>
+get all bgp update messages in time range      </DESCR>
+    </Q1>
+    <Q2>
+      <APTYPE>
+simple      </APTYPE>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+            <DIV>
+collector.ip_address                      </DIV>
+          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+value        </VRS>
+      </GR>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+            <DIV>
+bgp_update_message.id                      </DIV>
+          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+range        </VRS>
+      </GR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+            <DIV>
+bgp_update_message.id                      </DIV>
+          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <DESCR>
+find bgp update messages by collector      </DESCR>
+    </Q2>
+    <Q3>
+      <APTYPE>
+simple      </APTYPE>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+            <DIV>
+peer.ip_address                      </DIV>
+          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+value        </VRS>
+      </GR>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+            <DIV>
+bgp_update_message.id                      </DIV>
+          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+range        </VRS>
+      </GR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+            <DIV>
+bgp_update_message.id                      </DIV>
+          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <DESCR>
+find bgp update messages by peer      </DESCR>
+    </Q3>
+    <Q4>
+      <APTYPE>
+simple      </APTYPE>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+collector.ip_address          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+value        </VRS>
+      </GR>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.collection_time          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+range        </VRS>
+      </GR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.country          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.latitude          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.longitude          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <DESCR>
+geo location by ip address      </DESCR>
+    </Q4>
+    <Q5>
+      <APTYPE>
+simple      </APTYPE>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+as.as_number          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+value        </VRS>
+      </GR>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.collection_time          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+range        </VRS>
+      </GR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.country          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.latitude          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.longitude          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <DESCR>
+geo location by as      </DESCR>
+    </Q5>
+    <Q6>
+      <APTYPE>
+simple      </APTYPE>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+prefix.mask          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+value        </VRS>
+      </GR>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+prefix.ip_address          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+value        </VRS>
+      </GR>
+      <GR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.collection_time          </DIV>
+        </ATTRIBUTE>
+        <VRS>
+range        </VRS>
+      </GR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.country          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.latitude          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <FR>
+        <ATTRIBUTE>
+          <DIV>
+geo_location.longitude          </DIV>
+        </ATTRIBUTE>
+      </FR>
+      <DESCR>
+geo location by prefix      </DESCR>
+    </Q6>
+  </ACCESS_PATTERNS>
+  <LOGICAL_MODEL>
+    <Q1 qTemplate="SELECT |s|bgp_update_message__time|e|, |s|collector__ip_address|e|, |s|collector_name|e|, |s|peer__ip_address|e|, |s|as_number|e|, |s|bgp_update_message__source|e|, |s|bgp_update_message__message_number|e|, |s|bgp_update_message__bytes|e| FROM |s|tableName|e| WHERE |s|bgp_update_message__id|e|=? and |s|bgp_update_message__time|e|&gt;?;">
+      <tbl>
+        <table0/>
+        <columns>
+          <id origName="bgp_update_message__id">
+            <K/>
+            <NOCLUST/>
+          </id>
+          <time origName="bgp_update_message__time">
+            <C>
+ASC            </C>
+          </time>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <collector_ip_address origName="collector__ip_address">
+            <S/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <collector_name origName="collector_name">
+            <S/>
+            <NOCLUST/>
+          </collector_name>
+          <peer_ip_address origName="peer__ip_address">
+            <S/>
+            <NOCLUST/>
+          </peer_ip_address>
+          <as_number origName="as_number"/>
+          <source origName="bgp_update_message__source">
+            <S/>
+            <NOCLUST/>
+          </source>
+          <message_number origName="bgp_update_message__message_number">
+            <S/>
+            <NOCLUST/>
+          </message_number>
+          <bytes origName="bgp_update_message__bytes">
+            <S/>
+            <NOCLUST/>
+          </bytes>
+        </columns>
+      </tbl>
+      <tbl>
+        <table1/>
+        <columns>
+          <id origName="bgp_update_message__id">
+            <K/>
+            <NOCLUST/>
+          </id>
+          <time origName="bgp_update_message__time">
+            <C>
+ASC            </C>
+          </time>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <collector_ip_address origName="collector__ip_address">
+            <S/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <collector_name origName="collector_name">
+            <S/>
+            <NOCLUST/>
+          </collector_name>
+          <peer_ip_address origName="peer__ip_address">
+            <S/>
+            <NOCLUST/>
+          </peer_ip_address>
+          <as_number origName="as_number"/>
+          <source origName="bgp_update_message__source">
+            <S/>
+            <NOCLUST/>
+          </source>
+          <message_number origName="bgp_update_message__message_number">
+            <S/>
+            <NOCLUST/>
+          </message_number>
+          <bytes origName="bgp_update_message__bytes">
+            <S/>
+            <NOCLUST/>
+          </bytes>
+        </columns>
+      </tbl>
+    </Q1>
+    <Q2 qTemplate="SELECT |s|bgp_update_message__id|e| FROM |s|tableName|e| WHERE |s|collector__ip_address|e|=? and |s|bgp_update_message__id|e|&gt;?;">
+      <tbl>
+        <bgp_update_messages_by_collector/>
+        <columns>
+          <collector_ip_address origName="collector__ip_address">
+            <K/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+        </columns>
+      </tbl>
+      <tbl>
+        <bgp_update_messages_by_collector1/>
+        <columns>
+          <collector_ip_address origName="collector__ip_address">
+            <K/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+        </columns>
+      </tbl>
+    </Q2>
+    <Q3 qTemplate="SELECT |s|bgp_update_message__id|e| FROM |s|tableName|e| WHERE |s|peer__ip_address|e|=? and |s|bgp_update_message__id|e|&gt;?;">
+      <tbl>
+        <bgp_update_messages_by_peer/>
+        <columns>
+          <peer_ip_address origName="peer__ip_address">
+            <K/>
+            <NOCLUST/>
+          </peer_ip_address>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+        </columns>
+      </tbl>
+      <tbl>
+        <bgp_update_messages_by_peer1/>
+        <columns>
+          <peer_ip_address origName="peer__ip_address">
+            <K/>
+            <NOCLUST/>
+          </peer_ip_address>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+        </columns>
+      </tbl>
+    </Q3>
+    <Q4 qTemplate="SELECT |s|geo_location__country|e|, |s|geo_location__latitude|e|, |s|geo_location__longitude|e| FROM |s|tableName|e| WHERE |s|collector__ip_address|e|=? and |s|geo_location__collection_time|e|&gt;?;">
+      <tbl>
+        <geo_locations_by_collector/>
+        <columns>
+          <collector_ip_address origName="collector__ip_address">
+            <K/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <country origName="geo_location__country">
+            <S/>
+            <NOCLUST/>
+          </country>
+          <latitude origName="geo_location__latitude">
+            <S/>
+            <NOCLUST/>
+          </latitude>
+          <longitude origName="geo_location__longitude">
+            <S/>
+            <NOCLUST/>
+          </longitude>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_collector1/>
+        <columns>
+          <collector_ip_address origName="collector__ip_address">
+            <K/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <country origName="geo_location__country">
+            <S/>
+            <NOCLUST/>
+          </country>
+          <latitude origName="geo_location__latitude">
+            <S/>
+            <NOCLUST/>
+          </latitude>
+          <longitude origName="geo_location__longitude">
+            <S/>
+            <NOCLUST/>
+          </longitude>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_collector2/>
+        <columns>
+          <collector_ip_address origName="collector__ip_address">
+            <K/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <country origName="geo_location__country">
+            <S/>
+            <NOCLUST/>
+          </country>
+          <latitude origName="geo_location__latitude">
+            <S/>
+            <NOCLUST/>
+          </latitude>
+          <longitude origName="geo_location__longitude">
+            <S/>
+            <NOCLUST/>
+          </longitude>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_collector3/>
+        <columns>
+          <collector_ip_address origName="collector__ip_address">
+            <K/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <country origName="geo_location__country">
+            <S/>
+            <NOCLUST/>
+          </country>
+          <latitude origName="geo_location__latitude">
+            <S/>
+            <NOCLUST/>
+          </latitude>
+          <longitude origName="geo_location__longitude">
+            <S/>
+            <NOCLUST/>
+          </longitude>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_collector4/>
+        <columns>
+          <collector_ip_address origName="collector__ip_address">
+            <K/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <country origName="geo_location__country">
+            <S/>
+            <NOCLUST/>
+          </country>
+          <latitude origName="geo_location__latitude">
+            <S/>
+            <NOCLUST/>
+          </latitude>
+          <longitude origName="geo_location__longitude">
+            <S/>
+            <NOCLUST/>
+          </longitude>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_collector5/>
+        <columns>
+          <collector_ip_address origName="collector__ip_address">
+            <K/>
+            <NOCLUST/>
+          </collector_ip_address>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <country origName="geo_location__country">
+            <S/>
+            <NOCLUST/>
+          </country>
+          <latitude origName="geo_location__latitude">
+            <S/>
+            <NOCLUST/>
+          </latitude>
+          <longitude origName="geo_location__longitude">
+            <S/>
+            <NOCLUST/>
+          </longitude>
+        </columns>
+      </tbl>
+    </Q4>
+    <Q5 qTemplate="SELECT |s|geo_location__country|e|, |s|geo_location__latitude|e|, |s|geo_location__longitude|e| FROM |s|tableName|e| WHERE |s|as_number|e|=? and |s|geo_location__collection_time|e|&gt;?;">
+      <tbl>
+        <geo_locations_by_as/>
+        <columns>
+          <as_number origName="as_number">
+            <K/>
+            <NOCLUST/>
+          </as_number>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_as1/>
+        <columns>
+          <as_number origName="as_number">
+            <K/>
+            <NOCLUST/>
+          </as_number>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_as2/>
+        <columns>
+          <as_number origName="as_number">
+            <K/>
+            <NOCLUST/>
+          </as_number>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_as3/>
+        <columns>
+          <as_number origName="as_number">
+            <K/>
+            <NOCLUST/>
+          </as_number>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_as4/>
+        <columns>
+          <as_number origName="as_number">
+            <K/>
+            <NOCLUST/>
+          </as_number>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_as5/>
+        <columns>
+          <as_number origName="as_number">
+            <K/>
+            <NOCLUST/>
+          </as_number>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+    </Q5>
+    <Q6 qTemplate="SELECT |s|geo_location__country|e|, |s|geo_location__latitude|e|, |s|geo_location__longitude|e| FROM |s|tableName|e| WHERE |s|prefix__ip_address|e|=? and |s|prefix__mask|e|=? and |s|geo_location__collection_time|e|&gt;?;">
+      <tbl>
+        <geo_locations_by_prefix/>
+        <columns>
+          <mask origName="prefix__mask">
+            <K/>
+            <NOCLUST/>
+          </mask>
+          <prefix_ip_address origName="prefix__ip_address">
+            <C>
+ASC            </C>
+          </prefix_ip_address>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_prefix1/>
+        <columns>
+          <prefix_ip_address origName="prefix__ip_address">
+            <K/>
+            <NOCLUST/>
+          </prefix_ip_address>
+          <mask origName="prefix__mask">
+            <C>
+ASC            </C>
+          </mask>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_prefix2/>
+        <columns>
+          <prefix_ip_address origName="prefix__ip_address">
+            <K/>
+            <NOCLUST/>
+          </prefix_ip_address>
+          <mask origName="prefix__mask">
+            <K/>
+            <NOCLUST/>
+          </mask>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+      <tbl>
+        <geo_locations_by_prefix3/>
+        <columns>
+          <mask origName="prefix__mask">
+            <K/>
+            <NOCLUST/>
+          </mask>
+          <prefix_ip_address origName="prefix__ip_address">
+            <K/>
+            <NOCLUST/>
+          </prefix_ip_address>
+          <collection_time origName="geo_location__collection_time">
+            <C>
+ASC            </C>
+          </collection_time>
+          <id origName="bgp_update_message__id">
+            <C>
+ASC            </C>
+          </id>
+          <country origName="geo_location__country"/>
+          <latitude origName="geo_location__latitude"/>
+          <longitude origName="geo_location__longitude"/>
+        </columns>
+      </tbl>
+    </Q6>
+    <LOGICAL_CONFIGEL>
+{"table0":"","bgp_update_messages_by_collector":"","bgp_update_messages_by_peer":"","geo_locations_by_collector":"","geo_locations_by_as":"","geo_locations_by_prefix":""}    </LOGICAL_CONFIGEL>
+  </LOGICAL_MODEL>
+</KDMPROJECT>

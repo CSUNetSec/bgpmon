@@ -1,0 +1,42 @@
+docker cassandra cluster
+======
+
+Stress Testing
+--------------
+To test inserting data
+```bash
+./bin/cassandra-stress user profile=./blogpost.yaml ops\(insert=1\)
+```
+
+To test a query
+```bash
+./bin/cassandra-stress user profile=blogpost.yaml ops\(singlepost=1\)
+```
+
+Start Cluster Script
+--------------------
+start-cluster.sh
+	-d DATA_DIRECTORY
+		The directory on the local machine where cassandra data will be physcially stored by the docker containers
+	-i IP_LIST
+		A space separated list of comma separated lists of IP addresses that correspond to the collector IP addresses for each of the cassandra instances
+	-p CONTAINER_PREFIX
+		The prefix of docker container names. If not provided "CAS" is the default
+
+--EXAMPLE--
+./start-cluster.sh -d /raid/cassandra_bgp/docker_data -i 0.0.0.0 1.1.1.1 2.2.2.2,3.3.3.3 -p CASSANDRA
+
+The above command will create 3 docker containers. The data for each cassandra instance will be stored in directories named "CASSANDRA1", "CASSANDRA2", and "CASSANDRA3" and will be located in the "/raid/cassandra_bgp/docker_data directory. The first two cassandra instances are both responsible for a single collector IP address namely, 0.0.0.0 and 1.1.1.1 respectively. The third cassandra instance is responsible for data from collecter IP's 2.2.2.2 and 3.3.3.3.
+
+Stop Cluster Script
+-------------------
+shutdown-cluster.sh
+	-d DATA_DIRECTORY
+		The directory on the local machine where cassandra data will be physcially stored by the docker containers
+	-p CONTAINER_PREFIX
+		The prefix of docker container names. If not provided "CAS" is the default
+
+--EXAMPLE--
+./shutdown-cluster.sh -d /raid/cassandra_bgp/docker_data -p CASSANDRA
+
+The above command will stop and remove all docker containers with the name prefix "CASSANDRA". In addition it will delete the directories storing the cassandra data in the "/raid/cassandra_bgp/docker_data" directory

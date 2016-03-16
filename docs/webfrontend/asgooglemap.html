@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<script type="application/javascript" src="/tmp/hijack.json"></script>
+	<head>
+	<script>
+		function initialize() {
+		  var mapProp = {
+		      center: new google.maps.LatLng(51.508742,-0.120850),
+		      zoom:3,
+		      mapTypeId: google.maps.MapTypeId.ROADMAP
+		  };
+                  console.log(data);
+		  var map = new google.maps.Map(document.getElementById("googleMap"),mapProp);
+
+		  for (var i=0;i<data.length;i++) {
+		    showhijack(data[i], map)
+		  }
+		}
+
+		cols = ['#FF0000',"#000000","#0000FF","#0FF000", "#000FF0", "#00FF00"]
+		var colnum=0
+                
+		function plotpath(p, m) {
+		   new google.maps.Polyline({
+                      path: p,
+                      geodesic: true,
+                      strokeColor: cols[colnum%cols.length],
+                      strokeOpacity: 1.0,
+                      strokeWeight: 2
+                    }).setMap(m);
+		   colnum+=1;
+		}
+
+		function makeaspath(h) {
+		  var path = new Array();
+                  var asplen = h.ASPath.length;
+		  var i=0;
+		  var j=1;
+		  path[0] = getlocation(h.PeerLocation);
+		  if (asplen > 2) {
+		    for (j = 1; j<asplen-1; j++) {
+		      path[j] = getlocation(h.ASPath[j].Locations[0])
+		    }
+		  }
+		  path[j] = getlocation(h.ASPath[asplen-1].Locations[0])
+		  return path
+		}
+
+                function showhijack(h, m) {
+                  var peermarker = makemarker("good", getlocation(h.PeerLocation), m)
+                  var infowindow = new google.maps.InfoWindow({
+                    content: "PeerIP:".concat(h.PeerIPAddress, "<br>PeerLocation country:", h.PeerLocation.Country, ",city:", h.PeerLocation.City)
+                  });
+                  peermarker.addListener('click', function() {
+                    infowindow.open(m, peermarker);
+                  });
+                  var colmarker = makemarker("collector", getlocation(h.CollectorLocation), m)
+                  var infowindow = new google.maps.InfoWindow({
+                    content: "CollectorIP:".concat(h.CollectorIPAddress, "<br>Collector Location country:", h.CollectorLocation.Country, ",city:", h.CollectorLocation.City)
+                  });
+                  colmarker.addListener('click', function() {
+                    infowindow.open(m, colmarker);
+                  });
+		  plotpath(makeaspath(h), m)
+                  
+                }
+
+                function getlocation(l) {
+		  if (("Country" in l || "City" in l) || ("Latitude" in l && l.Lattitude==0 && "Longtitude" in l && l.Longtitude==0)) {
+		          if ("City" in l) {
+			    return resolveCountryLocation(l.Country.concat(",", l.City))
+		          } else {
+			    return resolveCountryLocation(l.Country)
+		          }
+		  }
+                  if ("Latitude" in l && "Longtitude" in l) {
+                    return {lat:l.Latitude, lng: l.Longtitude}
+		  }
+                }
+
+		function makemarker(type, loc, map) {
+			var icon;
+			if (type == "good") {
+				icon = 'http://maps.google.com/mapfiles/ms/icons/blue.png';
+			} else if (type == "bad") {
+				icon = 'http://maps.google.com/mapfiles/ms/icons/red.png';
+			} else if (type == "collector") {
+				icon = 'http://maps.google.com/mapfiles/ms/icons/green.png';
+                        }	
+			var marker = new google.maps.Marker({
+			  icon: icon,
+			  map: map,
+			  position: loc,
+		          animation: google.maps.Animation.DROP
+			})
+			return marker
+		}
+
+
+		function resolveCountryLocation(country)
+		{
+                  var latlong = new Array();
+		  var xmlHttp = new XMLHttpRequest();
+		  xmlHttp.open( "GET","http://maps.google.com/maps/api/geocode/json?address="+country+"&sensor=false" , false ); // false for synchronous request
+		  xmlHttp.send( null );
+		  var geobject = JSON.parse(xmlHttp.responseText);
+	          if (geobject.results.length >= 1) {
+		    return geobject.results[0].geometry.location
+		  } else { //idiotic fallbac k
+			  return resolveCountryLocation("CZ")
+		  }
+		}
+
+		function loadScript() {
+		  var script = document.createElement("script");
+		  script.type = "text/javascript";
+		  script.src = "http://maps.googleapis.com/maps/api/js?key=AIzaSyDRnjMkmuv-PMhnrCqMS04p5MuG1ryjoe0&sensor=false&callback=initialize";
+		  document.body.appendChild(script);
+		}
+
+		window.onload = loadScript;
+	</script>
+	</head>
+	<body>
+		<div id="googleMap" style="width:2560px;height:1440px;"></div>
+	</body>
+</html>
