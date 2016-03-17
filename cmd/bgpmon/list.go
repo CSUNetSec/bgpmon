@@ -16,15 +16,15 @@ func ListModules(cmd *cli.Cmd) {
 			panic(err)
 		}
 
-		config := new(pb.Empty)
+		request := new(pb.Empty)
 
 		ctx := context.Background()
-		res, err := client.ListModules(ctx, config)
+		reply, err := client.ListModules(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(res)
+		fmt.Println(reply)
 	}
 }
 
@@ -35,14 +35,14 @@ func ListSessions(cmd *cli.Cmd) {
 			panic(err)
 		}
 
-		config := new(pb.Empty)
+		request := new(pb.Empty)
 
 		ctx := context.Background()
-		res, err := client.ListSessions(ctx, config)
+		reply, err := client.ListSessions(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(res)
+		fmt.Println(reply)
 	}
 }

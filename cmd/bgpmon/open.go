@@ -23,18 +23,18 @@ func OpenCassandra(cmd *cli.Cmd) {
 			panic(err)
 		}
 
-		config := new(pb.OpenSessionConfig)
-		config.Type = pb.SessionType_CASSANDRA
-		config.SessionId = *sessionID
-		config.CassandraSession = &pb.CassandraSession{*username, *password, strings.Split(*hosts, ",")}
+		request := new(pb.OpenSessionRequest)
+		request.Type = pb.SessionType_CASSANDRA
+		request.SessionId = *sessionID
+		request.CassandraSession = &pb.CassandraSession{*username, *password, strings.Split(*hosts, ",")}
 
 		ctx := context.Background()
-		res, err := client.OpenSession(ctx, config)
+		reply, err := client.OpenSession(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(res)
+		fmt.Println(reply)
 	}
 }
 
@@ -49,17 +49,17 @@ func OpenFile(cmd *cli.Cmd) {
 			panic(err)
 		}
 
-		config := new(pb.OpenSessionConfig)
-		config.Type = pb.SessionType_FILE
-		config.SessionId = *sessionID
-		config.FileSession = &pb.FileSession{*filename}
+		request := new(pb.OpenSessionRequest)
+		request.Type = pb.SessionType_FILE
+		request.SessionId = *sessionID
+		request.FileSession = &pb.FileSession{*filename}
 
 		ctx := context.Background()
-		res, err := client.OpenSession(ctx, config)
+		reply, err := client.OpenSession(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(res)
+		fmt.Println(reply)
 	}
 }

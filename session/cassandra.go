@@ -20,7 +20,7 @@ type InsertConfig struct {
 
 type CassandraSession struct {
 	session          *gocql.Session
-	insertStatements map[pb.WriteConfig_Type][]InsertConfig
+	insertStatements map[pb.WriteRequest_Type][]InsertConfig
 }
 
 func NewCassandraSession(username, password string, hosts []string, config CassandraConfig) (Session, error) {
@@ -36,17 +36,17 @@ func NewCassandraSession(username, password string, hosts []string, config Cassa
 		return nil, err
 	}
 
-	insertStatements := make(map[pb.WriteConfig_Type][]InsertConfig)
+	insertStatements := make(map[pb.WriteRequest_Type][]InsertConfig)
 	for key, value := range config.MessageTypes {
 		switch key {
 		case "ASNumberLocation":
-			insertStatements[pb.WriteConfig_AS_NUMBER_LOCATION] = value
+			insertStatements[pb.WriteRequest_AS_NUMBER_LOCATION] = value
 		case "BGPUpdateMessage":
-			insertStatements[pb.WriteConfig_BGP_UPDATE] = value
+			insertStatements[pb.WriteRequest_BGP_UPDATE] = value
 		case "IPAddressLocation":
-			insertStatements[pb.WriteConfig_IP_ADDRESS_LOCATION] = value
+			insertStatements[pb.WriteRequest_IP_ADDRESS_LOCATION] = value
 		case "PrefixLocation":
-			insertStatements[pb.WriteConfig_PREFIX_LOCATION] = value
+			insertStatements[pb.WriteRequest_PREFIX_LOCATION] = value
 		default:
 			return nil, errors.New(fmt.Sprintf("Unknown message type '%s' in cassandra session", key))
 		}

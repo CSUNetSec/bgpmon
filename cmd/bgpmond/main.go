@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-var configFile string
+var requestFile string
 var bgpmondConfig BgpmondConfig
 
 type BgpmondConfig struct {
@@ -40,13 +40,13 @@ type SessionConfig struct {
 }
 
 func init() {
-	flag.StringVar(&configFile, "config_file", "", "bgpmond toml configuration file")
+	flag.StringVar(&requestFile, "request_file", "", "bgpmond toml requesturation file")
 }
 
 func main() {
 	flag.Parse()
 
-	if _, err := toml.DecodeFile(configFile, &bgpmondConfig); err != nil {
+	if _, err := toml.DecodeFile(requestFile, &bgpmondConfig); err != nil {
 		panic(err)
 	}
 
@@ -80,13 +80,13 @@ type Server struct {
 /*
  * Module RPC Calls
  */
-func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.RunModuleResult, error) {
+func (s Server) RunModule(ctx context.Context, request *pb.RunModuleRequest) (*pb.RunModuleReply, error) {
 	var mod *module.Module
 	var err error
 
-	switch config.Type {
+	switch request.Type {
 	case pb.ModuleType_PREFIX_HIJACK:
-		mod, err = s.createModule(config.GetPrefixHijackModule())
+		mod, err = s.createModule(request.GetPrefixHijackModule())
 		if err != nil {
 			break
 		}
@@ -100,28 +100,28 @@ func (s Server) RunModule(ctx context.Context, config *pb.RunModuleConfig) (*pb.
 
 	mod.CommandChan <- module.ModuleCommand{module.COMRUN, nil}
 	//TODO need to kill after execution ends
-	return &pb.RunModuleResult{mod.Status()}, nil
+	return &pb.RunModuleReply{mod.Status()}, nil
 }
 
-func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (*pb.StartModuleResult, error) {
-	log.Debl.Printf("Starting module %s\n", config.ModuleId)
-	if _, ok := s.modules[config.ModuleId]; ok {
-		return nil, errors.New(fmt.Sprintf("Module ID %s already exists", config.ModuleId))
+func (s Server) StartModule(ctx context.Context, request *pb.StartModuleRequest) (*pb.StartModuleReply, error) {
+	log.Debl.Printf("Starting module %s\n", request.ModuleId)
+	if _, ok := s.modules[request.ModuleId]; ok {
+		return nil, errors.New(fmt.Sprintf("Module ID %s already exists", request.ModuleId))
 	}
 
 	var mod *module.Module
 	var err error
 
-	switch config.Type {
+	switch request.Type {
 	case pb.ModuleType_GOBGP_LINK:
-		mod, err = s.createModule(config.GetGobgpLinkModule())
+		mod, err = s.createModule(request.GetGobgpLinkModule())
 		if err != nil {
 			break
 		}
 
 		mod.CommandChan <- module.ModuleCommand{module.COMRUN, nil}
 	case pb.ModuleType_PREFIX_HIJACK:
-		rpcConfig := config.GetPrefixHijackModule()
+		rpcConfig := request.GetPrefixHijackModule()
 		mod, err = s.createModule(rpcConfig)
 		if err != nil {
 			break
@@ -136,79 +136,79 @@ func (s Server) StartModule(ctx context.Context, config *pb.StartModuleConfig) (
 		return nil, err
 	}
 
-	s.modules[config.ModuleId] = mod
-	log.Debl.Printf("Module %s Started\n", config.ModuleId)
-	return &pb.StartModuleResult{config.ModuleId}, nil
+	s.modules[request.ModuleId] = mod
+	log.Debl.Printf("Module %s Started\n", request.ModuleId)
+	return &pb.StartModuleReply{request.ModuleId}, nil
 }
 
-func (s Server) ListModules(ctx context.Context, config *pb.Empty) (*pb.ListModulesResult, error) {
+func (s Server) ListModules(ctx context.Context, request *pb.Empty) (*pb.ListModulesReply, error) {
 	moduleIDs := []string{}
 	for moduleID, _ := range s.modules {
 		moduleIDs = append(moduleIDs, moduleID)
 	}
 
-	return &pb.ListModulesResult{moduleIDs}, nil
+	return &pb.ListModulesReply{moduleIDs}, nil
 }
 
-func (s Server) StopModule(ctx context.Context, config *pb.StopModuleConfig) (*pb.Empty, error) {
-	log.Debl.Printf("Stopping module %s\n", config.ModuleId)
+func (s Server) StopModule(ctx context.Context, request *pb.StopModuleRequest) (*pb.Empty, error) {
+	log.Debl.Printf("Stopping module %s\n", request.ModuleId)
 
-	mod, ok := s.modules[config.ModuleId]
+	mod, ok := s.modules[request.ModuleId]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("Module ID %s not found", config.ModuleId))
+		return nil, errors.New(fmt.Sprintf("Module ID %s not found", request.ModuleId))
 	} else {
 		mod.CommandChan <- module.ModuleCommand{module.COMDIE, nil}
-		delete(s.modules, config.ModuleId)
+		delete(s.modules, request.ModuleId)
 	}
 
-	log.Debl.Printf("Module %s stopped\n", config.ModuleId)
+	log.Debl.Printf("Module %s stopped\n", request.ModuleId)
 	return &pb.Empty{}, nil
 }
 
 /*
  * Session RPC Calls
  */
-func (s Server) CloseSession(ctx context.Context, config *pb.CloseSessionConfig) (*pb.Empty, error) {
-	log.Debl.Printf("Closing session %s\n", config.SessionId)
-	sess, ok := s.sessions[config.SessionId]
+func (s Server) CloseSession(ctx context.Context, request *pb.CloseSessionRequest) (*pb.Empty, error) {
+	log.Debl.Printf("Closing session %s\n", request.SessionId)
+	sess, ok := s.sessions[request.SessionId]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("Session ID %s not found", config.SessionId))
+		return nil, errors.New(fmt.Sprintf("Session ID %s not found", request.SessionId))
 	} else {
 		sess.Close()
-		delete(s.sessions, config.SessionId)
+		delete(s.sessions, request.SessionId)
 	}
 
-	log.Debl.Printf("Session %s closed\n", config.SessionId)
+	log.Debl.Printf("Session %s closed\n", request.SessionId)
 	return &pb.Empty{}, nil
 }
 
-func (s Server) ListSessions(ctx context.Context, config *pb.Empty) (*pb.ListSessionsResult, error) {
+func (s Server) ListSessions(ctx context.Context, request *pb.Empty) (*pb.ListSessionsReply, error) {
 	sessionIDs := []string{}
 	for sessionID, _ := range s.sessions {
 		sessionIDs = append(sessionIDs, sessionID)
 	}
 
-	return &pb.ListSessionsResult{sessionIDs}, nil
+	return &pb.ListSessionsReply{sessionIDs}, nil
 }
 
-func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (*pb.OpenSessionResult, error) {
-	log.Debl.Printf("Opening session %s\n", config.SessionId)
-	if _, ok := s.sessions[config.SessionId]; ok {
-		return nil, errors.New(fmt.Sprintf("Session ID %s already exists", config.SessionId))
+func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest) (*pb.OpenSessionReply, error) {
+	log.Debl.Printf("Opening session %s\n", request.SessionId)
+	if _, ok := s.sessions[request.SessionId]; ok {
+		return nil, errors.New(fmt.Sprintf("Session ID %s already exists", request.SessionId))
 	}
 
 	var sess session.Session
 	var err error
 
-	switch config.Type {
+	switch request.Type {
 	case pb.SessionType_CASSANDRA:
-		rpcConfig := config.GetCassandraSession()
+		rpcConfig := request.GetCassandraSession()
 		sess, err = session.NewCassandraSession(rpcConfig.Username, rpcConfig.Password, rpcConfig.Hosts, bgpmondConfig.Sessions.Cassandra)
 		if err != nil {
 			break
 		}
 	case pb.SessionType_FILE:
-		rpcConfig := config.GetFileSession()
+		rpcConfig := request.GetFileSession()
 		sess, err = session.NewFileSession(rpcConfig.Filename, bgpmondConfig.Sessions.File)
 		if err != nil {
 			break
@@ -221,21 +221,21 @@ func (s Server) OpenSession(ctx context.Context, config *pb.OpenSessionConfig) (
 		return nil, err
 	}
 
-	s.sessions[config.SessionId] = sess
-	log.Debl.Printf("Session %s opened\n", config.SessionId)
-	return &pb.OpenSessionResult{config.SessionId}, nil
+	s.sessions[request.SessionId] = sess
+	log.Debl.Printf("Session %s opened\n", request.SessionId)
+	return &pb.OpenSessionReply{request.SessionId}, nil
 }
 
 /*
  * Miscellaneous Functions
  */
 
-func (s Server) createModule(config interface{}) (*module.Module, error) {
+func (s Server) createModule(request interface{}) (*module.Module, error) {
 	var mod *module.Module
 
-	switch config.(type) {
+	switch request.(type) {
 	case *pb.GoBGPLinkModule:
-		rpcConfig := config.(*pb.GoBGPLinkModule)
+		rpcConfig := request.(*pb.GoBGPLinkModule)
 		outSessions, err := s.getSessions(rpcConfig.OutSessionId)
 		if err != nil {
 			return nil, err
@@ -246,7 +246,7 @@ func (s Server) createModule(config interface{}) (*module.Module, error) {
 			return nil, err
 		}
 	case *pb.PrefixHijackModule:
-		rpcConfig := config.(*pb.PrefixHijackModule)
+		rpcConfig := request.(*pb.PrefixHijackModule)
 		inSessions, err := s.getSessions(rpcConfig.InSessionId)
 		if err != nil {
 			return nil, err

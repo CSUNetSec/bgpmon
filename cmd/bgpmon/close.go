@@ -19,14 +19,14 @@ func Close(cmd *cli.Cmd) {
 			panic(err)
 		}
 
-		config := &pb.CloseSessionConfig{*id}
+		request := &pb.CloseSessionRequest{*id}
 
 		ctx := context.Background()
-		res, err := client.CloseSession(ctx, config)
+		reply, err := client.CloseSession(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(res)
+		fmt.Println(reply)
 	}
 }

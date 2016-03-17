@@ -41,16 +41,16 @@ func RunPrefixHijackModule(cmd *cli.Cmd) {
 			InSessionId:     strings.Split(*inSessions, ","),
 		}
 
-		config := new(pb.StartModuleConfig)
-		config.Type = pb.ModuleType_PREFIX_HIJACK
-		config.PrefixHijackModule = &prefixHijack
+		request := new(pb.StartModuleRequest)
+		request.Type = pb.ModuleType_PREFIX_HIJACK
+		request.PrefixHijackModule = &prefixHijack
 
 		ctx := context.Background()
-		res, err := client.StartModule(ctx, config)
+		reply, err := client.StartModule(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(res)
+		fmt.Println(reply)
 	}
 }

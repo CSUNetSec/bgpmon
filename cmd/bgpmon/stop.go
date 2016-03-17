@@ -19,14 +19,14 @@ func StopModule(cmd *cli.Cmd) {
 			panic(err)
 		}
 
-		config := &pb.StopModuleConfig{*id}
+		request := &pb.StopModuleRequest{*id}
 
 		ctx := context.Background()
-		res, err := client.StopModule(ctx, config)
+		reply, err := client.StopModule(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(res)
+		fmt.Println(reply)
 	}
 }

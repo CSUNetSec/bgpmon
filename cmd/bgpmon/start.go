@@ -13,7 +13,7 @@ import (
 
 func StartGoBGPDLinkModule(cmd *cli.Cmd) {
 	cmd.Spec = "ADDRESS SESSION_IDS [--module_id]"
-	address := cmd.StringArg("ADDRESS", "", "address of gobgpd instance")
+	addreplys := cmd.StringArg("ADDRESS", "", "addreplys of gobgpd instance")
 	outSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids use as output")
 	moduleID := cmd.StringOpt("module_id", getUUID(), "id of new module")
 
@@ -23,18 +23,18 @@ func StartGoBGPDLinkModule(cmd *cli.Cmd) {
 			panic(err)
 		}
 
-		config := new(pb.StartModuleConfig)
-		config.Type = pb.ModuleType_GOBGP_LINK
-		config.ModuleId = *moduleID
-		config.GobgpLinkModule = &pb.GoBGPLinkModule{*address, strings.Split(*outSessions, ",")}
+		request := new(pb.StartModuleRequest)
+		request.Type = pb.ModuleType_GOBGP_LINK
+		request.ModuleId = *moduleID
+		request.GobgpLinkModule = &pb.GoBGPLinkModule{*addreplys, strings.Split(*outSessions, ",")}
 
 		ctx := context.Background()
-		res, err := client.StartModule(ctx, config)
+		reply, err := client.StartModule(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(res)
+		fmt.Println(reply)
 	}
 }
 
@@ -70,17 +70,17 @@ func StartPrefixHijackModule(cmd *cli.Cmd) {
 			InSessionId:     strings.Split(*inSessions, ","),
 		}
 
-		config := new(pb.StartModuleConfig)
-		config.Type = pb.ModuleType_PREFIX_HIJACK
-		config.ModuleId = *moduleID
-		config.PrefixHijackModule = &prefixHijack
+		request := new(pb.StartModuleRequest)
+		request.Type = pb.ModuleType_PREFIX_HIJACK
+		request.ModuleId = *moduleID
+		request.PrefixHijackModule = &prefixHijack
 
 		ctx := context.Background()
-		res, err := client.StartModule(ctx, config)
+		reply, err := client.StartModule(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-		fmt.Println(res)
+		fmt.Println(reply)
 	}
 }

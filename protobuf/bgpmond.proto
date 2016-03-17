@@ -3,13 +3,13 @@ syntax = "proto3";
 package bgpmond;
 
 service Bgpmond {
-	rpc CloseSession(CloseSessionConfig) returns (Empty) {}
-	rpc ListModules(Empty) returns (ListModulesResult) {}
-	rpc ListSessions(Empty) returns (ListSessionsResult) {}
-	rpc RunModule(RunModuleConfig)returns (RunModuleResult) {}
-	rpc StartModule(StartModuleConfig) returns (StartModuleResult) {}
-	rpc StopModule(StopModuleConfig) returns (Empty) {}
-	rpc OpenSession(OpenSessionConfig) returns (OpenSessionResult) {}
+	rpc CloseSession(CloseSessionRequest) returns (Empty) {}
+	rpc ListModules(Empty) returns (ListModulesReply) {}
+	rpc ListSessions(Empty) returns (ListSessionsReply) {}
+	rpc RunModule(RunModuleRequest)returns (RunModuleReply) {}
+	rpc StartModule(StartModuleRequest) returns (StartModuleReply) {}
+	rpc StopModule(StopModuleRequest) returns (Empty) {}
+	rpc OpenSession(OpenSessionRequest) returns (OpenSessionReply) {}
 }
 
 message Empty {
@@ -39,31 +39,31 @@ message PrefixHijackModule {
 /*
  * Module Command Messages
  */
-message ListModulesResult {
+message ListModulesReply {
 	repeated string module_id = 1;
 }
 
-message RunModuleConfig {
+message RunModuleRequest {
 	ModuleType type = 1;
 	PrefixHijackModule prefix_hijack_module = 2;
 }
 
-message RunModuleResult {
+message RunModuleReply {
 	string module_message = 3;
 }
 
-message StartModuleConfig {
+message StartModuleRequest {
 	ModuleType type = 1;
 	string module_id = 2;
 	GoBGPLinkModule gobgp_link_module = 3;
 	PrefixHijackModule prefix_hijack_module = 4;
 }
 
-message StartModuleResult {
+message StartModuleReply {
 	string module_id = 3;
 }
 
-message StopModuleConfig {
+message StopModuleRequest {
 	string module_id = 1;
 }
 
@@ -88,29 +88,29 @@ message FileSession {
 /*
  * Session Command Messages 
  */
-message CloseSessionConfig {
+message CloseSessionRequest {
 	string session_id = 1;
 }
 
-message ListSessionsResult {
+message ListSessionsReply {
 	repeated string session_id = 1;
 }
 
-message OpenSessionConfig {
+message OpenSessionRequest {
 	SessionType type = 1;
 	string session_id = 2;
 	CassandraSession cassandra_session = 3;
 	FileSession file_session = 4;
 }
 
-message OpenSessionResult {
+message OpenSessionReply {
 	string session_id = 3;
 }
 
 /*
  * Write Messages
  */
-message WriteConfig {
+message WriteRequest {
 	enum Type {
 		AS_NUMBER_LOCATION = 0;
 		BGP_UPDATE = 1;
