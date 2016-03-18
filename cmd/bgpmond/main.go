@@ -63,7 +63,7 @@ func main() {
 	}
 
 	bgpmondServer := Server{
-		sessions: make(map[string]session.Session),
+		sessions: make(map[string]session.Sessioner),
 		modules:  make(map[string]*module.Module),
 	}
 
@@ -73,8 +73,8 @@ func main() {
 }
 
 type Server struct {
-	sessions map[string]session.Session //map from uuid to session interface
-	modules  map[string]*module.Module  //map from uuid to running module interface
+	sessions map[string]session.Sessioner //map from uuid to session interface
+	modules  map[string]*module.Module    //map from uuid to running module interface
 }
 
 /*
@@ -197,7 +197,7 @@ func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest)
 		return nil, errors.New(fmt.Sprintf("Session ID %s already exists", request.SessionId))
 	}
 
-	var sess session.Session
+	var sess session.Sessioner
 	var err error
 
 	switch request.Type {
@@ -264,8 +264,8 @@ func (s Server) createModule(request interface{}) (*module.Module, error) {
 	return mod, nil
 }
 
-func (s Server) getSessions(sessionIDs []string) ([]session.Session, error) {
-	sessions := []session.Session{}
+func (s Server) getSessions(sessionIDs []string) ([]session.Sessioner, error) {
+	sessions := []session.Sessioner{}
 	for _, sessionID := range sessionIDs {
 		sess, ok := s.sessions[sessionID]
 		if !ok {

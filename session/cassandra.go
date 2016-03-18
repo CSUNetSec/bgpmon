@@ -1,8 +1,8 @@
 package session
 
 import (
-	"errors"
-	"fmt"
+	//"errors"
+	//"fmt"
 
 	pb "github.com/CSUNetSec/bgpmon/protobuf"
 
@@ -19,11 +19,12 @@ type InsertConfig struct {
 }
 
 type CassandraSession struct {
-	session          *gocql.Session
-	insertStatements map[pb.WriteRequest_Type][]InsertConfig
+	Session
+	cqlSession *gocql.Session
+	//insertStatements map[pb.WriteRequest_Type][]InsertConfig
 }
 
-func NewCassandraSession(username, password string, hosts []string, config CassandraConfig) (Session, error) {
+func NewCassandraSession(username, password string, hosts []string, config CassandraConfig) (Sessioner, error) {
 	cluster := gocql.NewCluster(hosts...)
 	cluster.Consistency = gocql.LocalOne
 	cluster.ProtoVersion = 4
@@ -31,12 +32,13 @@ func NewCassandraSession(username, password string, hosts []string, config Cassa
 	cluster.Authenticator = gocql.PasswordAuthenticator{Username: username, Password: password}
 	cluster.NumConns = 16
 
-	session, err := cluster.CreateSession()
+	cqlSession, err := cluster.CreateSession()
 	if err != nil {
 		return nil, err
 	}
 
-	insertStatements := make(map[pb.WriteRequest_Type][]InsertConfig)
+	writers := make(map[pb.WriteRequest_Type][]Writer)
+	/*insertStatements := make(map[pb.WriteRequest_Type][]InsertConfig)
 	for key, value := range config.MessageTypes {
 		switch key {
 		case "ASNumberLocation":
@@ -50,17 +52,38 @@ func NewCassandraSession(username, password string, hosts []string, config Cassa
 		default:
 			return nil, errors.New(fmt.Sprintf("Unknown message type '%s' in cassandra session", key))
 		}
-	}
+	}*/
 
-	cassSession := CassandraSession{session, insertStatements}
+	cassSession := CassandraSession{Session{writers}, cqlSession}
 	return cassSession, nil
 }
 
 func (c CassandraSession) Close() error {
-	c.session.Close()
+	c.cqlSession.Close()
 	return nil
 }
 
-func (c CassandraSession) Write(string) error {
-	return errors.New("unimplemented")
+/*
+ * Writers
+ */
+type CassandraWriter struct {
+	cqlSession *gocql.Session
+}
+
+type BGPUpdateWriter struct {
+	CassandraWriter
+	keyspaces  []string
+}
+
+func (b BGPUpdateWriter) Write(request *pb.WriteRequest) error {
+	return nil
+}
+
+type LocationByASWriter struct {
+	CassandraWriter
+	keyspaces []string
+}
+
+func (l LocationByASWriter) Write(request *pb.WriteRequest) error {
+	return nil
 }

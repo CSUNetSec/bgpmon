@@ -31,7 +31,7 @@ type PrefixHijackStatus struct {
 	LastExecutionTime time.Time
 }
 
-func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds, timeoutSeconds int32, inSessions []session.Session, config PrefixHijackConfig) (*module.Module, error) {
+func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config PrefixHijackConfig) (*module.Module, error) {
 	//parse cidr address
 	_, ipNet, err := net.ParseCIDR(prefix)
 	if err != nil {

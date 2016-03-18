@@ -1,13 +1,33 @@
 package session
 
-import ()
+import (
+	"errors"
 
-type IOSessions struct {
-	In  []Session
-	Out []Session
+	pb "github.com/CSUNetSec/bgpmon/protobuf"
+)
+
+type Session struct {
+	Writers map[pb.WriteRequest_Type][]Writer
 }
 
-type Session interface {
+func (s Session) Write(w *pb.WriteRequest) error {
+	writers, exists := s.Writers[w.Type]
+	if !exists {
+		return errors.New("WriteRequest type not configured")
+	}
+
+	for _, writer := range writers {
+		writer.Write(w)
+	}
+
+	return nil
+}
+
+type Sessioner interface {
 	Close() error
-	Write(string) error
+	Write(*pb.WriteRequest) error
+}
+
+type Writer interface {
+	Write(*pb.WriteRequest)
 }
