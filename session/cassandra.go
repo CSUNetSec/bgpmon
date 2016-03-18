@@ -75,6 +75,13 @@ func addWriter(writers map[pb.WriteRequest_Type][]Writer, writeRequestType pb.Wr
 /*
  * Writers
  */
+
+const (
+	locationByASStmt = "INSERT INTO %s.location_by_as_number(measure_date, as_number, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
+	locationByIPAddressStmt = "INSERT INTO %s.location_by_ip_address(measure_date, ip_address, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
+	locationByPrefixStmt = "INSERT INTO %s.location_by_as_number(measure_date, prefix_ip_address, prefix_mask, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?,?)"
+)
+
 type CassandraWriter struct {
 	cqlSession *gocql.Session
 	keyspace   string
@@ -101,7 +108,19 @@ type LocationByAS struct {
 }
 
 func (l LocationByAS) Write(request *pb.WriteRequest) error {
-	return errors.New("unimplented")
+	msg := request.GetAsNumberLocation()
+	location := msg.GetLocation()
+	return l.cqlSession.Query(
+			fmt.Sprintf(locationByASStmt, l.keyspace),
+			msg.AsNumber,
+			msg.MeasureDate,
+			location.CountryCode,
+			location.StateCode,
+			location.City,
+			location.Latitude,
+			location.Longitude,
+			msg.Source,
+		).Exec()
 }
 
 type LocationByIPAddress struct {
@@ -109,7 +128,19 @@ type LocationByIPAddress struct {
 }
 
 func (l LocationByIPAddress) Write(request *pb.WriteRequest) error {
-	return errors.New("unimplented")
+	msg := request.GetIpAddressLocation()
+	location := msg.GetLocation()
+	return l.cqlSession.Query(
+			fmt.Sprintf(locationByIPAddressStmt, l.keyspace),
+			msg.IpAddress,
+			msg.MeasureDate,
+			location.CountryCode,
+			location.StateCode,
+			location.City,
+			location.Latitude,
+			location.Longitude,
+			msg.Source,
+		).Exec()
 }
 
 type LocationByPrefix struct {
@@ -117,5 +148,18 @@ type LocationByPrefix struct {
 }
 
 func (l LocationByPrefix) Write(request *pb.WriteRequest) error {
-	return errors.New("unimplented")
+	msg := request.GetPrefixLocation()
+	location := msg.GetLocation()
+	return l.cqlSession.Query(
+			fmt.Sprintf(locationByPrefixStmt, l.keyspace),
+			msg.PrefixIpAddress,
+			msg.PrefixMask,
+			msg.MeasureDate,
+			location.CountryCode,
+			location.StateCode,
+			location.City,
+			location.Latitude,
+			location.Longitude,
+			msg.Source,
+		).Exec()
 }

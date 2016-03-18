@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 
 	"github.com/CSUNetSec/bgpmon/log"
@@ -105,7 +106,7 @@ func (s Server) RunModule(ctx context.Context, request *pb.RunModuleRequest) (*p
 
 func (s Server) StartModule(ctx context.Context, request *pb.StartModuleRequest) (*pb.StartModuleReply, error) {
 	log.Debl.Printf("Starting module %s\n", request.ModuleId)
-	if _, ok := s.modules[request.ModuleId]; ok {
+	if _, exists := s.modules[request.ModuleId]; exists {
 		return nil, errors.New(fmt.Sprintf("Module ID %s already exists", request.ModuleId))
 	}
 
@@ -153,8 +154,8 @@ func (s Server) ListModules(ctx context.Context, request *pb.Empty) (*pb.ListMod
 func (s Server) StopModule(ctx context.Context, request *pb.StopModuleRequest) (*pb.Empty, error) {
 	log.Debl.Printf("Stopping module %s\n", request.ModuleId)
 
-	mod, ok := s.modules[request.ModuleId]
-	if !ok {
+	mod, exists := s.modules[request.ModuleId]
+	if !exists {
 		return nil, errors.New(fmt.Sprintf("Module ID %s not found", request.ModuleId))
 	} else {
 		mod.CommandChan <- module.ModuleCommand{module.COMDIE, nil}
@@ -170,8 +171,8 @@ func (s Server) StopModule(ctx context.Context, request *pb.StopModuleRequest) (
  */
 func (s Server) CloseSession(ctx context.Context, request *pb.CloseSessionRequest) (*pb.Empty, error) {
 	log.Debl.Printf("Closing session %s\n", request.SessionId)
-	sess, ok := s.sessions[request.SessionId]
-	if !ok {
+	sess, exists := s.sessions[request.SessionId]
+	if !exists {
 		return nil, errors.New(fmt.Sprintf("Session ID %s not found", request.SessionId))
 	} else {
 		sess.Close()
@@ -193,7 +194,7 @@ func (s Server) ListSessions(ctx context.Context, request *pb.Empty) (*pb.ListSe
 
 func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest) (*pb.OpenSessionReply, error) {
 	log.Debl.Printf("Opening session %s\n", request.SessionId)
-	if _, ok := s.sessions[request.SessionId]; ok {
+	if _, exists := s.sessions[request.SessionId]; exists {
 		return nil, errors.New(fmt.Sprintf("Session ID %s already exists", request.SessionId))
 	}
 
@@ -227,9 +228,31 @@ func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest)
 }
 
 /*
+ * Write Messages
+ */
+func (s Server) Write(stream pb.Bgpmond_WriteServer) error {
+	for {
+		writeRequest, err := stream.Recv()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		sess, exists := s.sessions[writeRequest.SessionId]
+		if !exists {
+			return errors.New(fmt.Sprintf("Session '%s' does not exist", writeRequest.SessionId))
+		}
+
+		sess.Write(writeRequest)
+	}
+
+	return nil
+}
+
+/*
  * Miscellaneous Functions
  */
-
 func (s Server) createModule(request interface{}) (*module.Module, error) {
 	var mod *module.Module
 
@@ -257,7 +280,7 @@ func (s Server) createModule(request interface{}) (*module.Module, error) {
 			return nil, err
 		}
 	default:
-		return nil, errors.New("unimplemented module type")
+		return nil, errors.New("Unimplemented module type")
 	}
 
 	mod.Init()
@@ -267,9 +290,9 @@ func (s Server) createModule(request interface{}) (*module.Module, error) {
 func (s Server) getSessions(sessionIDs []string) ([]session.Sessioner, error) {
 	sessions := []session.Sessioner{}
 	for _, sessionID := range sessionIDs {
-		sess, ok := s.sessions[sessionID]
-		if !ok {
-			return nil, errors.New(fmt.Sprintf("session with id '%s' does not exist", sessionID))
+		sess, exists := s.sessions[sessionID]
+		if !exists {
+			return nil, errors.New(fmt.Sprintf("Session '%s' does not exist", sessionID))
 		}
 
 		sessions = append(sessions, sess)

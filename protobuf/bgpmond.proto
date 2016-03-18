@@ -10,6 +10,7 @@ service Bgpmond {
 	rpc StartModule(StartModuleRequest) returns (StartModuleReply) {}
 	rpc StopModule(StopModuleRequest) returns (Empty) {}
 	rpc OpenSession(OpenSessionRequest) returns (OpenSessionReply) {}
+	rpc Write(stream WriteRequest) returns (Empty) {}
 }
 
 message Empty {
@@ -104,7 +105,7 @@ message OpenSessionRequest {
 }
 
 message OpenSessionReply {
-	string session_id = 3;
+	string session_id = 1;
 }
 
 /*
@@ -119,16 +120,18 @@ message WriteRequest {
 	}
 
 	Type type = 1;
-	ASNumberLocation as_number_location = 2;
-	BGPUpdateMessage bgp_update_message = 3;
-	IPAddressLocation ip_address_location = 4;
-	PrefixLocation prefix_location = 5;
+	string session_id = 2;
+	ASNumberLocation as_number_location = 3;
+	BGPUpdateMessage bgp_update_message = 4;
+	IPAddressLocation ip_address_location = 5;
+	PrefixLocation prefix_location = 6;
 }
 
 message ASNumberLocation {
-	uint32 ASNumber = 1;
+	uint32 as_number = 1;
 	string measure_date = 2;
 	Location location = 3;
+	string source = 4;
 }
 
 message BGPUpdateMessage {
@@ -139,6 +142,7 @@ message IPAddressLocation {
 	string ip_address = 1;
 	string measure_date = 2;
 	Location location = 3;
+	string source = 4;
 }
 
 message Location {
@@ -154,4 +158,5 @@ message PrefixLocation {
 	uint32 prefix_mask = 2;
 	string measure_date = 3;
 	Location location = 4;
+	string source = 5;
 }

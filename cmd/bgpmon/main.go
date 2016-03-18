@@ -33,7 +33,7 @@ bgpmon status
 bgpmon stop
 
 bgpmon write
-	as-location
+	as-number-location
 	mrt-file
 	ip-location
 	prefix-location
@@ -77,6 +77,7 @@ func main() {
 	bgpmon.Command("stop", "stop a module on bgpmond host", StopModule)
 
 	bgpmon.Command("write", "write data to bgpmond host", func(cmd *cli.Cmd) {
+		cmd.Command("as-location-file", "write as location data from file", WriteASLocationFile)
 		cmd.Command("mrt-file", "write bgp messages from mrt file", WriteMRTFile)
 	})
 
