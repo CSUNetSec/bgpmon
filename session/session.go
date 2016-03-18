@@ -29,5 +29,5 @@ type Sessioner interface {
 }
 
 type Writer interface {
-	Write(*pb.WriteRequest)
+	Write(*pb.WriteRequest) error
 }

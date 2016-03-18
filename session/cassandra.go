@@ -1,8 +1,8 @@
 package session
 
 import (
-	//"errors"
-	//"fmt"
+	"errors"
+	"fmt"
 
 	pb "github.com/CSUNetSec/bgpmon/protobuf"
 
@@ -10,18 +10,16 @@ import (
 )
 
 type CassandraConfig struct {
-	MessageTypes map[string][]InsertConfig
+	Writers map[string][]WriterConfig
 }
 
-type InsertConfig struct {
-	Statement string
-	Values    []string
+type WriterConfig struct {
+	Keyspace string
 }
 
 type CassandraSession struct {
 	Session
 	cqlSession *gocql.Session
-	//insertStatements map[pb.WriteRequest_Type][]InsertConfig
 }
 
 func NewCassandraSession(username, password string, hosts []string, config CassandraConfig) (Sessioner, error) {
@@ -38,21 +36,24 @@ func NewCassandraSession(username, password string, hosts []string, config Cassa
 	}
 
 	writers := make(map[pb.WriteRequest_Type][]Writer)
-	/*insertStatements := make(map[pb.WriteRequest_Type][]InsertConfig)
-	for key, value := range config.MessageTypes {
-		switch key {
-		case "ASNumberLocation":
-			insertStatements[pb.WriteRequest_AS_NUMBER_LOCATION] = value
-		case "BGPUpdateMessage":
-			insertStatements[pb.WriteRequest_BGP_UPDATE] = value
-		case "IPAddressLocation":
-			insertStatements[pb.WriteRequest_IP_ADDRESS_LOCATION] = value
-		case "PrefixLocation":
-			insertStatements[pb.WriteRequest_PREFIX_LOCATION] = value
-		default:
-			return nil, errors.New(fmt.Sprintf("Unknown message type '%s' in cassandra session", key))
+	for key, values := range config.Writers {
+		for _, value := range values {
+			switch key {
+			case "BGPUpdateMsgByTime":
+				addWriter(writers, pb.WriteRequest_BGP_UPDATE, BGPUpdateMsgByTime{CassandraWriter{cqlSession,value.Keyspace}})
+			case "BGPUpdateMsgByPrefixRange":
+				addWriter(writers, pb.WriteRequest_BGP_UPDATE, BGPUpdateMsgByPrefixRange{CassandraWriter{cqlSession,value.Keyspace}})
+			case "LocationByAS":
+				addWriter(writers, pb.WriteRequest_AS_NUMBER_LOCATION, LocationByAS{CassandraWriter{cqlSession,value.Keyspace}})
+			case "LocationByIPAddress":
+				addWriter(writers, pb.WriteRequest_IP_ADDRESS_LOCATION, LocationByIPAddress{CassandraWriter{cqlSession,value.Keyspace}})
+			case "LocationByPrefix":
+				addWriter(writers, pb.WriteRequest_PREFIX_LOCATION, LocationByPrefix{CassandraWriter{cqlSession,value.Keyspace}})
+			default:
+				return nil, errors.New(fmt.Sprintf("Unknown writer type %s for cassandra session", key))
+			}
 		}
-	}*/
+	}
 
 	cassSession := CassandraSession{Session{writers}, cqlSession}
 	return cassSession, nil
@@ -63,27 +64,58 @@ func (c CassandraSession) Close() error {
 	return nil
 }
 
+func addWriter(writers map[pb.WriteRequest_Type][]Writer, writeRequestType pb.WriteRequest_Type, writer Writer) {
+	if _, exists := writers[writeRequestType]; !exists {
+		writers[writeRequestType] = []Writer{}
+	}
+
+	writers[writeRequestType] = append(writers[writeRequestType], writer)
+}
+
 /*
  * Writers
  */
 type CassandraWriter struct {
 	cqlSession *gocql.Session
+	keyspace   string
 }
 
-type BGPUpdateWriter struct {
+type BGPUpdateMsgByTime struct {
 	CassandraWriter
-	keyspaces  []string
 }
 
-func (b BGPUpdateWriter) Write(request *pb.WriteRequest) error {
-	return nil
+func (b BGPUpdateMsgByTime) Write(request *pb.WriteRequest) error {
+	return errors.New("unimplented")
 }
 
-type LocationByASWriter struct {
+type BGPUpdateMsgByPrefixRange struct {
 	CassandraWriter
-	keyspaces []string
 }
 
-func (l LocationByASWriter) Write(request *pb.WriteRequest) error {
-	return nil
+func (b BGPUpdateMsgByPrefixRange) Write(request *pb.WriteRequest) error {
+	return errors.New("unimplented")
+}
+
+type LocationByAS struct {
+	CassandraWriter
+}
+
+func (l LocationByAS) Write(request *pb.WriteRequest) error {
+	return errors.New("unimplented")
+}
+
+type LocationByIPAddress struct {
+	CassandraWriter
+}
+
+func (l LocationByIPAddress) Write(request *pb.WriteRequest) error {
+	return errors.New("unimplented")
+}
+
+type LocationByPrefix struct {
+	CassandraWriter
+}
+
+func (l LocationByPrefix) Write(request *pb.WriteRequest) error {
+	return errors.New("unimplented")
 }

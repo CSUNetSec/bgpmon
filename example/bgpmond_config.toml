@@ -3,37 +3,27 @@ Address = ":12289"
 DebugOut = "stdout"
 ErrorOut = "stderr"
 
-# Configuration for Prefix Hijack Modules
+# Configuration for Modules
 [Modules.PrefixHijack]
-Keyspaces = ["csu_bgp_derived", "test_derived"]
+Keyspaces = ["csu_bgp_derived"]
 
-# Configuration for GoBGP Link Modules
 [Modules.GoBGPLink]
 
-# Configuration for Location Modules
 [Modules.Location]
 Keyspaces = ["csu_location_core"]
 
+# Configuration for Sessions
+[[Sessions.Cassandra.Writers.BGPUpdateMsgByTime]]
+Keyspace = "csu_bgp_core"
 
-# Configuration for Cassandra Sessions
-#[[Sessions.Cassandra.MessageTypes.ASNumberLocation]]
-#Statement = "INSERT INTO csu_location_core.location_by_as_number(measure_date, as_number, country_code, state_code, city, latitude, longitude) VALUES(?,?,?,?,?,?,?)"
-#Values = ["MeasureDate", "ASNumber", "CountryCode", "StateCode", "City", "Latitude", "Longitude"]
+[[Sessions.Cassandra.Writers.BGPUpdateMsgByPrefixRange]]
+Keyspace = "csu_bgp_derived"
 
-#[[Sessions.Cassandra.MessageTypes.BGPUpdateMessage]]
-#Statement = "INSERT INTO csu_bgp_core.update_messages_by_time() VALUES()"
-#Values = ["PeerIPAddress", "CollectorIPAddress", "AnnouncedPrefixes", "ASPath"]
+[[Sessions.Cassandra.Writers.LocationByAS]]
+Keyspace = "csu_location_core"
 
-#[[Sessions.Cassandra.MessageTypes.BGPUpdateMessage]]
-#Statement = "INSERT INTO csu_bgp_derived.as_number_by_prefix_range() VALUES()"
+[[Sessions.Cassandra.Writers.LocationByIPAddress]]
+Keyspace = "csu_location_core"
 
-#[[Sessions.Cassandra.MessageTypes.IPAddressLocation]]
-#Statement = "INSERT INTO csu_location_core.location_by_ip_address(measure_date, ip_address, country_code, state_code, city, latitude, longitude) VALUES(?,?,?,?,?,?,?)"
-#Values = ["MeasureDate", "IPAddress", "CountryCode", "StateCode", "City", "Latitude", "Longitude"]
-
-#[[Sessions.Cassandra.MessageTypes.PrefixLocation]]
-#Statement = "INSERT INTO csu_location_core.location_by_prefix(measure_date, prefix_ip_address, prefix_mask, country_code, state_code, city, latitude, longitude) VALUES(?,?,?,?,?,?,?)"
-#Values = ["MeasureDate", "PrefixIPAddress", "PrefixMask", "CountryCode", "StateCode", "City", "Latitude", "Longitude"]
-
-# Configuration for File Sessions
-#[Sessions.File]
+[[Sessions.Cassandra.Writers.LocationByPrefix]]
+Keyspace = "csu_location_core"
