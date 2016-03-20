@@ -235,7 +235,7 @@ func (s Server) Write(stream pb.Bgpmond_WriteServer) error {
 		}
 
 		buffer = append(buffer, writeRequest)
-		if len(buffer) == 25 {
+		if len(buffer) == 500 {
 			writeBuffer(buffer, s.sessions)
 			buffer = []*pb.WriteRequest{}
 		}

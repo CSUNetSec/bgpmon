@@ -80,7 +80,7 @@ func addWriter(writers map[pb.WriteRequest_Type][]Writer, writeRequestType pb.Wr
 const (
 	locationByASStmt = "INSERT INTO %s.location_by_as_number(as_number, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
 	locationByIPAddressStmt = "INSERT INTO %s.location_by_ip_address(ip_address, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
-	locationByPrefixStmt = "INSERT INTO %s.location_by_as_number(prefix_ip_address, prefix_mask, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?,?)"
+	locationByPrefixStmt = "INSERT INTO %s.location_by_prefix(prefix_ip_address, prefix_mask, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?,?)"
 )
 
 type CassandraWriter struct {
@@ -144,7 +144,7 @@ func (l LocationByIPAddress) Write(request *pb.WriteRequest) error {
 	return l.cqlSession.Query(
 			fmt.Sprintf(locationByIPAddressStmt, l.keyspace),
 			msg.IpAddress,
-			measureDate,
+			gocql.UUIDFromTime(measureDate),
 			location.CountryCode,
 			location.StateCode,
 			location.City,
@@ -170,7 +170,7 @@ func (l LocationByPrefix) Write(request *pb.WriteRequest) error {
 			fmt.Sprintf(locationByPrefixStmt, l.keyspace),
 			msg.PrefixIpAddress,
 			msg.PrefixMask,
-			measureDate,
+			gocql.UUIDFromTime(measureDate),
 			location.CountryCode,
 			location.StateCode,
 			location.City,

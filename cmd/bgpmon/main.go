@@ -79,6 +79,7 @@ func main() {
 	bgpmon.Command("write", "write data to bgpmond host", func(cmd *cli.Cmd) {
 		cmd.Command("as-location-file", "write as location data from file", WriteASLocationFile)
 		cmd.Command("mrt-file", "write bgp messages from mrt file", WriteMRTFile)
+		cmd.Command("prefix-location-file", "write prefix location data from file", WritePrefixLocationFile)
 	})
 
 	bgpmon.Run(os.Args)

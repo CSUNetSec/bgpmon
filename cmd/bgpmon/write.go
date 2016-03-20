@@ -105,3 +105,90 @@ func WriteASLocationFile(cmd *cli.Cmd) {
 		fmt.Printf("Processed %d lines\n", lineNum)
 	}
 }
+
+func WritePrefixLocationFile(cmd *cli.Cmd) {
+	cmd.Spec = "FILENAME SESSION_ID [MEASURE_DATE]"
+	filename := cmd.StringArg("FILENAME", "", "filename of as number location file")
+	sessionID := cmd.StringArg("SESSION_ID", "", "session to write data")
+	measureDate := cmd.StringArg("MEASURE_DATE", time.Now().Format("2006-01-02"), "date of measurement")
+
+	cmd.Action = func() {
+		//open file
+		file, err := os.Open(*filename)
+		if err != nil {
+			panic(err)
+		}
+		defer file.Close()
+
+		//open stream
+		client, err := getRPCClient()
+		if err != nil {
+			panic(err)
+		}
+
+		ctx := context.Background()
+		stream, err := client.Write(ctx)
+		if err != nil {
+			panic(err)
+		}
+		defer stream.CloseAndRecv()
+
+		//loop through rows
+		scanner := bufio.NewScanner(file)
+		lineNum := 0
+		replaceStrings := []string{"/","|"}
+		removeStrings := []string{" ", "'", "{", "}"}
+		for scanner.Scan() {
+			if scanner.Err() != nil {
+				panic(scanner.Err())
+			}
+
+			//clean line
+			line := scanner.Text()
+			for _, s := range replaceStrings {
+				line = strings.Replace(line, s, ",", -1)
+			}
+			for _, s := range removeStrings {
+				line = strings.Replace(line, s, "", -1)
+			}
+
+			fields := strings.Split(line, ",")
+			prefixMask, err := strconv.ParseUint(fields[1], 10, 32)
+			if err != nil {
+				panic(err)
+			}
+
+			//loop over countries
+			for _, country := range fields[2:] {
+				if country == "False" {
+					break
+				}
+
+				location := new(pb.Location)
+				location.CountryCode = strings.Trim(strings.TrimSpace(country), "'")
+
+				prefixLocation := new(pb.PrefixLocation)
+				prefixLocation.PrefixIpAddress = fields[0]
+				prefixLocation.PrefixMask = uint32(prefixMask)
+				prefixLocation.MeasureDate = *measureDate
+				prefixLocation.Location = location
+
+				writeRequest := new(pb.WriteRequest)
+				writeRequest.Type = pb.WriteRequest_PREFIX_LOCATION
+				writeRequest.PrefixLocation = prefixLocation
+				writeRequest.SessionId = *sessionID
+
+				if err = stream.Send(writeRequest); err != nil {
+					panic(err)
+				}
+			}
+
+			lineNum++
+			if lineNum % 1000 == 0 {
+				fmt.Printf("Processed %d lines\n", lineNum)
+			}
+		}
+
+		fmt.Printf("Processed %d lines\n", lineNum)
+	}
+}
