@@ -136,10 +136,15 @@ type LocationByIPAddress struct {
 func (l LocationByIPAddress) Write(request *pb.WriteRequest) error {
 	msg := request.GetIpAddressLocation()
 	location := msg.GetLocation()
+	measureDate, err := time.Parse("2006-01-02", msg.MeasureDate)
+	if err != nil {
+		return err
+	}
+
 	return l.cqlSession.Query(
 			fmt.Sprintf(locationByIPAddressStmt, l.keyspace),
 			msg.IpAddress,
-			msg.MeasureDate,
+			measureDate,
 			location.CountryCode,
 			location.StateCode,
 			location.City,
@@ -156,11 +161,16 @@ type LocationByPrefix struct {
 func (l LocationByPrefix) Write(request *pb.WriteRequest) error {
 	msg := request.GetPrefixLocation()
 	location := msg.GetLocation()
+	measureDate, err := time.Parse("2006-01-02", msg.MeasureDate)
+	if err != nil {
+		return err
+	}
+
 	return l.cqlSession.Query(
 			fmt.Sprintf(locationByPrefixStmt, l.keyspace),
 			msg.PrefixIpAddress,
 			msg.PrefixMask,
-			msg.MeasureDate,
+			measureDate,
 			location.CountryCode,
 			location.StateCode,
 			location.City,
