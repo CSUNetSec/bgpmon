@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	pb "github.com/CSUNetSec/bgpmon/protobuf"
 
@@ -27,7 +28,7 @@ func WriteASLocationFile(cmd *cli.Cmd) {
 	cmd.Spec = "FILENAME SESSION_ID [MEASURE_DATE]"
 	filename := cmd.StringArg("FILENAME", "", "filename of as number location file")
 	sessionID := cmd.StringArg("SESSION_ID", "", "session to write data")
-	measureDate := cmd.StringArg("MEASURE_DATE", "2016-01-01", "date of measurement")
+	measureDate := cmd.StringArg("MEASURE_DATE", time.Now().Format("2006-01-02"), "date of measurement")
 
 	cmd.Action = func() {
 		//open file
@@ -96,7 +97,7 @@ func WriteASLocationFile(cmd *cli.Cmd) {
 			}
 
 			lineNum++
-			if lineNum % 250 == 0 {
+			if lineNum % 1000 == 0 {
 				fmt.Printf("Processed %d lines\n", lineNum)
 			}
 		}
