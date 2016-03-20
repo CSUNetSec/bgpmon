@@ -3,6 +3,7 @@ package session
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	pb "github.com/CSUNetSec/bgpmon/protobuf"
 
@@ -77,9 +78,9 @@ func addWriter(writers map[pb.WriteRequest_Type][]Writer, writeRequestType pb.Wr
  */
 
 const (
-	locationByASStmt = "INSERT INTO %s.location_by_as_number(measure_date, as_number, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
-	locationByIPAddressStmt = "INSERT INTO %s.location_by_ip_address(measure_date, ip_address, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
-	locationByPrefixStmt = "INSERT INTO %s.location_by_as_number(measure_date, prefix_ip_address, prefix_mask, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?,?)"
+	locationByASStmt = "INSERT INTO %s.location_by_as_number(as_number, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
+	locationByIPAddressStmt = "INSERT INTO %s.location_by_ip_address(ip_address, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
+	locationByPrefixStmt = "INSERT INTO %s.location_by_as_number(prefix_ip_address, prefix_mask, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?,?)"
 )
 
 type CassandraWriter struct {
@@ -110,15 +111,20 @@ type LocationByAS struct {
 func (l LocationByAS) Write(request *pb.WriteRequest) error {
 	msg := request.GetAsNumberLocation()
 	location := msg.GetLocation()
+	measureDate, err := time.Parse("2006-01-02", msg.MeasureDate)
+	if err != nil {
+		return err
+	}
+
 	return l.cqlSession.Query(
 			fmt.Sprintf(locationByASStmt, l.keyspace),
 			msg.AsNumber,
-			msg.MeasureDate,
+			gocql.UUIDFromTime(measureDate),
 			location.CountryCode,
 			location.StateCode,
 			location.City,
-			location.Latitude,
-			location.Longitude,
+			float32(location.Latitude),
+			float32(location.Longitude),
 			msg.Source,
 		).Exec()
 }
@@ -137,8 +143,8 @@ func (l LocationByIPAddress) Write(request *pb.WriteRequest) error {
 			location.CountryCode,
 			location.StateCode,
 			location.City,
-			location.Latitude,
-			location.Longitude,
+			float32(location.Latitude),
+			float32(location.Longitude),
 			msg.Source,
 		).Exec()
 }
@@ -158,8 +164,8 @@ func (l LocationByPrefix) Write(request *pb.WriteRequest) error {
 			location.CountryCode,
 			location.StateCode,
 			location.City,
-			location.Latitude,
-			location.Longitude,
+			float32(location.Latitude),
+			float32(location.Longitude),
 			msg.Source,
 		).Exec()
 }

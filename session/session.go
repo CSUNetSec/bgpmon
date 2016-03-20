@@ -17,7 +17,9 @@ func (s Session) Write(w *pb.WriteRequest) error {
 	}
 
 	for _, writer := range writers {
-		writer.Write(w)
+		if err := writer.Write(w); err != nil {
+			return err
+		}
 	}
 
 	return nil

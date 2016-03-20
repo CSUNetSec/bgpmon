@@ -2,10 +2,10 @@ package main
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net"
+	"os"
 
 	"github.com/CSUNetSec/bgpmon/log"
 	"github.com/CSUNetSec/bgpmon/module"
@@ -19,7 +19,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-var requestFile string
 var bgpmondConfig BgpmondConfig
 
 type BgpmondConfig struct {
@@ -40,14 +39,8 @@ type SessionConfig struct {
 	File      session.FileConfig
 }
 
-func init() {
-	flag.StringVar(&requestFile, "request_file", "", "bgpmond toml requesturation file")
-}
-
 func main() {
-	flag.Parse()
-
-	if _, err := toml.DecodeFile(requestFile, &bgpmondConfig); err != nil {
+	if _, err := toml.DecodeFile(os.Args[1], &bgpmondConfig); err != nil {
 		panic(err)
 	}
 
@@ -231,23 +224,39 @@ func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest)
  * Write Messages
  */
 func (s Server) Write(stream pb.Bgpmond_WriteServer) error {
+	buffer := []*pb.WriteRequest{}
 	for {
 		writeRequest, err := stream.Recv()
 		if err == io.EOF {
+			writeBuffer(buffer, s.sessions)
 			break
 		} else if err != nil {
 			return err
 		}
 
-		sess, exists := s.sessions[writeRequest.SessionId]
-		if !exists {
-			return errors.New(fmt.Sprintf("Session '%s' does not exist", writeRequest.SessionId))
+		buffer = append(buffer, writeRequest)
+		if len(buffer) == 25 {
+			writeBuffer(buffer, s.sessions)
+			buffer = []*pb.WriteRequest{}
 		}
-
-		sess.Write(writeRequest)
 	}
 
 	return nil
+}
+
+func writeBuffer(buffer []*pb.WriteRequest, sessions map[string]session.Sessioner) {
+	go func() {
+		for _, writeRequest := range buffer {
+			sess, exists := sessions[writeRequest.SessionId]
+			if !exists {
+				panic(errors.New(fmt.Sprintf("Session '%s' does not exist", writeRequest.SessionId)))
+			}
+
+			if err := sess.Write(writeRequest); err != nil {
+				panic(err)
+			}
+		}
+	}()
 }
 
 /*

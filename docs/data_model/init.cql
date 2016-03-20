@@ -101,6 +101,18 @@ CREATE TABLE csu_bgp_derived.prefix_by_as_number (
  */
 CREATE KEYSPACE csu_location_core WITH replication = {'class': 'NetworkTopologyStrategy', 'dc1': '2'} AND durable_writes = true;
 
+CREATE TABLE csu_location_core.location_by_as_number (
+	as_number bigint,
+	measure_date timeuuid,
+	country_code text,
+	state_code,
+	city text,
+	latitude float,
+	longitude float,
+	source text,
+	PRIMARY KEY (as_number, measure_date)
+) WITH CLUSTERING ORDER BY (measure_date DESC);
+
 CREATE TABLE csu_location_core.location_by_ip_address (
 	ip_address inet,
 	measure_date timeuuid,
@@ -124,16 +136,4 @@ CREATE TABLE csu_location_core.location_by_prefix (
 	longitude float,
 	source text,
 	PRIMARY KEY ((prefix_ip_address, prefix_mask), measure_date)
-) WITH CLUSTERING ORDER BY (measure_date DESC);
-
-CREATE TABLE csu_location_core.location_by_as_number (
-	as_number bigint,
-	measure_date timeuuid,
-	country_code text,
-	state_code,
-	city text,
-	latitude float,
-	longitude float,
-	source text,
-	PRIMARY KEY (as_number, measure_date)
 ) WITH CLUSTERING ORDER BY (measure_date DESC);
