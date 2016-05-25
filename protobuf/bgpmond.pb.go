@@ -47,6 +47,10 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+const _ = proto.ProtoPackageIsVersion1
+
 //
 // Module Messages
 type ModuleType int32
@@ -130,7 +134,7 @@ func (*Empty) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
 type GoBGPLinkModule struct {
 	Address      string   `protobuf:"bytes,1,opt,name=address" json:"address,omitempty"`
-	OutSessionId []string `protobuf:"bytes,2,rep,name=out_session_id" json:"out_session_id,omitempty"`
+	OutSessionId []string `protobuf:"bytes,2,rep,name=out_session_id,json=outSessionId" json:"out_session_id,omitempty"`
 }
 
 func (m *GoBGPLinkModule) Reset()                    { *m = GoBGPLinkModule{} }
@@ -140,10 +144,10 @@ func (*GoBGPLinkModule) Descriptor() ([]byte, []int) { return fileDescriptor0, [
 
 type PrefixHijackModule struct {
 	Prefix          string   `protobuf:"bytes,1,opt,name=prefix" json:"prefix,omitempty"`
-	AsNumber        []uint32 `protobuf:"varint,2,rep,name=as_number" json:"as_number,omitempty"`
-	PeriodicSeconds int32    `protobuf:"varint,3,opt,name=periodic_seconds" json:"periodic_seconds,omitempty"`
-	TimeoutSeconds  int32    `protobuf:"varint,4,opt,name=timeout_seconds" json:"timeout_seconds,omitempty"`
-	InSessionId     []string `protobuf:"bytes,5,rep,name=in_session_id" json:"in_session_id,omitempty"`
+	AsNumber        []uint32 `protobuf:"varint,2,rep,name=as_number,json=asNumber" json:"as_number,omitempty"`
+	PeriodicSeconds int32    `protobuf:"varint,3,opt,name=periodic_seconds,json=periodicSeconds" json:"periodic_seconds,omitempty"`
+	TimeoutSeconds  int32    `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds" json:"timeout_seconds,omitempty"`
+	InSessionId     []string `protobuf:"bytes,5,rep,name=in_session_id,json=inSessionId" json:"in_session_id,omitempty"`
 }
 
 func (m *PrefixHijackModule) Reset()                    { *m = PrefixHijackModule{} }
@@ -154,7 +158,7 @@ func (*PrefixHijackModule) Descriptor() ([]byte, []int) { return fileDescriptor0
 //
 // Module Command Messages
 type ListModulesReply struct {
-	ModuleId []string `protobuf:"bytes,1,rep,name=module_id" json:"module_id,omitempty"`
+	ModuleId []string `protobuf:"bytes,1,rep,name=module_id,json=moduleId" json:"module_id,omitempty"`
 }
 
 func (m *ListModulesReply) Reset()                    { *m = ListModulesReply{} }
@@ -164,7 +168,7 @@ func (*ListModulesReply) Descriptor() ([]byte, []int) { return fileDescriptor0, 
 
 type RunModuleRequest struct {
 	Type               ModuleType          `protobuf:"varint,1,opt,name=type,enum=bgpmond.ModuleType" json:"type,omitempty"`
-	PrefixHijackModule *PrefixHijackModule `protobuf:"bytes,2,opt,name=prefix_hijack_module" json:"prefix_hijack_module,omitempty"`
+	PrefixHijackModule *PrefixHijackModule `protobuf:"bytes,2,opt,name=prefix_hijack_module,json=prefixHijackModule" json:"prefix_hijack_module,omitempty"`
 }
 
 func (m *RunModuleRequest) Reset()                    { *m = RunModuleRequest{} }
@@ -180,7 +184,7 @@ func (m *RunModuleRequest) GetPrefixHijackModule() *PrefixHijackModule {
 }
 
 type RunModuleReply struct {
-	ModuleMessage string `protobuf:"bytes,3,opt,name=module_message" json:"module_message,omitempty"`
+	ModuleMessage string `protobuf:"bytes,3,opt,name=module_message,json=moduleMessage" json:"module_message,omitempty"`
 }
 
 func (m *RunModuleReply) Reset()                    { *m = RunModuleReply{} }
@@ -190,9 +194,9 @@ func (*RunModuleReply) Descriptor() ([]byte, []int) { return fileDescriptor0, []
 
 type StartModuleRequest struct {
 	Type               ModuleType          `protobuf:"varint,1,opt,name=type,enum=bgpmond.ModuleType" json:"type,omitempty"`
-	ModuleId           string              `protobuf:"bytes,2,opt,name=module_id" json:"module_id,omitempty"`
-	GobgpLinkModule    *GoBGPLinkModule    `protobuf:"bytes,3,opt,name=gobgp_link_module" json:"gobgp_link_module,omitempty"`
-	PrefixHijackModule *PrefixHijackModule `protobuf:"bytes,4,opt,name=prefix_hijack_module" json:"prefix_hijack_module,omitempty"`
+	ModuleId           string              `protobuf:"bytes,2,opt,name=module_id,json=moduleId" json:"module_id,omitempty"`
+	GobgpLinkModule    *GoBGPLinkModule    `protobuf:"bytes,3,opt,name=gobgp_link_module,json=gobgpLinkModule" json:"gobgp_link_module,omitempty"`
+	PrefixHijackModule *PrefixHijackModule `protobuf:"bytes,4,opt,name=prefix_hijack_module,json=prefixHijackModule" json:"prefix_hijack_module,omitempty"`
 }
 
 func (m *StartModuleRequest) Reset()                    { *m = StartModuleRequest{} }
@@ -215,7 +219,7 @@ func (m *StartModuleRequest) GetPrefixHijackModule() *PrefixHijackModule {
 }
 
 type StartModuleReply struct {
-	ModuleId string `protobuf:"bytes,3,opt,name=module_id" json:"module_id,omitempty"`
+	ModuleId string `protobuf:"bytes,3,opt,name=module_id,json=moduleId" json:"module_id,omitempty"`
 }
 
 func (m *StartModuleReply) Reset()                    { *m = StartModuleReply{} }
@@ -224,7 +228,7 @@ func (*StartModuleReply) ProtoMessage()               {}
 func (*StartModuleReply) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
 type StopModuleRequest struct {
-	ModuleId string `protobuf:"bytes,1,opt,name=module_id" json:"module_id,omitempty"`
+	ModuleId string `protobuf:"bytes,1,opt,name=module_id,json=moduleId" json:"module_id,omitempty"`
 }
 
 func (m *StopModuleRequest) Reset()                    { *m = StopModuleRequest{} }
@@ -255,7 +259,7 @@ func (*FileSession) Descriptor() ([]byte, []int) { return fileDescriptor0, []int
 //
 // Session Command Messages
 type CloseSessionRequest struct {
-	SessionId string `protobuf:"bytes,1,opt,name=session_id" json:"session_id,omitempty"`
+	SessionId string `protobuf:"bytes,1,opt,name=session_id,json=sessionId" json:"session_id,omitempty"`
 }
 
 func (m *CloseSessionRequest) Reset()                    { *m = CloseSessionRequest{} }
@@ -264,7 +268,7 @@ func (*CloseSessionRequest) ProtoMessage()               {}
 func (*CloseSessionRequest) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{11} }
 
 type ListSessionsReply struct {
-	SessionId []string `protobuf:"bytes,1,rep,name=session_id" json:"session_id,omitempty"`
+	SessionId []string `protobuf:"bytes,1,rep,name=session_id,json=sessionId" json:"session_id,omitempty"`
 }
 
 func (m *ListSessionsReply) Reset()                    { *m = ListSessionsReply{} }
@@ -274,9 +278,9 @@ func (*ListSessionsReply) Descriptor() ([]byte, []int) { return fileDescriptor0,
 
 type OpenSessionRequest struct {
 	Type             SessionType       `protobuf:"varint,1,opt,name=type,enum=bgpmond.SessionType" json:"type,omitempty"`
-	SessionId        string            `protobuf:"bytes,2,opt,name=session_id" json:"session_id,omitempty"`
-	CassandraSession *CassandraSession `protobuf:"bytes,3,opt,name=cassandra_session" json:"cassandra_session,omitempty"`
-	FileSession      *FileSession      `protobuf:"bytes,4,opt,name=file_session" json:"file_session,omitempty"`
+	SessionId        string            `protobuf:"bytes,2,opt,name=session_id,json=sessionId" json:"session_id,omitempty"`
+	CassandraSession *CassandraSession `protobuf:"bytes,3,opt,name=cassandra_session,json=cassandraSession" json:"cassandra_session,omitempty"`
+	FileSession      *FileSession      `protobuf:"bytes,4,opt,name=file_session,json=fileSession" json:"file_session,omitempty"`
 }
 
 func (m *OpenSessionRequest) Reset()                    { *m = OpenSessionRequest{} }
@@ -299,7 +303,7 @@ func (m *OpenSessionRequest) GetFileSession() *FileSession {
 }
 
 type OpenSessionReply struct {
-	SessionId string `protobuf:"bytes,1,opt,name=session_id" json:"session_id,omitempty"`
+	SessionId string `protobuf:"bytes,1,opt,name=session_id,json=sessionId" json:"session_id,omitempty"`
 }
 
 func (m *OpenSessionReply) Reset()                    { *m = OpenSessionReply{} }
@@ -311,11 +315,11 @@ func (*OpenSessionReply) Descriptor() ([]byte, []int) { return fileDescriptor0, 
 // Write Messages
 type WriteRequest struct {
 	Type              WriteRequest_Type  `protobuf:"varint,1,opt,name=type,enum=bgpmond.WriteRequest_Type" json:"type,omitempty"`
-	SessionId         string             `protobuf:"bytes,2,opt,name=session_id" json:"session_id,omitempty"`
-	AsNumberLocation  *ASNumberLocation  `protobuf:"bytes,3,opt,name=as_number_location" json:"as_number_location,omitempty"`
-	BgpUpdateMessage  *BGPUpdateMessage  `protobuf:"bytes,4,opt,name=bgp_update_message" json:"bgp_update_message,omitempty"`
-	IpAddressLocation *IPAddressLocation `protobuf:"bytes,5,opt,name=ip_address_location" json:"ip_address_location,omitempty"`
-	PrefixLocation    *PrefixLocation    `protobuf:"bytes,6,opt,name=prefix_location" json:"prefix_location,omitempty"`
+	SessionId         string             `protobuf:"bytes,2,opt,name=session_id,json=sessionId" json:"session_id,omitempty"`
+	AsNumberLocation  *ASNumberLocation  `protobuf:"bytes,3,opt,name=as_number_location,json=asNumberLocation" json:"as_number_location,omitempty"`
+	BgpUpdateMessage  *BGPUpdateMessage  `protobuf:"bytes,4,opt,name=bgp_update_message,json=bgpUpdateMessage" json:"bgp_update_message,omitempty"`
+	IpAddressLocation *IPAddressLocation `protobuf:"bytes,5,opt,name=ip_address_location,json=ipAddressLocation" json:"ip_address_location,omitempty"`
+	PrefixLocation    *PrefixLocation    `protobuf:"bytes,6,opt,name=prefix_location,json=prefixLocation" json:"prefix_location,omitempty"`
 }
 
 func (m *WriteRequest) Reset()                    { *m = WriteRequest{} }
@@ -352,8 +356,8 @@ func (m *WriteRequest) GetPrefixLocation() *PrefixLocation {
 }
 
 type ASNumberLocation struct {
-	AsNumber    uint32    `protobuf:"varint,1,opt,name=as_number" json:"as_number,omitempty"`
-	MeasureDate string    `protobuf:"bytes,2,opt,name=measure_date" json:"measure_date,omitempty"`
+	AsNumber    uint32    `protobuf:"varint,1,opt,name=as_number,json=asNumber" json:"as_number,omitempty"`
+	MeasureDate string    `protobuf:"bytes,2,opt,name=measure_date,json=measureDate" json:"measure_date,omitempty"`
 	Location    *Location `protobuf:"bytes,3,opt,name=location" json:"location,omitempty"`
 	Source      string    `protobuf:"bytes,4,opt,name=source" json:"source,omitempty"`
 }
@@ -379,8 +383,8 @@ func (*BGPUpdateMessage) ProtoMessage()               {}
 func (*BGPUpdateMessage) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{17} }
 
 type IPAddressLocation struct {
-	IpAddress   string    `protobuf:"bytes,1,opt,name=ip_address" json:"ip_address,omitempty"`
-	MeasureDate string    `protobuf:"bytes,2,opt,name=measure_date" json:"measure_date,omitempty"`
+	IpAddress   string    `protobuf:"bytes,1,opt,name=ip_address,json=ipAddress" json:"ip_address,omitempty"`
+	MeasureDate string    `protobuf:"bytes,2,opt,name=measure_date,json=measureDate" json:"measure_date,omitempty"`
 	Location    *Location `protobuf:"bytes,3,opt,name=location" json:"location,omitempty"`
 	Source      string    `protobuf:"bytes,4,opt,name=source" json:"source,omitempty"`
 }
@@ -398,8 +402,8 @@ func (m *IPAddressLocation) GetLocation() *Location {
 }
 
 type Location struct {
-	CountryCode string  `protobuf:"bytes,1,opt,name=country_code" json:"country_code,omitempty"`
-	StateCode   string  `protobuf:"bytes,2,opt,name=state_code" json:"state_code,omitempty"`
+	CountryCode string  `protobuf:"bytes,1,opt,name=country_code,json=countryCode" json:"country_code,omitempty"`
+	StateCode   string  `protobuf:"bytes,2,opt,name=state_code,json=stateCode" json:"state_code,omitempty"`
 	City        string  `protobuf:"bytes,3,opt,name=city" json:"city,omitempty"`
 	Latitude    float64 `protobuf:"fixed64,4,opt,name=latitude" json:"latitude,omitempty"`
 	Longitude   float64 `protobuf:"fixed64,5,opt,name=longitude" json:"longitude,omitempty"`
@@ -411,9 +415,9 @@ func (*Location) ProtoMessage()               {}
 func (*Location) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{19} }
 
 type PrefixLocation struct {
-	PrefixIpAddress string    `protobuf:"bytes,1,opt,name=prefix_ip_address" json:"prefix_ip_address,omitempty"`
-	PrefixMask      uint32    `protobuf:"varint,2,opt,name=prefix_mask" json:"prefix_mask,omitempty"`
-	MeasureDate     string    `protobuf:"bytes,3,opt,name=measure_date" json:"measure_date,omitempty"`
+	PrefixIpAddress string    `protobuf:"bytes,1,opt,name=prefix_ip_address,json=prefixIpAddress" json:"prefix_ip_address,omitempty"`
+	PrefixMask      uint32    `protobuf:"varint,2,opt,name=prefix_mask,json=prefixMask" json:"prefix_mask,omitempty"`
+	MeasureDate     string    `protobuf:"bytes,3,opt,name=measure_date,json=measureDate" json:"measure_date,omitempty"`
 	Location        *Location `protobuf:"bytes,4,opt,name=location" json:"location,omitempty"`
 	Source          string    `protobuf:"bytes,5,opt,name=source" json:"source,omitempty"`
 }
@@ -460,6 +464,10 @@ func init() {
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
 var _ grpc.ClientConn
+
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the grpc package it is being compiled against.
+const _ = grpc.SupportPackageIsVersion2
 
 // Client API for Bgpmond service
 
@@ -596,88 +604,130 @@ func RegisterBgpmondServer(s *grpc.Server, srv BgpmondServer) {
 	s.RegisterService(&_Bgpmond_serviceDesc, srv)
 }
 
-func _Bgpmond_CloseSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Bgpmond_CloseSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CloseSessionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(BgpmondServer).CloseSession(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(BgpmondServer).CloseSession(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/bgpmond.Bgpmond/CloseSession",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BgpmondServer).CloseSession(ctx, req.(*CloseSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Bgpmond_ListModules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Bgpmond_ListModules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(BgpmondServer).ListModules(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(BgpmondServer).ListModules(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/bgpmond.Bgpmond/ListModules",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BgpmondServer).ListModules(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Bgpmond_ListSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Bgpmond_ListSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(BgpmondServer).ListSessions(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(BgpmondServer).ListSessions(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/bgpmond.Bgpmond/ListSessions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BgpmondServer).ListSessions(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Bgpmond_RunModule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Bgpmond_RunModule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RunModuleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(BgpmondServer).RunModule(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(BgpmondServer).RunModule(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/bgpmond.Bgpmond/RunModule",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BgpmondServer).RunModule(ctx, req.(*RunModuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Bgpmond_StartModule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Bgpmond_StartModule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartModuleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(BgpmondServer).StartModule(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(BgpmondServer).StartModule(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/bgpmond.Bgpmond/StartModule",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BgpmondServer).StartModule(ctx, req.(*StartModuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Bgpmond_StopModule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Bgpmond_StopModule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StopModuleRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(BgpmondServer).StopModule(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(BgpmondServer).StopModule(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/bgpmond.Bgpmond/StopModule",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BgpmondServer).StopModule(ctx, req.(*StopModuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _Bgpmond_OpenSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+func _Bgpmond_OpenSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(OpenSessionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
-	out, err := srv.(BgpmondServer).OpenSession(ctx, in)
-	if err != nil {
-		return nil, err
+	if interceptor == nil {
+		return srv.(BgpmondServer).OpenSession(ctx, in)
 	}
-	return out, nil
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/bgpmond.Bgpmond/OpenSession",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BgpmondServer).OpenSession(ctx, req.(*OpenSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Bgpmond_Write_Handler(srv interface{}, stream grpc.ServerStream) error {
