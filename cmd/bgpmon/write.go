@@ -168,8 +168,10 @@ func WritePrefixLocationFile(cmd *cli.Cmd) {
 				location.CountryCode = strings.Trim(strings.TrimSpace(country), "'")
 
 				prefixLocation := new(pb.PrefixLocation)
-				prefixLocation.PrefixIpAddress = fields[0]
-				prefixLocation.PrefixMask = uint32(prefixMask)
+                ipPrefix := new(pb.IPPrefix)
+                ipPrefix.PrefixIpAddress = fields[0]
+                ipPrefix.PrefixMask = uint32(prefixMask)
+                prefixLocation.Prefix = ipPrefix
 				prefixLocation.MeasureDate = *measureDate
 				prefixLocation.Location = location
 

@@ -135,7 +135,17 @@ message ASNumberLocation {
 }
 
 message BGPUpdateMessage {
-	
+    uint64 timestamp = 1;
+    string collector_ip_address = 2;
+    string collector_mac = 3;
+    uint32 collector_port = 4;
+    string peer_ip_address = 5;
+
+    repeated uint32 as_path = 6;
+    string next_hop = 9;
+
+    repeated IPPrefix advertised_routes = 7;
+    repeated IPPrefix withdrawn_routes = 8;
 }
 
 message IPAddressLocation {
@@ -143,6 +153,11 @@ message IPAddressLocation {
 	string measure_date = 2;
 	Location location = 3;
 	string source = 4;
+}
+
+message IPPrefix {
+    string prefix_ip_address = 1;
+    uint32 prefix_mask = 2;
 }
 
 message Location {
@@ -154,9 +169,8 @@ message Location {
 }
 
 message PrefixLocation {
-	string prefix_ip_address = 1;
-	uint32 prefix_mask = 2;
-	string measure_date = 3;
-	Location location = 4;
-	string source = 5;
+    IPPrefix prefix = 1;
+	string measure_date = 2;
+	Location location = 3;
+	string source = 4;
 }

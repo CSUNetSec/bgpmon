@@ -168,8 +168,8 @@ func (l LocationByPrefix) Write(request *pb.WriteRequest) error {
 
 	return l.cqlSession.Query(
 			fmt.Sprintf(locationByPrefixStmt, l.keyspace),
-			msg.PrefixIpAddress,
-			msg.PrefixMask,
+			msg.Prefix.PrefixIpAddress,
+			msg.Prefix.PrefixMask,
 			gocql.UUIDFromTime(measureDate),
 			location.CountryCode,
 			location.StateCode,
