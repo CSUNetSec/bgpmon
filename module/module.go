@@ -35,12 +35,12 @@ func (m *Module) Init() error {
 	go func() {
 		commandChan := m.CommandChan
 		for {
-			log.Debl.Printf("listening on command channel\n")
+			//log.Debl.Printf("listening on command channel\n")
 			select {
 			case command := <-commandChan:
 				switch command.Command {
 				case COMDIE:
-					log.Debl.Printf("COMDIE for module:%+v\n", m)
+					//log.Debl.Printf("COMDIE for module:%+v\n", m)
 					if m.runTicker != nil {
 						m.runTicker.Stop()
 					}
@@ -50,10 +50,10 @@ func (m *Module) Init() error {
 					m.Cleanup()
 					return
 				case COMRUN:
-					log.Debl.Printf("COMRUN for module:%v\n", m)
+					//log.Debl.Printf("COMRUN for module:%v\n", m)
 					m.Run()
 				case COMSTATUS:
-					log.Debl.Printf("COMSTATUS for module:%+v\n", m)
+					//log.Debl.Printf("COMSTATUS for module:%+v\n", m)
 					m.Status()
 				default:
 					log.Errl.Printf("Command chan for module:%+v got undefined command number:%v", m, command)

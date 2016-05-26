@@ -89,10 +89,8 @@ func (p PrefixHijackModule) Run() error {
     )
 
 	for _, timeBucket := range timeBuckets {
-        fmt.Printf("querying timebucket %v\n", timeBucket)
         for _, session := range p.inSessions {
             for _, keyspace := range p.keyspaces {
-                fmt.Printf("querying keyspace %s %v %v\n", keyspace, minIPAddress, maxIPAddress)
                 query := session.CqlSession.Query(
                     fmt.Sprintf(asNumberByPrefixStmt, keyspace),
                     timeBucket,
@@ -105,7 +103,7 @@ func (p PrefixHijackModule) Run() error {
                         continue
                     }
 
-                    fmt.Printf("NOTIFICATION OF HIJACK - TIMESTAMP:%v IP_ADDRESS:%s MASK:%d AS_NUMBER:%d\n", timestamp, ipAddress, mask, asNumber)
+                    fmt.Printf("NOTIFICATION OF HIJACK - TIMESTAMP:%v IP_ADDRESS:%s MASK:%d AS_PATH:%d\n", timestamp, ipAddress, mask, asNumber)
                 }
             }
         }

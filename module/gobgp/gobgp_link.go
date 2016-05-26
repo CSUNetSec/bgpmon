@@ -7,7 +7,6 @@ import (
     "strings"
     "time"
 
-	"github.com/CSUNetSec/bgpmon/log"
     "github.com/CSUNetSec/bgpmon/module"
 	pb "github.com/CSUNetSec/bgpmon/protobuf"
     "github.com/CSUNetSec/bgpmon/session"
@@ -26,8 +25,6 @@ type GoBGPLinkModule struct {
 }
 
 func NewGoBGPLinkModule(address string, sessions []session.Sessioner, config GoBGPLinkConfig) (*module.Module, error) {
-    log.Debl.Printf("starting gobgp link module with arguments: %s\n", address)
-
     //connect over grpc
     conn, err := grpc.Dial(fmt.Sprintf("%s:50051", address), grpc.WithInsecure())
     if err != nil {
@@ -83,7 +80,6 @@ func (g GoBGPLinkModule) Run() error {
                     bgpUpdateMessage.AdvertisedRoutes = append(bgpUpdateMessage.AdvertisedRoutes, ipPrefix)
                 }
 
-
                 //write to sessions
                 writeRequest := new(pb.WriteRequest)
                 writeRequest.Type = pb.WriteRequest_BGP_UPDATE
@@ -91,7 +87,6 @@ func (g GoBGPLinkModule) Run() error {
                 for _, session := range g.sessions {
                     session.Write(writeRequest)
                 }
-                //fmt.Printf("%+v\n", bgpUpdateMessage)
             }
         }
     }()
