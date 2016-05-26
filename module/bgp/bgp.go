@@ -35,9 +35,9 @@ func getTimeBuckets(startTime, endTime time.Time) ([]time.Time, error) {
 	startTimeBucket := time.Unix(startTime.Unix() - (startTime.Unix() % timeBucketInterval), 0)
 	endTimeBucket := time.Unix(endTime.Unix() - (endTime.Unix() % timeBucketInterval), 0)
 
-	timeBuckets := []time.Time{startTimeBucket}
+	timeBuckets := []time.Time{startTimeBucket.UTC()}
 	for !startTimeBucket.Equal(endTimeBucket) {
-		timeBuckets = append(timeBuckets, startTimeBucket)
+		timeBuckets = append(timeBuckets, startTimeBucket.UTC())
 		startTimeBucket = startTimeBucket.Add(time.Duration(timeBucketInterval) * time.Second)
 	}
 

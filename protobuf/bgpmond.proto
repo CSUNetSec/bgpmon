@@ -135,7 +135,7 @@ message ASNumberLocation {
 }
 
 message BGPUpdateMessage {
-    uint64 timestamp = 1;
+    int64 timestamp = 1;
     string collector_ip_address = 2;
     string collector_mac = 3;
     uint32 collector_port = 4;

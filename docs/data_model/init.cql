@@ -6,6 +6,14 @@ CREATE KEYSPACE csu_bgp_core WITH replication = {'class': 'NetworkTopologyStrate
 CREATE TYPE csu_bgp_core.prefix (ip_address inet, mask int);
 
 CREATE TABLE csu_bgp_core.update_messages_by_time (
+    time_bucket timestamp,
+    timestamp timeuuid,
+    protobuf blob,
+    PRIMARY KEY (time_bucket, timestamp)
+) WITH CLUSTERING ORDER BY (timestamp DESC)
+    AND compaction = {'class': 'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy'};
+
+/*CREATE TABLE csu_bgp_core.update_messages_by_time (
 	time_bucket timestamp,
 	timestamp timeuuid,
 	announced_prefixes list< frozen< prefix> >,
@@ -21,7 +29,7 @@ CREATE TABLE csu_bgp_core.update_messages_by_time (
 ) WITH CLUSTERING ORDER BY (timestamp DESC)
 	AND compaction = {'class': 'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy'};
 
-CREATE INDEX ON csu_bgp_core.update_messages_by_time(as_path);
+CREATE INDEX ON csu_bgp_core.update_messages_by_time(as_path); 
 
 CREATE MATERIALIZED VIEW csu_bgp_core.update_messages_by_collector_view AS
 	SELECT time_bucket, timestamp, announced_prefixes, withdrawn_prefixes, collector_ip_address, peer_ip_address, as_path, bytes FROM csu_bgp_core.update_messages_by_time
@@ -35,7 +43,7 @@ CREATE MATERIALIZED VIEW csu_bgp_core.update_messages_by_peer_view AS
 	WHERE peer_ip_address IS NOT NULL AND time_bucket IS NOT NULL AND timestamp IS NOT NULL
 	PRIMARY KEY ((peer_ip_address, time_bucket), timestamp)
 	WITH CLUSTERING ORDER BY (timestamp DESC)
-	AND compaction = {'class': 'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy'};
+	AND compaction = {'class': 'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy'}; */
 
 -- CREATE INDEX ON csu_bgp_core.update_message_by_time(announed_prefixes);
 -- CREATE INDEX ON csu_bgp_core.update_message_by_time(withdrawn_prefixes);

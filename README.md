@@ -9,10 +9,8 @@ sudo -E gobgpd -f gobgp.conf
 gobgp global rib add 192.168.0.0/16 -a ipv4
 
 ##TODO
-- implement modules on server side
-	gobgp-link
-	prefix-hijack
-- implement writers
+- prefix-hijack module - more verbose activity (just prints out that a hijack occured)
+- get common timeuuid for BPGUpdate inserts in cassandra session
 - thread saftey? does it exist in go? apply with respect to writing (sessions)
 - null out defaulted fields (ex "", 0) in gocql insert statements
 - implement signaling for writing - don't allow more than 50 go routines actively writing at a time

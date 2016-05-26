@@ -5,25 +5,28 @@ ErrorOut = "stderr"
 
 # Configuration for Modules
 [Modules.PrefixHijack]
-Keyspaces = ["csu_bgp_derived"]
+    Keyspaces = ["csu_bgp_derived"]
+    TimeBucketSize = 86400
 
 [Modules.GoBGPLink]
 
 [Modules.Location]
-Keyspaces = ["csu_location_core"]
+    Keyspaces = ["csu_location_core"]
 
 # Configuration for Sessions
 [[Sessions.Cassandra.Writers.BGPUpdateMsgByTime]]
-Keyspace = "csu_bgp_core"
+    Keyspace = "csu_bgp_core"
+    TimeBucketSeconds = 86400
 
 [[Sessions.Cassandra.Writers.BGPUpdateMsgByPrefixRange]]
-Keyspace = "csu_bgp_derived"
+    Keyspace = "csu_bgp_derived"
+    TimeBucketSeconds = 86400
 
 [[Sessions.Cassandra.Writers.LocationByAS]]
-Keyspace = "csu_location_core"
+    Keyspace = "csu_location_core"
 
 [[Sessions.Cassandra.Writers.LocationByIPAddress]]
-Keyspace = "csu_location_core"
+    Keyspace = "csu_location_core"
 
 [[Sessions.Cassandra.Writers.LocationByPrefix]]
-Keyspace = "csu_location_core"
+    Keyspace = "csu_location_core"

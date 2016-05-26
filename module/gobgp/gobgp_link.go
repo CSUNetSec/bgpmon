@@ -22,6 +22,7 @@ type GoBGPLinkConfig struct {
 type GoBGPLinkModule struct {
     address string
     conn    *grpc.ClientConn
+    sessions []session.Sessioner
 }
 
 func NewGoBGPLinkModule(address string, sessions []session.Sessioner, config GoBGPLinkConfig) (*module.Module, error) {
@@ -33,7 +34,7 @@ func NewGoBGPLinkModule(address string, sessions []session.Sessioner, config GoB
         return nil, err
     }
 
-    return &module.Module{Moduler:GoBGPLinkModule{address, conn}}, nil
+    return &module.Module{Moduler:GoBGPLinkModule{address, conn, sessions}}, nil
 }
 
 func (g GoBGPLinkModule) Run() error {
@@ -70,7 +71,7 @@ func (g GoBGPLinkModule) Run() error {
             for _, path := range destination.GetPaths() {
                 //create BGPUpdateMessage protobuf
                 bgpUpdateMessage := new(pb.BGPUpdateMessage)
-                bgpUpdateMessage.Timestamp = uint64(time.Now().Unix())
+                bgpUpdateMessage.Timestamp = time.Now().UTC().Unix()
                 bgpUpdateMessage.CollectorIpAddress = g.address
                 bgpUpdateMessage.CollectorPort = 50051
                 bgpUpdateMessage.PeerIpAddress = path.NeighborIp
@@ -82,7 +83,15 @@ func (g GoBGPLinkModule) Run() error {
                     bgpUpdateMessage.AdvertisedRoutes = append(bgpUpdateMessage.AdvertisedRoutes, ipPrefix)
                 }
 
-                fmt.Printf("%+v\n", bgpUpdateMessage)
+
+                //write to sessions
+                writeRequest := new(pb.WriteRequest)
+                writeRequest.Type = pb.WriteRequest_BGP_UPDATE
+                writeRequest.BgpUpdateMessage = bgpUpdateMessage
+                for _, session := range g.sessions {
+                    session.Write(writeRequest)
+                }
+                //fmt.Printf("%+v\n", bgpUpdateMessage)
             }
         }
     }()
