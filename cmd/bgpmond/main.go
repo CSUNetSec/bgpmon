@@ -224,23 +224,6 @@ func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest)
  * Write Messages
  */
 func (s Server) Write(stream pb.Bgpmond_WriteServer) error {
-	/*buffer := []*pb.WriteRequest{}
-	for {
-		writeRequest, err := stream.Recv()
-		if err == io.EOF {
-			writeBuffer(buffer, s.sessions)
-			break
-		} else if err != nil {
-			return err
-		}
-
-		buffer = append(buffer, writeRequest)
-		if len(buffer) == 500 {
-			writeBuffer(buffer, s.sessions)
-			buffer = []*pb.WriteRequest{}
-		}
-	}*/
-
     for {
         writeRequest, err := stream.Recv()
         if err == io.EOF {
@@ -261,21 +244,6 @@ func (s Server) Write(stream pb.Bgpmond_WriteServer) error {
 
 	return nil
 }
-
-/*func writeBuffer(buffer []*pb.WriteRequest, sessions map[string]session.Sessioner) {
-	go func() {
-		for _, writeRequest := range buffer {
-			sess, exists := sessions[writeRequest.SessionId]
-			if !exists {
-				panic(errors.New(fmt.Sprintf("Session '%s' does not exist", writeRequest.SessionId)))
-			}
-
-			if err := sess.Write(writeRequest); err != nil {
-				panic(err)
-			}
-		}
-	}()
-}*/
 
 /*
  * Miscellaneous Functions
