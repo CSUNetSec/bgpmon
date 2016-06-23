@@ -37,7 +37,7 @@ func NewGoBGPLinkModule(address string, sessions []session.Sessioner, config GoB
 func (g GoBGPLinkModule) Run() error {
     //open gobgp stream
     gobgpClient := gobgpAPI.NewGobgpApiClient(g.conn)
-    bgpStream, err := gobgpClient.MonitorBestChanged(context.Background(), &gobgpAPI.Arguments{})
+    bgpStream, err := gobgpClient.MonitorRib(context.Background(), &gobgpAPI.Table{})
     if err != nil {
         return err
     }

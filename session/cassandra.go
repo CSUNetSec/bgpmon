@@ -59,8 +59,12 @@ func NewCassandraSession(username, password string, hosts []string, config Cassa
 		}
 	}
 
-	cassSession := CassandraSession{Session{writers}, cqlSession}
-	return cassSession, nil
+    session, err := NewSession(writers, 50)
+    if err != nil {
+        return nil, err
+    }
+
+    return CassandraSession{session, cqlSession}, nil
 }
 
 func (c CassandraSession) Close() error {

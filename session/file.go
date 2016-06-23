@@ -16,7 +16,12 @@ type FileSession struct {
 func NewFileSession(filename string, config FileConfig) (Sessioner, error) {
 	writers := make(map[pb.WriteRequest_Type][]Writer)
 
-	return FileSession{Session{writers}}, nil
+    session, err := NewSession(writers, 1)
+    if err != nil {
+        return nil, err
+    }
+
+	return FileSession{session}, nil
 }
 
 func (f FileSession) Close() error {
