@@ -26,7 +26,7 @@ type CassandraSession struct {
 	CqlSession *gocql.Session
 }
 
-func NewCassandraSession(username, password string, hosts []string, config CassandraConfig) (Sessioner, error) {
+func NewCassandraSession(username, password string, hosts []string, workerCount uint32, config CassandraConfig) (Sessioner, error) {
 	cluster := gocql.NewCluster(hosts...)
 	//cluster.Consistency = gocql.LocalOne
 	cluster.ProtoVersion = 4
@@ -59,7 +59,7 @@ func NewCassandraSession(username, password string, hosts []string, config Cassa
 		}
 	}
 
-    session, err := NewSession(writers, 200)
+    session, err := NewSession(writers, workerCount)
     if err != nil {
         return nil, err
     }

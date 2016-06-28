@@ -80,6 +80,7 @@ message CassandraSession {
 	string username = 1;
 	string password = 2;
 	repeated string hosts = 3;
+    uint32 workerCount = 4;
 }
 
 message FileSession {

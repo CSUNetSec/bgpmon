@@ -12,9 +12,9 @@ type Session struct {
     workerIndex int
 }
 
-func NewSession(writers map[pb.WriteRequest_Type][]Writer, workerCount int) (Session, error) {
+func NewSession(writers map[pb.WriteRequest_Type][]Writer, workerCount uint32) (Session, error) {
     workerChans := make([]chan *pb.WriteRequest, workerCount)
-    for i := 0; i<workerCount; i++ {
+    for i := 0; i<int(workerCount); i++ {
         workerChan := make(chan *pb.WriteRequest)
         go func() {
             for {
@@ -44,14 +44,14 @@ func (s *Session) Write(w *pb.WriteRequest) error {
     s.workerChans[s.workerIndex] <- w
     s.workerIndex = (s.workerIndex + 1) % len(s.workerChans)
 
-	return nil
+    return nil
 }
 
 type Sessioner interface {
-	Close() error
-	Write(*pb.WriteRequest) error
+    Close() error
+    Write(*pb.WriteRequest) error
 }
 
 type Writer interface {
-	Write(*pb.WriteRequest) error
+    Write(*pb.WriteRequest) error
 }

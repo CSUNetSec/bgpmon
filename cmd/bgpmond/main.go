@@ -197,7 +197,7 @@ func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest)
 	switch request.Type {
 	case pb.SessionType_CASSANDRA:
 		rpcConfig := request.GetCassandraSession()
-		sess, err = session.NewCassandraSession(rpcConfig.Username, rpcConfig.Password, rpcConfig.Hosts, bgpmondConfig.Sessions.Cassandra)
+		sess, err = session.NewCassandraSession(rpcConfig.Username, rpcConfig.Password, rpcConfig.Hosts, rpcConfig.WorkerCount, bgpmondConfig.Sessions.Cassandra)
 		if err != nil {
 			break
 		}
