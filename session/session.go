@@ -40,7 +40,7 @@ func NewSession(writers map[pb.WriteRequest_Type][]Writer, workerCount int) (Ses
     return Session{workerChans, 0}, nil
 }
 
-func (s Session) Write(w *pb.WriteRequest) error {
+func (s *Session) Write(w *pb.WriteRequest) error {
     s.workerChans[s.workerIndex] <- w
     s.workerIndex = (s.workerIndex + 1) % len(s.workerChans)
 

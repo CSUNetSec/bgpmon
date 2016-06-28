@@ -22,13 +22,13 @@ type WriterConfig struct {
 }
 
 type CassandraSession struct {
-	Session
+	*Session
 	CqlSession *gocql.Session
 }
 
 func NewCassandraSession(username, password string, hosts []string, config CassandraConfig) (Sessioner, error) {
 	cluster := gocql.NewCluster(hosts...)
-	cluster.Consistency = gocql.LocalOne
+	//cluster.Consistency = gocql.LocalOne
 	cluster.ProtoVersion = 4
 	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{10}
 	cluster.Authenticator = gocql.PasswordAuthenticator{Username: username, Password: password}
@@ -59,12 +59,12 @@ func NewCassandraSession(username, password string, hosts []string, config Cassa
 		}
 	}
 
-    session, err := NewSession(writers, 50)
+    session, err := NewSession(writers, 200)
     if err != nil {
         return nil, err
     }
 
-    return CassandraSession{session, cqlSession}, nil
+    return CassandraSession{&session, cqlSession}, nil
 }
 
 func (c CassandraSession) Close() error {

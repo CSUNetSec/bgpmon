@@ -10,7 +10,7 @@ type FileConfig struct {
 }
 
 type FileSession struct {
-	Session
+	*Session
 }
 
 func NewFileSession(filename string, config FileConfig) (Sessioner, error) {
@@ -21,7 +21,7 @@ func NewFileSession(filename string, config FileConfig) (Sessioner, error) {
         return nil, err
     }
 
-	return FileSession{session}, nil
+	return FileSession{&session}, nil
 }
 
 func (f FileSession) Close() error {

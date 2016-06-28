@@ -48,6 +48,7 @@ func WriteMRTFile(cmd *cli.Cmd) {
 
         //loop over mrt messsages
         messageCount := 0
+        startTime := time.Now()
         for scanner.Scan() {
             //parse mrt header
             mrtHeader := &gomrt.MRTHeader{}
@@ -79,12 +80,6 @@ func WriteMRTFile(cmd *cli.Cmd) {
 					fmt.Printf("msg not an UPDATE. not sending to server")
 					continue
 				}
-
-				/*bgpdata, err := bgp4mp.BGPMessage.Body.Serialize()
-				if err != nil {
-					fmt.Printf("Couldn't serialize BGP message:%s", err)
-					continue
-				}*/
 
                 //populate bgp update message protobuf
                 bgpUpdateMessage := new(pb.BGPUpdateMessage)
@@ -148,8 +143,8 @@ func WriteMRTFile(cmd *cli.Cmd) {
 				}
 
                 messageCount++
-                if messageCount % 5000 == 0 {
-                    fmt.Printf("processed %d messages\n", messageCount)
+                if messageCount % 1000 == 0 {
+                    fmt.Printf("processed %d messages in %v\n", messageCount, time.Since(startTime))
                 }
 			default:
 				fmt.Printf("unsupported mrt message type '%v'", mrtHeader.Type)
@@ -161,6 +156,7 @@ func WriteMRTFile(cmd *cli.Cmd) {
             panic(err)
 		}
 
+        fmt.Printf("processed %d total messages in %v\n", messageCount, time.Since(startTime))
 		mrtFile.Close()
 	}
 }
