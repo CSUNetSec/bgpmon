@@ -115,23 +115,23 @@ func WriteMRTFile(cmd *cli.Cmd) {
 
                 //TODO next hop
 
-                advertisedRoutes := []*pb.IPPrefix{}
+                advertisedPrefixes := []*pb.IPPrefix{}
                 for _, ipAddrPrefix := range bgpUpdate.NLRI {
                     ipPrefix := new(pb.IPPrefix)
                     ipPrefix.PrefixIpAddress = fmt.Sprintf("%v", ipAddrPrefix.Prefix)
                     ipPrefix.PrefixMask = uint32(ipAddrPrefix.Length)
-                    advertisedRoutes = append(advertisedRoutes, ipPrefix)
+                    advertisedPrefixes = append(advertisedPrefixes, ipPrefix)
                 }
-                bgpUpdateMessage.AdvertisedRoutes = advertisedRoutes
+                bgpUpdateMessage.AdvertisedPrefixes = advertisedPrefixes
 
-                withdrawnRoutes := []*pb.IPPrefix{}
+                withdrawnPrefixes := []*pb.IPPrefix{}
                 for _, ipAddrPrefix := range bgpUpdate.WithdrawnRoutes {
                     ipPrefix := new(pb.IPPrefix)
                     ipPrefix.PrefixIpAddress = fmt.Sprintf("%v", ipAddrPrefix.Prefix)
                     ipPrefix.PrefixMask = uint32(ipAddrPrefix.Length)
-                    withdrawnRoutes = append(withdrawnRoutes, ipPrefix)
+                    withdrawnPrefixes = append(withdrawnPrefixes, ipPrefix)
                 }
-                bgpUpdateMessage.WithdrawnRoutes = withdrawnRoutes
+                bgpUpdateMessage.WithdrawnPrefixes = withdrawnPrefixes
 
                 writeRequest := new(pb.WriteRequest)
 				writeRequest.Type = pb.WriteRequest_BGP_UPDATE

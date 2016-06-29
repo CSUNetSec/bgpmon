@@ -75,9 +75,9 @@ func (g GoBGPLinkModule) Run() error {
                 bgpUpdateMessage.AsPath = append(bgpUpdateMessage.AsPath, path.SourceAsn)
 
                 if path.IsWithdraw {
-                    bgpUpdateMessage.WithdrawnRoutes = append(bgpUpdateMessage.WithdrawnRoutes, ipPrefix)
+                    bgpUpdateMessage.WithdrawnPrefixes = append(bgpUpdateMessage.WithdrawnPrefixes, ipPrefix)
                 } else {
-                    bgpUpdateMessage.AdvertisedRoutes = append(bgpUpdateMessage.AdvertisedRoutes, ipPrefix)
+                    bgpUpdateMessage.AdvertisedPrefixes = append(bgpUpdateMessage.AdvertisedPrefixes, ipPrefix)
                 }
 
                 //write to sessions

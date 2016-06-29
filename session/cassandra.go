@@ -9,7 +9,7 @@ import (
 	pb "github.com/CSUNetSec/bgpmon/protobuf"
 
 	"github.com/gocql/gocql"
-    "github.com/golang/protobuf/proto"
+    //"github.com/golang/protobuf/proto"
 )
 
 type CassandraConfig struct {
@@ -85,7 +85,7 @@ func addWriter(writers map[pb.WriteRequest_Type][]Writer, writeRequestType pb.Wr
  */
 
 const (
-    bgpUpdateMsgByTimeStmt = "INSERT INTO %s.update_messages_by_time(time_bucket, timestamp, protobuf) VALUES(?,?,?)"
+    bgpUpdateMsgByTimeStmt = "INSERT INTO %s.update_messages_by_time(time_bucket, timestamp, advertised_prefixes, as_path, collector_ip_address, collector_mac_address, collector_port, next_hop, peer_ip_address, withdrawn_prefixes) VALUES(?,?,?,?,?,?,?,?,?,?)"
     bgpUpdateMsgByPrefixRangeStmt = "INSERT INTO %s.as_number_by_prefix_range(time_bucket, prefix_ip_address, prefix_mask, timestamp, as_number) VALUES(?,?,?,?,?)"
 	locationByASStmt = "INSERT INTO %s.location_by_as_number(as_number, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
 	locationByIPAddressStmt = "INSERT INTO %s.location_by_ip_address(ip_address, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
@@ -102,23 +102,55 @@ type BGPUpdateMsgByTime struct {
     timeBucketSeconds int64
 }
 
+type IPPrefix struct {
+    IP   net.IP `cql:"ip_address"`
+    Mask uint8  `cql:"mask"`
+}
+
 func (b BGPUpdateMsgByTime) Write(request *pb.WriteRequest) error {
     //get message and convert timestamp to timeuuid
     msg := request.GetBgpUpdateMessage()
     timestamp := gocql.UUIDFromTime(time.Unix(int64(msg.Timestamp), 0))
 
-    //change protobuf into byte array
-    bytes, err := proto.Marshal(msg)
-    if err != nil {
-        return err
+    advertisedPrefixes := []IPPrefix{}
+    for _, ipPrefix := range msg.AdvertisedPrefixes {
+        advertisedPrefixes = append(advertisedPrefixes, IPPrefix{net.ParseIP(ipPrefix.PrefixIpAddress), uint8(ipPrefix.PrefixMask)})
     }
 
-    return b.cqlSession.Query(
+    withdrawnPrefixes := []IPPrefix{}
+    for _, ipPrefix := range msg.WithdrawnPrefixes {
+        withdrawnPrefixes = append(withdrawnPrefixes, IPPrefix{net.ParseIP(ipPrefix.PrefixIpAddress), uint8(ipPrefix.PrefixMask)})
+    }
+
+    err := b.cqlSession.Query(
 			fmt.Sprintf(bgpUpdateMsgByTimeStmt, b.keyspace),
             time.Unix(msg.Timestamp - (msg.Timestamp % b.timeBucketSeconds), 0),
             timestamp,
-            bytes,
+            advertisedPrefixes, //announced_prefixes
+            msg.AsPath, //as_path
+            net.ParseIP(msg.CollectorIpAddress), //collector_ip_address
+            msg.CollectorMacAddress, //collector_mac_address
+            msg.CollectorPort, //collector_port
+            nil, //TODO msg.NextHop next_hop
+            net.ParseIP(msg.PeerIpAddress), //peer_ip_address
+            withdrawnPrefixes, //withdrawn_prefixes
 		).Exec()
+
+    if err != nil {
+        fmt.Printf("aprefix:%v\naspath:%v\ncip:%v\ncmac:%v\ncport:%v\nnhop:%v\npip:%v\nwprefix:%v\n--------------------------\n",
+            advertisedPrefixes,
+            msg.AsPath,
+            net.ParseIP(msg.CollectorIpAddress),
+            msg.CollectorMacAddress,
+            msg.CollectorPort,
+            msg.NextHop,
+            net.ParseIP(msg.PeerIpAddress),
+            withdrawnPrefixes)
+
+        panic(err)
+    }
+
+    return nil
 }
 
 type BGPUpdateMsgByPrefixRange struct {
@@ -131,7 +163,7 @@ func (b BGPUpdateMsgByPrefixRange) Write(request *pb.WriteRequest) error {
     msg := request.GetBgpUpdateMessage()
     timestamp := gocql.UUIDFromTime(time.Unix(int64(msg.Timestamp), 0))
 
-    for _, prefix := range msg.AdvertisedRoutes {
+    for _, prefix := range msg.AdvertisedPrefixes {
         //parse ip address
         prefixIP := net.ParseIP(prefix.PrefixIpAddress)
 
