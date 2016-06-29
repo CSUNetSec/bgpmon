@@ -163,10 +163,10 @@ func WriteMRTFile(cmd *cli.Cmd) {
             panic(err)
 		}
 
-        fmt.Printf("processed %d total messages in %v" +
-            "\theaderLengthZeroCount:%d" +
-            "\tunableToParseBodyCount:%d" +
-            "\tnotBGPUpdateCount:%d" +
+        fmt.Printf("processed %d total messages in %v\n" +
+            "\theaderLengthZeroCount:%d\n" +
+            "\tunableToParseBodyCount:%d\n" +
+            "\tnotBGPUpdateCount:%d\n" +
             "\tasPathLengthZeroCount:%d\n",
             messageCount,
             time.Since(startTime),

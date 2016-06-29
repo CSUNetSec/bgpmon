@@ -14,3 +14,4 @@ gobgp global rib add 192.168.0.0/16 -a ipv4
 - get common timeuuid for BPGUpdate inserts in cassandra session
 - thread saftey? does it exist in go? apply with respect to writing (sessions)
 - null out defaulted fields (ex "", 0) in gocql insert statements
+- send write errors back to user
