@@ -5,13 +5,29 @@ CREATE KEYSPACE csu_bgp_core WITH replication = {'class': 'NetworkTopologyStrate
 
 CREATE TYPE csu_bgp_core.prefix (ip_address inet, mask int);
 
-CREATE TABLE csu_bgp_core.update_messages_by_time (
+//CREATE TABLE csu_bgp_core.update_messages_by_time (
+//    time_bucket timestamp,
+//    timestamp timeuuid,
+//    protobuf blob,
+//    PRIMARY KEY (time_bucket, timestamp)
+//) WITH CLUSTERING ORDER BY (timestamp DESC)
+//    AND compaction = {'class': 'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy'};
+
+CREATE TABLE csu_bgp_core.update_message_by_time (
     time_bucket timestamp,
     timestamp timeuuid,
-    protobuf blob,
+    collector_ip_address inet,
+    collector_mac_address blob,
+    collector_port int,
+    peer_ip_address inet,
+    as_path list< bigint >,
+    next_hop inet,
+    announced_prefixes list< frozen< prefix> >,
+    withdrawn_prefixes list< frozen< prefix> >,
     PRIMARY KEY (time_bucket, timestamp)
 ) WITH CLUSTERING ORDER BY (timestamp DESC)
-    AND compaction = {'class': 'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy'};
+	AND compaction = {'class': 'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy'};
+
 
 /*CREATE TABLE csu_bgp_core.update_messages_by_time (
 	time_bucket timestamp,
