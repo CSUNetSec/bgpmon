@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-    "errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -49,19 +48,25 @@ func WriteMRTFile(cmd *cli.Cmd) {
         //loop over mrt messsages
         messageCount := 0
         startTime := time.Now()
+        headerLengthZeroCount := 0
+        unableToParseBodyCount := 0
+        notBGPUpdateCount := 0
+        asPathLengthZeroCount := 0
         for scanner.Scan() {
             //parse mrt header
             mrtHeader := &gomrt.MRTHeader{}
             data := scanner.Bytes()
             mrtHeader.DecodeFromBytes(data[:gomrt.MRT_COMMON_HEADER_LEN])
             if mrtHeader.Len == 0 {
-                panic(errors.New("mrt header length is 0"))
+                headerLengthZeroCount++
+                continue
             }
 
             //parse mrt body
             mrt, err := gomrt.ParseMRTBody(mrtHeader, data[gomrt.MRT_COMMON_HEADER_LEN:])
             if err != nil {
-                panic(err)
+                unableToParseBodyCount++
+                continue
             }
 
             switch mrtHeader.Type {
@@ -69,7 +74,7 @@ func WriteMRTFile(cmd *cli.Cmd) {
                 //parse bgp4mp message
 				bgp4mp, ok := mrt.Body.(*gomrt.BGP4MPMessage)
 				if !ok {
-					fmt.Printf("msg not of type bgp.BGP4MPMessage")
+                    notBGPUpdateCount++
 					continue
 				}
 
@@ -77,7 +82,7 @@ func WriteMRTFile(cmd *cli.Cmd) {
 				bgp4mpHeader := bgp4mp.BGP4MPHeader
 				bgpHeader := bgp4mp.BGPMessage.Header
 				if bgpHeader.Type != gobgp.BGP_MSG_UPDATE {
-					fmt.Printf("msg not an UPDATE. not sending to server")
+                    notBGPUpdateCount++
 					continue
 				}
 
@@ -111,6 +116,11 @@ func WriteMRTFile(cmd *cli.Cmd) {
                         }
                     }
                 }
+
+                if len(asPath) == 0 {
+                    asPathLengthZeroCount++
+                    continue
+                }
                 bgpUpdateMessage.AsPath = asPath
 
                 //TODO next hop
@@ -143,9 +153,6 @@ func WriteMRTFile(cmd *cli.Cmd) {
 				}
 
                 messageCount++
-                if messageCount % 1000 == 0 {
-                    fmt.Printf("processed %d messages in %v\n", messageCount, time.Since(startTime))
-                }
 			default:
 				fmt.Printf("unsupported mrt message type '%v'", mrtHeader.Type)
 				continue
@@ -156,7 +163,18 @@ func WriteMRTFile(cmd *cli.Cmd) {
             panic(err)
 		}
 
-        fmt.Printf("processed %d total messages in %v\n", messageCount, time.Since(startTime))
+        fmt.Printf("processed %d total messages in %v" +
+            "\theaderLengthZeroCount:%d" +
+            "\tunableToParseBodyCount:%d" +
+            "\tnotBGPUpdateCount:%d" +
+            "\tasPathLengthZeroCount:%d\n",
+            messageCount,
+            time.Since(startTime),
+            headerLengthZeroCount,
+            unableToParseBodyCount,
+            notBGPUpdateCount,
+            asPathLengthZeroCount)
+
 		mrtFile.Close()
 	}
 }
