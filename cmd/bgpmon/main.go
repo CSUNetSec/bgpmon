@@ -39,14 +39,14 @@ bgpmon write
 	prefix-location
 */
 
-var ipAddress, port string
+var ipAddress, port *string
 
 func main() {
 	bgpmon := cli.App("bgpmon", "seamless command interfaces to bgpmond")
 	bgpmon.Version("v version", "bgpmon 0.0.1")
 
-	ipAddress = *bgpmon.StringOpt("i ipAddress", "", "ip address of bgpmond host")
-	port = *bgpmon.StringOpt("p port", "12289", "port of bgpmond host")
+	ipAddress = bgpmon.StringOpt("i ipAddress", "", "ip address of bgpmond host")
+	port = bgpmon.StringOpt("p port", "12289", "port of bgpmond host")
 
 	bgpmon.Command("close", "close a session on bgpmond host", Close)
 
@@ -90,7 +90,7 @@ func getUUID() string {
 }
 
 func getRPCClient() (pb.BgpmondClient, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", ipAddress, port), grpc.WithInsecure())
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%s", *ipAddress, *port), grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
