@@ -66,7 +66,7 @@ func WriteMRTFile(cmd *cli.Cmd) {
             mrt, err := gomrt.ParseMRTBody(mrtHeader, data[gomrt.MRT_COMMON_HEADER_LEN:])
             if err != nil {
                 unableToParseBodyCount++
-                continue
+                panic(err)
             }
 
             switch mrtHeader.Type {

@@ -21,12 +21,19 @@ message Empty {
  */
 enum ModuleType {
 	GOBGP_LINK = 0;
-	PREFIX_HIJACK = 1;
+    PREFIX_BY_AS_NUMBER = 1;
+	PREFIX_HIJACK = 2;
 }
 
 message GoBGPLinkModule {
 	string address = 1;
 	repeated string out_session_id = 2;
+}
+
+message PrefixByAsNumberModule {
+    int64 start_time = 1;
+    int64 end_time = 2;
+    repeated string in_session_id = 3;
 }
 
 message PrefixHijackModule {
@@ -46,7 +53,8 @@ message ListModulesReply {
 
 message RunModuleRequest {
 	ModuleType type = 1;
-	PrefixHijackModule prefix_hijack_module = 2;
+    PrefixByAsNumberModule prefix_by_as_number_module = 2;
+	PrefixHijackModule prefix_hijack_module = 3;
 }
 
 message RunModuleReply {

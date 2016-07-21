@@ -4,14 +4,18 @@ DebugOut = "stdout"
 ErrorOut = "stderr"
 
 # Configuration for Modules
-[Modules.PrefixHijack]
-    Keyspaces = ["csu_bgp_derived"]
-    TimeBucketSize = 86400
-
 [Modules.GoBGPLink]
 
 [Modules.Location]
     Keyspaces = ["csu_location_core"]
+
+[Modules.PrefixByAsNumber]
+    Keyspaces = ["csu_bgp_derived"]
+    WriteKeyspace = "csu_bgp_derived"
+
+[Modules.PrefixHijack]
+    Keyspaces = ["csu_bgp_derived"]
+    TimeBucketSize = 86400
 
 # Configuration for Sessions
 [[Sessions.Cassandra.Writers.BGPUpdateMsgByTime]]

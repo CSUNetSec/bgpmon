@@ -30,8 +30,9 @@ type BgpmondConfig struct {
 }
 
 type ModuleConfig struct {
-	PrefixHijack bgp.PrefixHijackConfig
-	GoBGPLink    gobgp.GoBGPLinkConfig
+	GoBGPLink           gobgp.GoBGPLinkConfig
+    PrefixByAsNumber    bgp.PrefixByAsNumberConfig
+	PrefixHijack        bgp.PrefixHijackConfig
 }
 
 type SessionConfig struct {
@@ -84,6 +85,11 @@ func (s Server) RunModule(ctx context.Context, request *pb.RunModuleRequest) (*p
 		if err != nil {
 			break
 		}
+    case pb.ModuleType_PREFIX_BY_AS_NUMBER:
+        mod, err = s.createModule(request.GetPrefixByAsNumberModule())
+        if err != nil {
+            break
+        }
 	default:
 		return nil, errors.New("Unimplemented module type")
 	}
@@ -263,6 +269,17 @@ func (s Server) createModule(request interface{}) (*module.Module, error) {
 		if err != nil {
 			return nil, err
 		}
+    case *pb.PrefixByAsNumberModule:
+        rpcConfig := request.(*pb.PrefixByAsNumberModule)
+        inSessions, err := s.getSessions(rpcConfig.InSessionId)
+        if err != nil {
+            return nil, err
+        }
+
+        mod, err = bgp.NewPrefixByAsNumberModule(rpcConfig.StartTime, rpcConfig.EndTime, inSessions, bgpmondConfig.Modules.PrefixByAsNumber)
+        if err != nil {
+            return nil, err
+        }
 	case *pb.PrefixHijackModule:
 		rpcConfig := request.(*pb.PrefixHijackModule)
 		inSessions, err := s.getSessions(rpcConfig.InSessionId)
