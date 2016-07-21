@@ -119,6 +119,19 @@ func (p PrefixByAsNumberModule) Run() error {
                         count++
                     }
                 }
+
+                err = session.CqlSession.Query (
+                    fmt.Sprintf(prefixByAsNumberStmt, p.writeKeyspace),
+                    currentAsNumber,
+                    timeBucket,
+                    currentIpAddress,
+                    currentMask,
+                    count,
+                ).Exec()
+
+                if err != nil {
+                    return err
+                }
             }
         }
 	}

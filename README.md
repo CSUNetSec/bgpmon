@@ -9,6 +9,8 @@ sudo -E gobgpd -f gobgp.conf
 gobgp global rib add 192.168.0.0/16 -a ipv4
 
 ##TODO
+- on "run" module need to still be able to "list modules" as they run for awhile
+
 - fix gobgp_link - they removed MonitorBestChanged from the protobuf api
 - prefix-hijack module - more verbose activity (just prints out that a hijack occured)
 - get common timeuuid for BPGUpdate inserts in cassandra session
