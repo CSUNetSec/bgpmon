@@ -240,11 +240,15 @@ func (s Server) Write(stream pb.Bgpmond_WriteServer) error {
 
         sess, exists := s.sessions[writeRequest.SessionId]
         if !exists {
-            panic(errors.New(fmt.Sprintf("Session '%s' does not exists", writeRequest.SessionId)))
+            fmt.Printf("session doesn't exist\n")
+            //panic(errors.New(fmt.Sprintf("Session '%s' does not exists", writeRequest.SessionId)))
+            return errors.New(fmt.Sprintf("Session '%s' does not exists", writeRequest.SessionId))
         }
 
         if err := sess.Write(writeRequest); err != nil {
-            panic(err)
+            fmt.Printf("error writing\n")
+            //panic(err)
+            return err
         }
     }
 

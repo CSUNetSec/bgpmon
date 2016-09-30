@@ -89,14 +89,13 @@ func (p PrefixByAsNumberModule) Run() error {
 
                 iter := query.Iter()
                 for iter.Scan(&ipAddress, &mask, &timestamp, &asNumber) {
-                    if timestamp.Before(startTime) {
+                    if timestamp.Before(startTime) || timestamp.After(endTime) {
                         continue
-                    } else if timestamp.After(endTime) {
-                        break
                     }
 
                     if ipAddress != currentIpAddress || mask != currentMask || asNumber != currentAsNumber {
                         if count != 0 {
+                            fmt.Printf("%d %v:%d\n", currentAsNumber, currentIpAddress, currentMask)
                             err := session.CqlSession.Query (
                                 fmt.Sprintf(prefixByAsNumberStmt, p.writeKeyspace),
                                 currentAsNumber,
@@ -136,6 +135,7 @@ func (p PrefixByAsNumberModule) Run() error {
         }
 	}
 
+    fmt.Printf("done\n")
 	return nil
 }
 

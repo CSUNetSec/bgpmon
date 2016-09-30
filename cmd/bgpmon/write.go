@@ -149,8 +149,14 @@ func WriteMRTFile(cmd *cli.Cmd) {
 				writeRequest.SessionId = *sessionID
 
 				if err := stream.Send(writeRequest); err != nil {
+                    fmt.Println("FOUND ERROR")
                     panic(err)
 				}
+
+                /*m := new(pb.Empty)
+                if err := stream.ClientStream.Recv(m); err != nil {
+                    panic(err)
+                }*/
 
                 messageCount++
 			default:
