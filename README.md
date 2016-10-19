@@ -2,7 +2,7 @@
 
 ##link gobgpd commands
 ./bgpmond example/bgpmond_config.toml
-./bgpmon open cassandra csuadmin n3ts3c@dmin 129.82.138.74 --session_id=CAS1
+./bgpmon open cassandra user pass ip --session_id=CAS1
 ./bgpmon start gobgpd-link 127.0.0.1 CAS1
 
 sudo -E gobgpd -f gobgp.conf
