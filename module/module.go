@@ -26,8 +26,8 @@ type Module struct {
 
 type Moduler interface {
 	Cleanup() error
-	Run()     error
-	Status()  string
+	Run() error
+	Status() string
 }
 
 func (m *Module) Init() error {

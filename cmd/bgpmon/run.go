@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-    "time"
+	"time"
 
 	pb "github.com/CSUNetSec/bgpmon/protobuf"
 
@@ -13,36 +13,36 @@ import (
 )
 
 func RunPrefixByAsNumberModule(cmd *cli.Cmd) {
-    cmd.Spec = "START_TIME END_TIME SESSION_IDS"
-    startTime := cmd.StringArg("START_TIME", "1990-05-28 00:00:00+0000", "Start time for analysis")
-    endTime := cmd.StringArg("END_TIME", "1990-05-28 23:59:59+0000", "Start time for analysis")
+	cmd.Spec = "START_TIME END_TIME SESSION_IDS"
+	startTime := cmd.StringArg("START_TIME", "1990-05-28 00:00:00+0000", "Start time for analysis")
+	endTime := cmd.StringArg("END_TIME", "1990-05-28 23:59:59+0000", "Start time for analysis")
 	inSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to use as input")
 
-    cmd.Action = func() {
-        client, err := getRPCClient()
-        if err != nil {
-            panic(err)
-        }
+	cmd.Action = func() {
+		client, err := getRPCClient()
+		if err != nil {
+			panic(err)
+		}
 
-        startTimeParsed, err := time.Parse("2006-01-02 15:04:05-0700", *startTime)
-        if err != nil {
-            panic(err)
-        }
+		startTimeParsed, err := time.Parse("2006-01-02 15:04:05-0700", *startTime)
+		if err != nil {
+			panic(err)
+		}
 
-        endTimeParsed, err := time.Parse("2006-01-02 15:04:05-0700", *endTime)
-        if err != nil {
-            panic(err)
-        }
+		endTimeParsed, err := time.Parse("2006-01-02 15:04:05-0700", *endTime)
+		if err != nil {
+			panic(err)
+		}
 
-        prefixByAsNumber := pb.PrefixByAsNumberModule {
-            StartTime:      int64(startTimeParsed.Unix()),
-            EndTime:        int64(endTimeParsed.Unix()),
-            InSessionId:    strings.Split(*inSessions, ","),
-        }
+		prefixByAsNumber := pb.PrefixByAsNumberModule{
+			StartTime:   int64(startTimeParsed.Unix()),
+			EndTime:     int64(endTimeParsed.Unix()),
+			InSessionId: strings.Split(*inSessions, ","),
+		}
 
-        request := new(pb.RunModuleRequest)
+		request := new(pb.RunModuleRequest)
 		request.Type = pb.ModuleType_PREFIX_BY_AS_NUMBER
-        request.PrefixByAsNumberModule = &prefixByAsNumber
+		request.PrefixByAsNumberModule = &prefixByAsNumber
 
 		ctx := context.Background()
 		reply, err := client.RunModule(ctx, request)
@@ -51,7 +51,7 @@ func RunPrefixByAsNumberModule(cmd *cli.Cmd) {
 		}
 
 		fmt.Println(reply)
-    }
+	}
 }
 
 func RunPrefixHijackModule(cmd *cli.Cmd) {
@@ -76,7 +76,7 @@ func RunPrefixHijackModule(cmd *cli.Cmd) {
 			asNums = append(asNums, uint32(asNum))
 		}
 
-		prefixHijack := pb.PrefixHijackModule {
+		prefixHijack := pb.PrefixHijackModule{
 			Prefix:          *prefix,
 			AsNumber:        asNums,
 			PeriodicSeconds: 0,

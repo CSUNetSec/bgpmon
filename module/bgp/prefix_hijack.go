@@ -2,7 +2,7 @@ package bgp
 
 import (
 	"errors"
-    "fmt"
+	"fmt"
 	"net"
 	"time"
 
@@ -12,7 +12,7 @@ import (
 )
 
 const (
-    asNumberByPrefixStmt = "SELECT prefix_ip_address, prefix_mask, as_number, dateOf(timestamp) FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
+	asNumberByPrefixStmt = "SELECT prefix_ip_address, prefix_mask, as_number, dateOf(timestamp) FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
 )
 
 //struct for use in parsing bgpmond toml configuration file
@@ -56,7 +56,7 @@ func NewPrefixHijackModule(prefix string, asNumbers []uint32, periodicSeconds, t
 		inSess = append(inSess, casSess)
 	}
 
-	return &module.Module{Moduler:PrefixHijackModule{ipNet.IP, mask, asNumbers, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}}}, nil
+	return &module.Module{Moduler: PrefixHijackModule{ipNet.IP, mask, asNumbers, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}}}, nil
 }
 
 func (p PrefixHijackModule) Run() error {
@@ -64,7 +64,7 @@ func (p PrefixHijackModule) Run() error {
 
 	//set detection start and end time
 	endTime := time.Now().UTC()
-	startTime := endTime.Add(time.Duration(-1 * p.periodicSeconds) * time.Second)
+	startTime := endTime.Add(time.Duration(-1*p.periodicSeconds) * time.Second)
 	if startTime.After(p.status.LastExecutionTime) { //set start time to min(LastExecutionTime, time.Now()-periodicSecs)
 		startTime = p.status.LastExecutionTime
 	}
@@ -82,31 +82,31 @@ func (p PrefixHijackModule) Run() error {
 	}
 
 	//loop through time buckets
-    var (
-        ipAddress string
-        mask, asNumber int
-        timestamp time.Time
-    )
+	var (
+		ipAddress      string
+		mask, asNumber int
+		timestamp      time.Time
+	)
 
 	for _, timeBucket := range timeBuckets {
-        for _, session := range p.inSessions {
-            for _, keyspace := range p.keyspaces {
-                query := session.CqlSession.Query(
-                    fmt.Sprintf(asNumberByPrefixStmt, keyspace),
-                    timeBucket,
-                    minIPAddress,
-                    maxIPAddress)
+		for _, session := range p.inSessions {
+			for _, keyspace := range p.keyspaces {
+				query := session.CqlSession.Query(
+					fmt.Sprintf(asNumberByPrefixStmt, keyspace),
+					timeBucket,
+					minIPAddress,
+					maxIPAddress)
 
-                iter := query.Iter()
-                for iter.Scan(&ipAddress, &mask, &asNumber, &timestamp) {
-                    if mask < p.prefixMask || timestamp.Before(startTime) || timestamp.After(endTime) || intContains(p.asNumbers, uint32(asNumber)) {
-                        continue
-                    }
+				iter := query.Iter()
+				for iter.Scan(&ipAddress, &mask, &asNumber, &timestamp) {
+					if mask < p.prefixMask || timestamp.Before(startTime) || timestamp.After(endTime) || intContains(p.asNumbers, uint32(asNumber)) {
+						continue
+					}
 
-                    fmt.Printf("NOTIFICATION OF HIJACK - TIMESTAMP:%v IP_ADDRESS:%s MASK:%d AS_PATH:%d\n", timestamp, ipAddress, mask, asNumber)
-                }
-            }
-        }
+					fmt.Printf("NOTIFICATION OF HIJACK - TIMESTAMP:%v IP_ADDRESS:%s MASK:%d AS_PATH:%d\n", timestamp, ipAddress, mask, asNumber)
+				}
+			}
+		}
 	}
 
 	//update status variables
@@ -124,13 +124,13 @@ func (p PrefixHijackModule) Cleanup() error {
 }
 
 func intContains(list []uint32, value uint32) bool {
-    for _, num := range list {
-        if value == num {
-            return true
-        }
-    }
+	for _, num := range list {
+		if value == num {
+			return true
+		}
+	}
 
-    return false
+	return false
 }
 
 /*import (

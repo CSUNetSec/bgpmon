@@ -32,8 +32,8 @@ func getTimeBuckets(startTime, endTime time.Time) ([]time.Time, error) {
 		return nil, errors.New("end time just be after start time")
 	}
 
-	startTimeBucket := time.Unix(startTime.Unix() - (startTime.Unix() % timeBucketInterval), 0)
-	endTimeBucket := time.Unix(endTime.Unix() - (endTime.Unix() % timeBucketInterval), 0)
+	startTimeBucket := time.Unix(startTime.Unix()-(startTime.Unix()%timeBucketInterval), 0)
+	endTimeBucket := time.Unix(endTime.Unix()-(endTime.Unix()%timeBucketInterval), 0)
 
 	timeBuckets := []time.Time{startTimeBucket}
 	for !startTimeBucket.Equal(endTimeBucket) {
