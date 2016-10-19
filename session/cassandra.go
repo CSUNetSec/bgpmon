@@ -121,6 +121,7 @@ func (b BGPUpdateMsgByTime) Write(request *pb.WriteRequest) error {
 	for _, ipPrefix := range msg.WithdrawnPrefixes {
 		withdrawnPrefixes = append(withdrawnPrefixes, IPPrefix{net.ParseIP(ipPrefix.PrefixIpAddress), uint8(ipPrefix.PrefixMask)})
 	}
+	//fmt.Printf("by time msg with timestamp :%s\n", timestamp)
 
 	err := b.cqlSession.Query(
 		fmt.Sprintf(bgpUpdateMsgByTimeStmt, b.keyspace),
@@ -162,6 +163,7 @@ func (b BGPUpdateMsgByPrefixRange) Write(request *pb.WriteRequest) error {
 	//get message and convert timestamp to timeuuid
 	msg := request.GetBgpUpdateMessage()
 	timestamp := gocql.UUIDFromTime(time.Unix(int64(msg.Timestamp), 0))
+	//fmt.Printf("by prefix msg with timestamp :%s\n", timestamp)
 
 	for _, prefix := range msg.AdvertisedPrefixes {
 		//parse ip address

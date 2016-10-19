@@ -1,67 +1,60 @@
 package session
 
 import (
-	"errors"
-    "fmt"
+	"github.com/CSUNetSec/bgpmon/log"
 
 	pb "github.com/CSUNetSec/bgpmon/protobuf"
 )
 
 type Session struct {
-    workerChans []chan *pb.WriteRequest
-    errChans []chan error
-    workerIndex int
+	workerChans []chan *pb.WriteRequest
+	workerIndex int
 }
 
 func NewSession(writers map[pb.WriteRequest_Type][]Writer, workerCount uint32) (Session, error) {
-    workerChans := make([]chan *pb.WriteRequest, workerCount)
-    errChans := make([]chan error, workerCount)
+	workerChans := make([]chan *pb.WriteRequest, workerCount)
 
-    for i := 0; i<int(workerCount); i++ {
-        workerChan := make(chan *pb.WriteRequest)
-        errChan := make(chan error)
-        go func() {
-            for {
-                writeRequest := <-workerChan
-                writers, exists := writers[writeRequest.Type]
-                if !exists {
-                    //TODO get an error message back somehow
-                    //panic(errors.New(fmt.Sprintf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)))
-                    errChan <- errors.New(fmt.Sprintf("Unable to write type '%v' because it doesn't exist", writeRequest.Type))
-                }
+	for i := 0; i < int(workerCount); i++ {
+		workerChan := make(chan *pb.WriteRequest)
+		go func(wc chan *pb.WriteRequest) {
+			for {
+				select {
+				case writeRequest := <-wc:
+					writers, exists := writers[writeRequest.Type]
+					if !exists {
+						//TODO get an error message back somehow
+						//panic(errors.New(fmt.Sprintf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)))
+						log.Errl.Printf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)
+					}
 
-                for _, writer := range writers {
-                    err := writer.Write(writeRequest)
+					for _, writer := range writers {
+						//fmt.Printf("writing in writer :%v\n", writer)
+						if err := writer.Write(writeRequest); err != nil {
+							log.Errl.Printf("error from worker for write request:%+v on writer:%+v error:%s\n", writeRequest, writer, err)
+							break
+						}
+					}
+				}
+			}
+		}(workerChan)
 
-                    errChan <- err
-                    /*if err := writer.Write(writeRequest); err != nil {
-                        //TODO return error
-                        panic(err)
-                    }*/
-                }
-            }
-        }()
+		workerChans[i] = workerChan
+	}
 
-        workerChans[i] = workerChan
-        errChans[i] = errChan
-    }
-
-    return Session{workerChans, errChans, 0}, nil
+	return Session{workerChans, 0}, nil
 }
 
 func (s *Session) Write(w *pb.WriteRequest) error {
-    s.workerChans[s.workerIndex] <- w
-    err := <-s.errChans[s.workerIndex]
-
-    s.workerIndex = (s.workerIndex + 1) % len(s.workerChans)
-    return err
+	s.workerChans[s.workerIndex] <- w
+	s.workerIndex = (s.workerIndex + 1) % len(s.workerChans)
+	return nil
 }
 
 type Sessioner interface {
-    Close() error
-    Write(*pb.WriteRequest) error
+	Close() error
+	Write(*pb.WriteRequest) error
 }
 
 type Writer interface {
-    Write(*pb.WriteRequest) error
+	Write(*pb.WriteRequest) error
 }

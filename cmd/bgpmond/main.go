@@ -30,9 +30,9 @@ type BgpmondConfig struct {
 }
 
 type ModuleConfig struct {
-	GoBGPLink           gobgp.GoBGPLinkConfig
-    PrefixByAsNumber    bgp.PrefixByAsNumberConfig
-	PrefixHijack        bgp.PrefixHijackConfig
+	GoBGPLink        gobgp.GoBGPLinkConfig
+	PrefixByAsNumber bgp.PrefixByAsNumberConfig
+	PrefixHijack     bgp.PrefixHijackConfig
 }
 
 type SessionConfig struct {
@@ -85,11 +85,11 @@ func (s Server) RunModule(ctx context.Context, request *pb.RunModuleRequest) (*p
 		if err != nil {
 			break
 		}
-    case pb.ModuleType_PREFIX_BY_AS_NUMBER:
-        mod, err = s.createModule(request.GetPrefixByAsNumberModule())
-        if err != nil {
-            break
-        }
+	case pb.ModuleType_PREFIX_BY_AS_NUMBER:
+		mod, err = s.createModule(request.GetPrefixByAsNumberModule())
+		if err != nil {
+			break
+		}
 	default:
 		return nil, errors.New("Unimplemented module type")
 	}
@@ -230,27 +230,27 @@ func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest)
  * Write Messages
  */
 func (s Server) Write(stream pb.Bgpmond_WriteServer) error {
-    for {
-        writeRequest, err := stream.Recv()
-        if err == io.EOF {
-            break
-        } else if err != nil {
-            return err
-        }
+	for {
+		writeRequest, err := stream.Recv()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
 
-        sess, exists := s.sessions[writeRequest.SessionId]
-        if !exists {
-            fmt.Printf("session doesn't exist\n")
-            //panic(errors.New(fmt.Sprintf("Session '%s' does not exists", writeRequest.SessionId)))
-            return errors.New(fmt.Sprintf("Session '%s' does not exists", writeRequest.SessionId))
-        }
+		sess, exists := s.sessions[writeRequest.SessionId]
+		if !exists {
+			fmt.Printf("session doesn't exist\n")
+			//panic(errors.New(fmt.Sprintf("Session '%s' does not exists", writeRequest.SessionId)))
+			return errors.New(fmt.Sprintf("Session '%s' does not exists", writeRequest.SessionId))
+		}
 
-        if err := sess.Write(writeRequest); err != nil {
-            fmt.Printf("error writing\n")
-            //panic(err)
-            return err
-        }
-    }
+		if err := sess.Write(writeRequest); err != nil {
+			fmt.Printf("error writing\n")
+			//panic(err)
+			return err
+		}
+	}
 
 	return nil
 }
@@ -273,17 +273,17 @@ func (s Server) createModule(request interface{}) (*module.Module, error) {
 		if err != nil {
 			return nil, err
 		}
-    case *pb.PrefixByAsNumberModule:
-        rpcConfig := request.(*pb.PrefixByAsNumberModule)
-        inSessions, err := s.getSessions(rpcConfig.InSessionId)
-        if err != nil {
-            return nil, err
-        }
+	case *pb.PrefixByAsNumberModule:
+		rpcConfig := request.(*pb.PrefixByAsNumberModule)
+		inSessions, err := s.getSessions(rpcConfig.InSessionId)
+		if err != nil {
+			return nil, err
+		}
 
-        mod, err = bgp.NewPrefixByAsNumberModule(rpcConfig.StartTime, rpcConfig.EndTime, inSessions, bgpmondConfig.Modules.PrefixByAsNumber)
-        if err != nil {
-            return nil, err
-        }
+		mod, err = bgp.NewPrefixByAsNumberModule(rpcConfig.StartTime, rpcConfig.EndTime, inSessions, bgpmondConfig.Modules.PrefixByAsNumber)
+		if err != nil {
+			return nil, err
+		}
 	case *pb.PrefixHijackModule:
 		rpcConfig := request.(*pb.PrefixHijackModule)
 		inSessions, err := s.getSessions(rpcConfig.InSessionId)
