@@ -12,6 +12,10 @@ import (
 	//"github.com/golang/protobuf/proto"
 )
 
+const (
+	writeretries = 3
+)
+
 type CassandraConfig struct {
 	Writers map[string][]WriterConfig
 }
@@ -109,6 +113,7 @@ type IPPrefix struct {
 
 func (b BGPUpdateMsgByTime) Write(request *pb.WriteRequest) error {
 	//get message and convert timestamp to timeuuid
+	errcount := 0
 	msg := request.GetBgpUpdateMessage()
 	timestamp := gocql.UUIDFromTime(time.Unix(int64(msg.Timestamp), 0))
 
@@ -123,32 +128,36 @@ func (b BGPUpdateMsgByTime) Write(request *pb.WriteRequest) error {
 	}
 	//fmt.Printf("by time msg with timestamp :%s\n", timestamp)
 
-	err := b.cqlSession.Query(
-		fmt.Sprintf(bgpUpdateMsgByTimeStmt, b.keyspace),
-		time.Unix(msg.Timestamp-(msg.Timestamp%b.timeBucketSeconds), 0),
-		timestamp,
-		advertisedPrefixes,                  //announced_prefixes
-		msg.AsPath,                          //as_path
-		net.ParseIP(msg.CollectorIpAddress), //collector_ip_address
-		msg.CollectorMacAddress,             //collector_mac_address
-		msg.CollectorPort,                   //collector_port
-		nil,                                 //TODO msg.NextHop next_hop
-		net.ParseIP(msg.PeerIpAddress), //peer_ip_address
-		withdrawnPrefixes,              //withdrawn_prefixes
-	).Exec()
+retry:
+	if errcount < writeretries {
 
-	if err != nil {
-		fmt.Printf("aprefix:%v\naspath:%v\ncip:%v\ncmac:%v\ncport:%v\nnhop:%v\npip:%v\nwprefix:%v\n--------------------------\n",
-			advertisedPrefixes,
-			msg.AsPath,
-			net.ParseIP(msg.CollectorIpAddress),
-			msg.CollectorMacAddress,
-			msg.CollectorPort,
-			msg.NextHop,
-			net.ParseIP(msg.PeerIpAddress),
-			withdrawnPrefixes)
+		err := b.cqlSession.Query(
+			fmt.Sprintf(bgpUpdateMsgByTimeStmt, b.keyspace),
+			time.Unix(msg.Timestamp-(msg.Timestamp%b.timeBucketSeconds), 0),
+			timestamp,
+			advertisedPrefixes,                  //announced_prefixes
+			msg.AsPath,                          //as_path
+			net.ParseIP(msg.CollectorIpAddress), //collector_ip_address
+			msg.CollectorMacAddress,             //collector_mac_address
+			msg.CollectorPort,                   //collector_port
+			nil,                                 //TODO msg.NextHop next_hop
+			net.ParseIP(msg.PeerIpAddress), //peer_ip_address
+			withdrawnPrefixes,              //withdrawn_prefixes
+		).Exec()
 
-		panic(err)
+		if err != nil {
+			fmt.Printf("aprefix:%v\naspath:%v\ncip:%v\ncmac:%v\ncport:%v\nnhop:%v\npip:%v\nwprefix:%v\n--------------------------\n",
+				advertisedPrefixes,
+				msg.AsPath,
+				net.ParseIP(msg.CollectorIpAddress),
+				msg.CollectorMacAddress,
+				msg.CollectorPort,
+				msg.NextHop,
+				net.ParseIP(msg.PeerIpAddress),
+				withdrawnPrefixes)
+			errcount++
+			goto retry
+		}
 	}
 
 	return nil
@@ -160,6 +169,8 @@ type BGPUpdateMsgByPrefixRange struct {
 }
 
 func (b BGPUpdateMsgByPrefixRange) Write(request *pb.WriteRequest) error {
+	errcount := 0
+	var err error
 	//get message and convert timestamp to timeuuid
 	msg := request.GetBgpUpdateMessage()
 	timestamp := gocql.UUIDFromTime(time.Unix(int64(msg.Timestamp), 0))
@@ -169,16 +180,22 @@ func (b BGPUpdateMsgByPrefixRange) Write(request *pb.WriteRequest) error {
 		//parse ip address
 		prefixIP := net.ParseIP(prefix.PrefixIpAddress)
 
-		err := b.cqlSession.Query(
-			fmt.Sprintf(bgpUpdateMsgByPrefixRangeStmt, b.keyspace),
-			time.Unix(msg.Timestamp-(msg.Timestamp%b.timeBucketSeconds), 0),
-			prefixIP,
-			prefix.PrefixMask,
-			timestamp,
-			msg.AsPath[len(msg.AsPath)-1],
-		).Exec()
+	retry:
+		if errcount < writeretries {
+			err = b.cqlSession.Query(
+				fmt.Sprintf(bgpUpdateMsgByPrefixRangeStmt, b.keyspace),
+				time.Unix(msg.Timestamp-(msg.Timestamp%b.timeBucketSeconds), 0),
+				prefixIP,
+				prefix.PrefixMask,
+				timestamp,
+				msg.AsPath[len(msg.AsPath)-1],
+			).Exec()
 
-		if err != nil {
+			if err != nil {
+				errcount++
+				goto retry
+			}
+		} else {
 			return err
 		}
 	}
