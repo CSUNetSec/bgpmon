@@ -21,7 +21,7 @@ message Empty {
  */
 enum ModuleType {
 	GOBGP_LINK = 0;
-    PREFIX_BY_AS_NUMBER = 1;
+	PREFIX_BY_AS_NUMBER = 1;
 	PREFIX_HIJACK = 2;
 }
 
@@ -31,9 +31,9 @@ message GoBGPLinkModule {
 }
 
 message PrefixByAsNumberModule {
-    int64 start_time = 1;
-    int64 end_time = 2;
-    repeated string in_session_id = 3;
+	int64 start_time = 1;
+	int64 end_time = 2;
+	repeated string in_session_id = 3;
 }
 
 message PrefixHijackModule {
@@ -53,7 +53,7 @@ message ListModulesReply {
 
 message RunModuleRequest {
 	ModuleType type = 1;
-    PrefixByAsNumberModule prefix_by_as_number_module = 2;
+	PrefixByAsNumberModule prefix_by_as_number_module = 2;
 	PrefixHijackModule prefix_hijack_module = 3;
 }
 
@@ -88,7 +88,7 @@ message CassandraSession {
 	string username = 1;
 	string password = 2;
 	repeated string hosts = 3;
-    uint32 workerCount = 4;
+	uint32 workerCount = 4;
 }
 
 message FileSession {
@@ -144,17 +144,17 @@ message ASNumberLocation {
 }
 
 message BGPUpdateMessage {
-    int64 timestamp = 1;
-    string collector_ip_address = 2;
-    string collector_mac_address = 3;
-    uint32 collector_port = 4;
-    string peer_ip_address = 5;
+	int64 timestamp = 1;
+	string collector_ip_address = 2;
+	string collector_mac_address = 3;
+	uint32 collector_port = 4;
+	string peer_ip_address = 5;
 
-    repeated uint32 as_path = 6;
-    string next_hop = 9;
+	repeated uint32 as_path = 6;
+	string next_hop = 9;
 
-    repeated IPPrefix advertised_prefixes = 7;
-    repeated IPPrefix withdrawn_prefixes = 8;
+	repeated IPPrefix advertised_prefixes = 7;
+	repeated IPPrefix withdrawn_prefixes = 8;
 }
 
 message IPAddressLocation {
@@ -165,8 +165,8 @@ message IPAddressLocation {
 }
 
 message IPPrefix {
-    string prefix_ip_address = 1;
-    uint32 prefix_mask = 2;
+	string prefix_ip_address = 1;
+	uint32 prefix_mask = 2;
 }
 
 message Location {
@@ -178,7 +178,7 @@ message Location {
 }
 
 message PrefixLocation {
-    IPPrefix prefix = 1;
+	IPPrefix prefix = 1;
 	string measure_date = 2;
 	Location location = 3;
 	string source = 4;
