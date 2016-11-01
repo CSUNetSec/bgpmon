@@ -11,7 +11,7 @@ import (
 	"github.com/CSUNetSec/bgpmon/module"
 	"github.com/CSUNetSec/bgpmon/module/bgp"
 	"github.com/CSUNetSec/bgpmon/module/gobgp"
-	pb "github.com/CSUNetSec/bgpmon/protobuf"
+	pb "github.com/CSUNetSec/bgpmon/pb"
 	"github.com/CSUNetSec/bgpmon/session"
 
 	"github.com/BurntSushi/toml"

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	pb "github.com/CSUNetSec/bgpmon/protobuf"
+	pb "github.com/CSUNetSec/bgpmon/pb"
 
 	"github.com/google/uuid"
 	cli "github.com/jawher/mow.cli"

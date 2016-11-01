@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/CSUNetSec/bgpmon/protobuf"
+	pb "github.com/CSUNetSec/bgpmon/pb"
 
 	cli "github.com/jawher/mow.cli"
 	gobgp "github.com/osrg/gobgp/packet/bgp"
