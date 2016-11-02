@@ -3,7 +3,7 @@ package session
 import (
 	"errors"
 
-	pb "github.com/CSUNetSec/bgpmon/pb"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 )
 
 type FileConfig struct {

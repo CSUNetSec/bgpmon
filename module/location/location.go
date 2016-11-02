@@ -3,7 +3,7 @@ package location
 import (
 	"time"
 
-	pb "github.com/CSUNetSec/bgpmon/protobuf"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 
 	"github.com/gocql/gocql"
 )

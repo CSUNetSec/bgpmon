@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	pb "github.com/CSUNetSec/bgpmon/pb"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 
 	"github.com/gocql/gocql"
 	//"github.com/golang/protobuf/proto"

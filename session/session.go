@@ -3,7 +3,7 @@ package session
 import (
 	"github.com/CSUNetSec/bgpmon/log"
 
-	pb "github.com/CSUNetSec/bgpmon/pb"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 )
 
 type Session struct {

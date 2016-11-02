@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/CSUNetSec/bgpmon/module"
-	pb "github.com/CSUNetSec/bgpmon/pb"
 	"github.com/CSUNetSec/bgpmon/session"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 	gobgpAPI "github.com/osrg/gobgp/api"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
