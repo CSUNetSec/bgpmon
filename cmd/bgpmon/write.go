@@ -8,13 +8,121 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/CSUNetSec/bgpmon/pb"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 
+	pp "github.com/CSUNetSec/protoparse"
+	ppmrt "github.com/CSUNetSec/protoparse/protocol/mrt"
 	cli "github.com/jawher/mow.cli"
 	gobgp "github.com/osrg/gobgp/packet/bgp"
 	gomrt "github.com/osrg/gobgp/packet/mrt"
 	"golang.org/x/net/context"
 )
+
+func WriteMRTFile2(cmd *cli.Cmd) {
+	cmd.Spec = "FILENAME SESSION_ID"
+	filename := cmd.StringArg("FILENAME", "", "filename of mrt file")
+	sessionID := cmd.StringArg("SESSION_ID", "", "session to write data")
+
+	cmd.Action = func() {
+		//open mrt file
+		mrtFile, err := os.Open(*filename)
+		if err != nil {
+			panic(err)
+		}
+		defer mrtFile.Close()
+
+		//open scanner
+		scanner := bufio.NewScanner(mrtFile)
+		scanner.Split(ppmrt.SplitMrt)
+
+		//open stream
+		client, err := getRPCClient()
+		if err != nil {
+			panic(err)
+		}
+
+		ctx := context.Background()
+		stream, err := client.Write(ctx)
+		if err != nil {
+			panic(err)
+		}
+		defer stream.CloseAndRecv()
+
+		//loop over mrt messsages
+		messageCount := 0
+		startTime := time.Now()
+		headerLengthZeroCount := 0
+		unableToParseBodyCount := 0
+		notBGPUpdateCount := 0
+		asPathLengthZeroCount := 0
+		for scanner.Scan() {
+			messageCount++
+			data := scanner.Bytes()
+			mrth := ppmrt.NewMrtHdrBuf(data)
+			bgp4h, err := mrth.Parse()
+			if err != nil {
+				notBGPUpdateCount++
+				fmt.Printf("Failed parsing MRT header %d :%s\n", messageCount, err)
+				continue
+			}
+			bgph, err := bgp4h.Parse()
+			if err != nil {
+				notBGPUpdateCount++
+				fmt.Printf("Failed parsing BGP4MP header %d :%s\n", messageCount, err)
+				continue
+			}
+			bgpup, err := bgph.Parse()
+			if err != nil {
+				headerLengthZeroCount++
+				fmt.Printf("Failed parsing BGP Header  %d :%s\n", messageCount, err)
+				continue
+			}
+			_, err = bgpup.Parse()
+			if err != nil {
+				unableToParseBodyCount++
+				fmt.Printf("Failed parsing BGP Update  %d :%s\n", messageCount, err)
+				continue
+			}
+			capture := new(pb.BGPCapture)
+			bgphpb := bgph.(pp.BGP4MPHeaderer).GetHeader()
+			//capture.Timestamp = bgph.dest.Timestamp
+			capture.PeerAs = bgphpb.PeerAs
+			capture.LocalAs = bgphpb.LocalAs
+			capture.InterfaceIndex = bgphpb.InterfaceIndex
+			capture.AddressFamily = bgphpb.AddressFamily
+			capture.PeerIp = bgphpb.PeerIp
+			capture.LocalIp = bgphpb.LocalIp
+			capture.Update = bgpup.(pp.BGPUpdater).GetUpdate()
+
+			writeRequest := new(pb.WriteRequest)
+			writeRequest.Type = pb.WriteRequest_BGP_CAPTURE
+			writeRequest.BgpCapture = capture
+			writeRequest.SessionId = *sessionID
+
+			if err := stream.Send(writeRequest); err != nil {
+				fmt.Println("FOUND ERROR")
+				panic(err)
+			}
+
+		}
+
+		if err := scanner.Err(); err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("processed %d total messages in %v\n"+
+			"\theaderLengthZeroCount:%d\n"+
+			"\tunableToParseBodyCount:%d\n"+
+			"\tnotBGPUpdateCount:%d\n"+
+			"\tasPathLengthZeroCount:%d\n",
+			messageCount,
+			time.Since(startTime),
+			headerLengthZeroCount,
+			unableToParseBodyCount,
+			notBGPUpdateCount,
+			asPathLengthZeroCount)
+	}
+}
 
 func WriteMRTFile(cmd *cli.Cmd) {
 	cmd.Spec = "FILENAME SESSION_ID"

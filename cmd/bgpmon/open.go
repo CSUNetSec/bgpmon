@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	pb "github.com/CSUNetSec/bgpmon/pb"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 
 	cli "github.com/jawher/mow.cli"
 	"golang.org/x/net/context"

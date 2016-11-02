@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	pb "github.com/CSUNetSec/bgpmon/pb"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 
 	"github.com/google/uuid"
 	cli "github.com/jawher/mow.cli"
@@ -35,6 +35,7 @@ bgpmon stop
 bgpmon write
 	as-number-location
 	mrt-file
+	mrt-file2
 	ip-location
 	prefix-location
 */
@@ -80,6 +81,7 @@ func main() {
 	bgpmon.Command("write", "write data to bgpmond host", func(cmd *cli.Cmd) {
 		cmd.Command("as-location-file", "write as location data from file", WriteASLocationFile)
 		cmd.Command("mrt-file", "write bgp messages from mrt file", WriteMRTFile)
+		cmd.Command("mrt-file2", "write bgp messages from mrt file", WriteMRTFile2)
 		cmd.Command("prefix-location-file", "write prefix location data from file", WritePrefixLocationFile)
 	})
 
