@@ -11,8 +11,8 @@ import (
 	"github.com/CSUNetSec/bgpmon/module"
 	"github.com/CSUNetSec/bgpmon/module/bgp"
 	"github.com/CSUNetSec/bgpmon/module/gobgp"
-	pb "github.com/CSUNetSec/bgpmon/pb"
 	"github.com/CSUNetSec/bgpmon/session"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 
 	"github.com/BurntSushi/toml"
 	"golang.org/x/net/context"
