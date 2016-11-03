@@ -1,3 +1,5 @@
+all: build
+
 bgpmon: 
 	cd cmd/bgpmon;\
 	go build -o ../../bgpmon || (echo "running go get"; go get; go get -u; go build -o ../../bgpmon);\
