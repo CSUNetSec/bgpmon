@@ -2,10 +2,13 @@ package main
 
 import (
 	"bufio"
+	"compress/bzip2"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+
+	"path/filepath"
 	"time"
 
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
@@ -17,6 +20,21 @@ import (
 	gomrt "github.com/osrg/gobgp/packet/mrt"
 	"golang.org/x/net/context"
 )
+
+func getScanner(file *os.File) (scanner *bufio.Scanner) {
+	fname := file.Name()
+	fext := filepath.Ext(fname)
+	if fext == ".bz2" {
+		bzreader := bzip2.NewReader(file)
+		scanner = bufio.NewScanner(bzreader)
+	} else {
+		scanner = bufio.NewScanner(file)
+	}
+	scanner.Split(ppmrt.SplitMrt)
+	scanbuffer := make([]byte, 2<<20) //an internal buffer for the large tokens (1M)
+	scanner.Buffer(scanbuffer, cap(scanbuffer))
+	return
+}
 
 func WriteMRTFile2(cmd *cli.Cmd) {
 	cmd.Spec = "FILENAME SESSION_ID"
@@ -32,10 +50,7 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 		defer mrtFile.Close()
 
 		//open scanner
-		scanner := bufio.NewScanner(mrtFile)
-		scanbuffer := make([]byte, 2<<20) //an internal buffer for the large tokens (1M)
-		scanner.Buffer(scanbuffer, cap(scanbuffer))
-		scanner.Split(ppmrt.SplitMrt)
+		scanner := getScanner(mrtFile)
 
 		//open stream
 		client, err := getRPCClient()
