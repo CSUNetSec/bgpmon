@@ -33,6 +33,8 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 
 		//open scanner
 		scanner := bufio.NewScanner(mrtFile)
+		scanbuffer := make([]byte, 2<<20) //an internal buffer for the large tokens (1M)
+		scanner.Buffer(scanbuffer, cap(scanbuffer))
 		scanner.Split(ppmrt.SplitMrt)
 
 		//open stream
@@ -59,32 +61,28 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 			messageCount++
 			data := scanner.Bytes()
 			mrth := ppmrt.NewMrtHdrBuf(data)
-			bgp4h, err := mrth.Parse()
-			if err != nil {
+			bgp4h, errmrt := mrth.Parse()
+			if errmrt != nil {
 				notBGPUpdateCount++
-				fmt.Printf("Failed parsing MRT header %d :%s\n", messageCount, err)
-				continue
+				fmt.Printf("Failed parsing MRT header %d :%s\n", messageCount, errmrt)
 			}
-			bgph, err := bgp4h.Parse()
-			if err != nil {
+			bgph, errbgph := bgp4h.Parse()
+			if errbgph != nil {
 				notBGPUpdateCount++
-				fmt.Printf("Failed parsing BGP4MP header %d :%s\n", messageCount, err)
-				continue
+				fmt.Printf("Failed parsing BGP4MP header %d :%s\n", messageCount, errbgph)
 			}
-			bgpup, err := bgph.Parse()
-			if err != nil {
+			bgpup, errbgpup := bgph.Parse()
+			if errbgpup != nil {
 				headerLengthZeroCount++
-				fmt.Printf("Failed parsing BGP Header  %d :%s\n", messageCount, err)
-				continue
+				fmt.Printf("Failed parsing BGP Header  %d :%s\n", messageCount, errbgpup)
 			}
-			_, err = bgpup.Parse()
-			if err != nil {
+			_, errup := bgpup.Parse()
+			if errup != nil {
 				unableToParseBodyCount++
-				fmt.Printf("Failed parsing BGP Update  %d :%s\n", messageCount, err)
-				continue
+				fmt.Printf("Failed parsing BGP Update  %d :%s\n", messageCount, errup)
 			}
 			capture := new(pb.BGPCapture)
-			bgphpb := bgph.(pp.BGP4MPHeaderer).GetHeader()
+			bgphpb := bgp4h.(pp.BGP4MPHeaderer).GetHeader()
 			//capture.Timestamp = bgph.dest.Timestamp
 			capture.PeerAs = bgphpb.PeerAs
 			capture.LocalAs = bgphpb.LocalAs
@@ -107,7 +105,7 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 		}
 
 		if err := scanner.Err(); err != nil {
-			panic(err)
+			fmt.Printf("Failed to parse message:%s", err)
 		}
 
 		fmt.Printf("processed %d total messages in %v\n"+
