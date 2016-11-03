@@ -65,9 +65,10 @@ func NewCassandraSession(username, password string, hosts []string, workerCount 
 	cluster.ProtoVersion = 4
 	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{10}
 	cluster.Authenticator = gocql.PasswordAuthenticator{Username: username, Password: password}
-	cluster.NumConns = 16
+	cluster.NumConns = 4
 	//cluster.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(gocql.RoundRobinHostPolicy())
 	cluster.Timeout = time.Duration(1200 * time.Millisecond)
+	cluster.MaxPreparedStmts = 20000
 
 	cqlSession, err := cluster.CreateSession()
 	if err != nil {
@@ -402,13 +403,13 @@ retry:
 			capbytes,           //msg bytes
 		).Exec()
 		if err != nil {
-			fmt.Printf("aprefix:%v\naspath:%v\ncip:%v\nnhop:%v\npip:%v\nwprefix:%v\n--------------------------\n",
-				advertisedPrefixes,
-				asp,
-				colip,
-				nhip,
-				peerip,
-				withdrawnPrefixes)
+			/*fmt.Printf("aprefix:%v\naspath:%v\ncip:%v\nnhop:%v\npip:%v\nwprefix:%v\n--------------------------\n",
+			advertisedPrefixes,
+			asp,
+			colip,
+			nhip,
+			peerip,
+			withdrawnPrefixes)*/
 			errcount++
 			goto retry
 		}
@@ -419,6 +420,7 @@ retry:
 
 func (b BGPCaptureByPrefixRange) Write(request *pb.WriteRequest) error {
 	errcount := 0
+	var err error
 	//get message and convert timestamp to timeuuid
 	msg := request.GetBgpCapture()
 	if msg == nil {
@@ -435,6 +437,7 @@ func (b BGPCaptureByPrefixRange) Write(request *pb.WriteRequest) error {
 	timestamp := gocql.UUIDFromTime(time.Unix(int64(msg.Timestamp), 0))
 	//fmt.Printf("by prefix msg with timestamp :%s\n", timestamp)
 
+	batch := gocql.NewBatch(gocql.UnloggedBatch)
 	if msgUp.AdvertizedRoutes != nil {
 		if len(msgUp.AdvertizedRoutes.Prefixes) != 0 {
 			for _, ar := range msgUp.AdvertizedRoutes.Prefixes {
@@ -442,26 +445,28 @@ func (b BGPCaptureByPrefixRange) Write(request *pb.WriteRequest) error {
 				if err != nil {
 					return err
 				}
-			retry:
-				if errcount < writeretries {
-					err = b.cqlSession.Query(
-						fmt.Sprintf(bgpCaptureByPrefixRangeStmt, b.keyspace),
-						time.Unix(int64(msg.Timestamp)-(int64(msg.Timestamp)%b.timeBucketSeconds), 0),
-						ip,
-						ar.Mask,
-						timestamp,
-						asp[len(asp)-1],
-					).Exec()
-
-					if err != nil {
-						errcount++
-						goto retry
-					}
-				} else {
-					return err
-				}
-
+				batch.Query(
+					fmt.Sprintf(bgpCaptureByPrefixRangeStmt, b.keyspace),
+					time.Unix(int64(msg.Timestamp)-(int64(msg.Timestamp)%b.timeBucketSeconds), 0),
+					ip,
+					ar.Mask,
+					timestamp,
+					asp[len(asp)-1],
+				)
 			}
+
+		retry:
+			if errcount < writeretries {
+				err = b.cqlSession.ExecuteBatch(batch)
+
+				if err != nil {
+					errcount++
+					goto retry
+				}
+			} else {
+				return err
+			}
+
 		}
 	}
 	return nil
