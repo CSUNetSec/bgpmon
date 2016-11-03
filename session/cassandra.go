@@ -61,11 +61,13 @@ func getAsPath(a pbbgp.BGPUpdate) []uint32 {
 
 func NewCassandraSession(username, password string, hosts []string, workerCount uint32, config CassandraConfig) (Sessioner, error) {
 	cluster := gocql.NewCluster(hosts...)
-	//cluster.Consistency = gocql.LocalOne
-	cluster.ProtoVersion = 3
+	cluster.Consistency = gocql.LocalOne
+	cluster.ProtoVersion = 4
 	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{10}
 	cluster.Authenticator = gocql.PasswordAuthenticator{Username: username, Password: password}
 	cluster.NumConns = 16
+	//cluster.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(gocql.RoundRobinHostPolicy())
+	cluster.Timeout = time.Duration(1200 * time.Millisecond)
 
 	cqlSession, err := cluster.CreateSession()
 	if err != nil {

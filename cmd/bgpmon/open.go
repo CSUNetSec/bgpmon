@@ -16,7 +16,7 @@ func OpenCassandra(cmd *cli.Cmd) {
 	password := cmd.StringArg("PASSWORD", "", "password for cassandra connection")
 	hosts := cmd.StringArg("HOSTS", "", "list of cassandra hosts")
 	sessionID := cmd.StringOpt("session_id", getUUID(), "id of the session")
-	workerCount := cmd.IntOpt("worker_count", 250, "size of the data writing worker pool")
+	workerCount := cmd.IntOpt("worker_count", 20000, "size of the data writing worker pool")
 
 	cmd.Action = func() {
 		client, err := getRPCClient()
