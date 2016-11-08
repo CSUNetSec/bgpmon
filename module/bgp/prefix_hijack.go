@@ -15,7 +15,9 @@ import (
 )
 
 const (
-	asNumberByPrefixStmt = "SELECT prefix_ip_address, prefix_mask, as_number, dateOf(timestamp) FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
+	asNumberByPrefixStmt = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
+    updateMessageSelectStmt = "SELECT as_path, peer_ip_address, collector_ip_address FROM csu_bgp_core.update_messages_by_time WHERE time_bucket=? AND timestamp=?"
+    prefixHijacksStmt = "INSERT INTO csu_bgp_derived.prefix_hijacks(time_bucket, timestamp, monitor_ip_address, monitor_mask, module_id) VALUES(?,?,?,?,?)"
 )
 
 //struct for use in parsing bgpmond toml configuration file
@@ -24,13 +26,13 @@ type PrefixHijackConfig struct {
 }
 
 type PrefixHijackModule struct {
-    prefixCache *PrefixCache
-
-	periodicSeconds int32
-	timeoutSeconds  int32
-	inSessions      []session.CassandraSession
-	keyspaces       []string
-	status          *PrefixHijackStatus
+    prefixCache      *PrefixCache
+	periodicSeconds  int32
+	timeoutSeconds   int32
+	inSessions       []session.CassandraSession
+	keyspaces        []string
+	status           *PrefixHijackStatus
+    hijackUUIDs      []string
 }
 
 type PrefixHijackStatus struct {
@@ -56,7 +58,7 @@ func NewPrefixHijackModule(monitorPrefixes []*pbbgpmon.PrefixHijackModule_Monito
         prefixCache.AddPrefix(monitorPrefix.Prefix.Prefix.Ipv4, monitorPrefix.Prefix.Mask, monitorPrefix.AsNumber)
     }
 
-	return &module.Module{Moduler: PrefixHijackModule{prefixCache, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}}}, nil
+	return &module.Module{Moduler: PrefixHijackModule{prefixCache, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, []string{}}}, nil
 }
 
 func (p PrefixHijackModule) Run() error {
@@ -68,45 +70,65 @@ func (p PrefixHijackModule) Run() error {
 
 	//loop through time buckets
 	var (
+        timeuuid       string
+		timestamp      time.Time
 		ipAddress      string
 		mask, asNumber uint32
-		timestamp      time.Time
+
+        asPath         []int
+        peerIpAddress, collectorIpAddress string
 	)
 
 	for _, timeBucket := range timeBuckets {
 		for _, session := range p.inSessions {
 			for _, keyspace := range p.keyspaces {
                 for _, prefixNode := range p.prefixCache.prefixNodes {
-                    query := session.CqlSession.Query(
-                        fmt.Sprintf(asNumberByPrefixStmt, keyspace),
-                        timeBucket,
-                        prefixNode.minAddress,
-                        prefixNode.maxAddress)
-
-
-                    iter := query.Iter()
-                    for iter.Scan(&ipAddress, &mask, &asNumber, &timestamp) {
+                    //fmt.Printf("CHECKING FOR HIJACKS ON %s/%d\n", prefixNode.ipAddress, prefixNode.mask)
+                    prefixRangeIter := session.CqlSession.Query(fmt.Sprintf(asNumberByPrefixStmt, keyspace), timeBucket, prefixNode.minAddress, prefixNode.maxAddress).Iter()
+                    for prefixRangeIter.Scan(&timeuuid, &timestamp, &ipAddress, &mask, &asNumber) {
                         //check for valid mask, timestamp, and if source is a valid asNumber
                         if mask < prefixNode.mask {
                             continue
                         }
 
-                        //check if as number is a valid advertisement
-                        if !prefixNode.ValidAsNumber(uint32(asNumber)) {
-                            continue
+                        //check if potential hijack has already been seen
+                        for _, hijackUUID := range p.hijackUUIDs {
+                            if hijackUUID == timeuuid {
+                                continue
+                            }
                         }
 
-                        /*//TODO retrieve as path of message - query update_messages_by_time with timeuuid
-                        updateMsgQuery := p.session.Query("SELECT as_path, peer_ip_address, collector_ip_address FROM csu_bgp_core.update_messages_by_time WHERE time_bucket=? AND timestamp=?", date, timeuuid)
-                        updateMsgIter := updateMsgQuery.Iter()
-                        var asPathValues []int
-                        var peerIPAddress, collectorIPAddress string
-                        for updateMsgIter.Scan(&asPathValues, &peerIPAddress, &collectorIPAddress) {
-                        }*/
+                        //retrieve as path of message - query update_messages_by_time with timeuuid
+                        updateMessageIter := session.CqlSession.Query(updateMessageSelectStmt, timeBucket, timeuuid).Iter()
+                        if updateMessageIter.Scan(&asPath, &peerIpAddress, &collectorIpAddress) {
+                            found := false
+                            for _, asNum := range asPath {
+                                if !prefixNode.ValidAsNumber(uint32(asNum)) {
+                                    found = true
+                                    break
+                                }
+                            }
+
+                            if found {
+                                continue
+                            }
+                        } else {
+                            //if message not found only check the source as on as_numbers_by_prefix_range
+                            if !prefixNode.ValidAsNumber(uint32(asNumber)) {
+                                continue
+                            }
+                        }
 
                         //TODO check historical data by querying prefix_by_as_number
 
-                        fmt.Printf("NOTIFICATION OF HIJACK - TIMESTAMP:%v IP_ADDRESS:%s MASK:%d AS_PATH:%d\n", timestamp, ipAddress, mask, asNumber)
+                        fmt.Printf("\tNOTIFICATION OF HIJACK - TIMESTAMP:%v IP_ADDRESS:%s MASK:%d AS_PATH:%d\n", timestamp, ipAddress, mask, asNumber)
+                        p.hijackUUIDs = append(p.hijackUUIDs, timeuuid)
+
+                        //write hijack to cassandra - TODO get module id from somewhere
+                        err := session.CqlSession.Query(prefixHijacksStmt, timeBucket, timeuuid, prefixNode.ipAddress, prefixNode.mask, "").Exec()
+                        if err != nil {
+                            return err
+                        }
                     }
                 }
 			}
@@ -120,7 +142,7 @@ func (p PrefixHijackModule) Run() error {
 }
 
 func (p PrefixHijackModule) Status() string {
-	return ""
+	return fmt.Sprintf("%v", p.status)
 }
 
 func (p PrefixHijackModule) Cleanup() error {

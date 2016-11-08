@@ -47,8 +47,8 @@ func StartPrefixHijackModule(cmd *cli.Cmd) {
     file := cmd.StringArg("FILE", "", "csv file formatted as 'AS_NUMBER,IP_ADDRESS,MASK'")
 	inSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to use as input")
 	moduleID := cmd.StringOpt("module_id", getUUID(), "id of new module")
-	periodicSeconds := cmd.IntOpt("periodic_secs", 30, "delay between monitoring checks for a prefix hijack")
-	timeoutSeconds := cmd.IntOpt("timeout_secs", 60, "stop module execution if time exceeds this limit")
+	periodicSeconds := cmd.IntOpt("periodic_secs", 3600, "delay between monitoring checks for a prefix hijack")
+	timeoutSeconds := cmd.IntOpt("timeout_secs", 3600, "stop module execution if time exceeds this limit")
 
     cmd.Action = func() {
         client, err := getRPCClient()
