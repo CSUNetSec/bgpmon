@@ -56,32 +56,15 @@ func NewPrefixHijackModule(monitorPrefixes []*pbbgpmon.PrefixHijackModule_Monito
         prefixCache.AddPrefix(monitorPrefix.Prefix.Prefix.Ipv4, monitorPrefix.Prefix.Mask, monitorPrefix.AsNumber)
     }
 
-    //prefixCache.Print()
-
 	return &module.Module{Moduler: PrefixHijackModule{prefixCache, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}}}, nil
 }
 
 func (p PrefixHijackModule) Run() error {
 	log.Debl.Printf("Running prefix hijack module\n")
 
-	//set detection start and end time
-	endTime := time.Now().UTC()
-	startTime := endTime.Add(time.Duration(-1*p.periodicSeconds) * time.Second)
-	if startTime.After(p.status.LastExecutionTime) { //set start time to min(LastExecutionTime, time.Now()-periodicSecs)
-		startTime = p.status.LastExecutionTime
-	}
-
-	//determine time buckets to be queried
-	timeBuckets, err := getTimeBuckets(startTime, endTime)
-	if err != nil {
-		return err
-	}
-
-	/*//parse min and max ip addresses
-	minIPAddress, maxIPAddress, err := getIPRange(p.prefixIPAddress, p.prefixMask)
-	if err != nil {
-		return err
-	}*/
+	//get execution time and initialize timebuckets to today and yesterday
+    executionTime := time.Now().UTC()
+	timeBuckets := []time.Time{ getTimeBucket(executionTime), getTimeBucket(time.Unix(executionTime.Unix() - 86400, 0)) }
 
 	//loop through time buckets
 	var (
@@ -104,23 +87,12 @@ func (p PrefixHijackModule) Run() error {
                     iter := query.Iter()
                     for iter.Scan(&ipAddress, &mask, &asNumber, &timestamp) {
                         //check for valid mask, timestamp, and if source is a valid asNumber
-                        if mask < prefixNode.mask || timestamp.Before(startTime) || timestamp.After(endTime) || intContains(prefixNode.asNumbers, uint32(asNumber)) {
+                        if mask < prefixNode.mask {
                             continue
                         }
 
-                        //check if parent nodes contain as number
-                        node := prefixNode
-                        found := false
-                        for node.parent != nil {
-                            node = node.parent
-
-                            if intContains(node.asNumbers, uint32(asNumber)) {
-                                found = true
-                                break
-                            }
-                        }
-
-                        if found {
+                        //check if as number is a valid advertisement
+                        if !prefixNode.ValidAsNumber(uint32(asNumber)) {
                             continue
                         }
 
@@ -143,7 +115,7 @@ func (p PrefixHijackModule) Run() error {
 
 	//update status variables
 	p.status.ExecutionCount++
-	p.status.LastExecutionTime = endTime
+	p.status.LastExecutionTime = executionTime
     return nil
 }
 
@@ -153,16 +125,6 @@ func (p PrefixHijackModule) Status() string {
 
 func (p PrefixHijackModule) Cleanup() error {
 	return nil
-}
-
-func intContains(list []uint32, value uint32) bool {
-	for _, num := range list {
-		if value == num {
-			return true
-		}
-	}
-
-	return false
 }
 
 /*
@@ -299,6 +261,20 @@ func (p *PrefixNode) SuperPrefix(prefixNode *PrefixNode) bool {
     return true
 }
 
+func (p *PrefixNode) ValidAsNumber(asNumber uint32) bool {
+    for _, asNum := range p.asNumbers {
+        if asNum == asNumber {
+            return true
+        }
+    }
+
+    if p.parent != nil {
+        return p.parent.ValidAsNumber(asNumber)
+    } else {
+        return false
+    }
+}
+
 func (p *PrefixNode) Print(indent int) {
     for i := 0; i<indent; i++ {
         fmt.Printf("\t")
@@ -310,3 +286,5 @@ func (p *PrefixNode) Print(indent int) {
         child.Print(indent + 1)
     }
 }
+
+
