@@ -1,6 +1,206 @@
 package bgp
 
 import (
+    "bytes"
+    "fmt"
+    "net"
+    "time"
+
+	"github.com/CSUNetSec/bgpmon/module"
+	"github.com/CSUNetSec/bgpmon/session"
+
+	pbbgpmon "github.com/CSUNetSec/netsec-protobufs/bgpmon"
+)
+
+const (
+	asNumberByPrefixStmt = "SELECT prefix_ip_address, prefix_mask, as_number, dateOf(timestamp) FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
+)
+
+//struct for use in parsing bgpmond toml configuration file
+type PrefixHijackConfig struct {
+	Keyspaces []string
+}
+
+type PrefixHijackModule struct {
+    prefixCache *PrefixCache
+}
+
+type PrefixHijackStatus struct {
+	ExecutionCount    uint
+	LastExecutionTime time.Time
+}
+
+func NewPrefixHijackModule(monitorPrefixes []*pbbgpmon.PrefixHijackModule_MonitorPrefix, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config PrefixHijackConfig) (*module.Module, error) {
+    //populate prefix cache
+    prefixCache := NewPrefixCache()
+    for _, monitorPrefix := range monitorPrefixes {
+        prefixCache.AddPrefix(monitorPrefix.Prefix.Prefix.Ipv4, monitorPrefix.Prefix.Mask, monitorPrefix.AsNumber)
+    }
+
+    //prefixCache.Print()
+
+    return &module.Module{Moduler: PrefixHijackModule{prefixCache: prefixCache}}, nil
+}
+
+func (p PrefixHijackModule) Run() error {
+    return nil
+}
+
+func (p PrefixHijackModule) Status() string {
+	return ""
+}
+
+func (p PrefixHijackModule) Cleanup() error {
+	return nil
+}
+
+/*
+ * PrefixCache
+ */
+type PrefixCache struct {
+    roots []*PrefixNode
+    prefixNodes []*PrefixNode
+}
+
+func NewPrefixCache() *PrefixCache {
+    return &PrefixCache {
+        roots: []*PrefixNode{},
+        prefixNodes: []*PrefixNode{},
+    }
+}
+
+func (p *PrefixCache) AddPrefix(ipAddress net.IP, mask uint32, asNumbers []uint32) error {
+    //create PrefxNode
+    prefixNode := NewPrefixNode(&ipAddress, mask, asNumbers)
+    p.prefixNodes = append(p.prefixNodes, prefixNode)
+
+    //check if prefixNode is subprefix/superprefix of a root
+    removeIndex := -1
+    for i, node := range p.roots {
+        if prefixNode.SubPrefix(node) {
+            //find correct node to insert on
+            insertNode := node
+            found := true
+            for found {
+                found = false
+                for _, child := range insertNode.children {
+                    if prefixNode.SubPrefix(child) {
+                        insertNode = child
+                        found = true
+                    }
+                }
+            }
+
+            //check if it's a superprefix to any children
+            superPrefixIndex := -1
+            for i, child := range insertNode.children {
+                if prefixNode.SuperPrefix(child) {
+                    superPrefixIndex = i
+                    break
+                }
+            }
+
+            if superPrefixIndex != -1 {
+                prefixNode.parent = insertNode
+                insertNode.children[superPrefixIndex].parent = prefixNode
+
+                prefixNode.children = append(prefixNode.children, insertNode.children[superPrefixIndex])
+                insertNode.children = append(insertNode.children[:superPrefixIndex], insertNode.children[superPrefixIndex+1:]...)
+            } else {
+                prefixNode.parent = insertNode
+                insertNode.children = append(insertNode.children, prefixNode)
+            }
+
+            return nil
+        } else if prefixNode.SuperPrefix(node) {
+            //add prefixNode as superprefix to node
+            node.parent = prefixNode
+            prefixNode.children = append(prefixNode.children, node)
+
+            removeIndex = i
+            break
+        }
+    }
+
+    if removeIndex != -1 {
+        //remove value
+        p.roots = append(p.roots[:removeIndex], p.roots[removeIndex+1:]...)
+    }
+
+    p.roots = append(p.roots, prefixNode)
+    return nil
+}
+
+func (p *PrefixCache) Print() {
+    for _, root := range p.roots {
+        root.Print(0)
+    }
+}
+
+type PrefixNode struct {
+    ipAddress *net.IP
+    mask uint32
+    asNumbers []uint32
+    minAddress, maxAddress []byte
+    parent *PrefixNode
+    children []*PrefixNode
+}
+
+func NewPrefixNode(ipAddress *net.IP, mask uint32, asNumbers[]uint32) *PrefixNode {
+    minAddress, maxAddress, _ := getIPRange(*ipAddress, int(mask))
+
+    return &PrefixNode {
+        ipAddress: ipAddress,
+        mask: mask,
+        asNumbers: asNumbers,
+        minAddress: minAddress,
+        maxAddress: maxAddress,
+        parent: nil,
+        children: []*PrefixNode{},
+    }
+}
+
+func (p *PrefixNode) SubPrefix(prefixNode *PrefixNode) bool {
+    //check if p.mask is shorter
+    if p.mask <= prefixNode.mask {
+        return false
+    }
+
+    //check if p.minAddress < prefixNode.minAddress or p.maxAddress > prefixNode.maxAddress
+    if bytes.Compare(p.minAddress, prefixNode.minAddress) < 0 || bytes.Compare(p.maxAddress, prefixNode.maxAddress) > 0 {
+        return false
+    }
+
+    return true
+}
+
+func (p *PrefixNode) SuperPrefix(prefixNode *PrefixNode) bool {
+    //check if p.mask is longer
+    if p.mask >= prefixNode.mask {
+        return false
+    }
+
+    //check if p.minAddress > prefixNode.minAddress or p.maxAddress < prefixNode.maxAddress
+    if bytes.Compare(p.minAddress, prefixNode.minAddress) > 0 || bytes.Compare(p.maxAddress, prefixNode.maxAddress) < 0 {
+        return false
+    }
+
+    return true
+}
+
+func (p *PrefixNode) Print(indent int) {
+    for i := 0; i<indent; i++ {
+        fmt.Printf("\t")
+    }
+
+    fmt.Printf("%s/%d : %v\n", p.ipAddress, p.mask, p.asNumbers)
+
+    for _, child := range p.children {
+        child.Print(indent + 1)
+    }
+}
+
+/*import (
 	"errors"
 	"fmt"
 	"net"
@@ -131,7 +331,11 @@ func intContains(list []uint32, value uint32) bool {
 	}
 
 	return false
-}
+}*/
+
+
+
+
 
 /*import (
 	"encoding/json"
