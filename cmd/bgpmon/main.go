@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+    "net"
 	"os"
 
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
@@ -99,4 +100,14 @@ func getRPCClient() (pb.BgpmondClient, error) {
 	}
 
 	return pb.NewBgpmondClient(conn), nil
+}
+
+func compareIpNet(a net.IP, b net.IP) bool {
+    for i := range a {
+        if a[i] != b[i] {
+            return false
+        }
+    }
+
+    return true
 }

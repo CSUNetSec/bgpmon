@@ -43,3 +43,7 @@ func getTimeBuckets(startTime, endTime time.Time) ([]time.Time, error) {
 
 	return timeBuckets, nil
 }
+
+func getTimeBucket(t time.Time) time.Time {
+    return time.Unix(t.Unix() - (t.Unix() % timeBucketInterval), 0)
+}
