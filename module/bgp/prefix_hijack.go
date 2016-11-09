@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	asNumberByPrefixStmt = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
+	asNumberByPrefixStmt = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number, is_advertisement FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
     updateMessageSelectStmt = "SELECT as_path, peer_ip_address, collector_ip_address FROM csu_bgp_core.update_messages_by_time WHERE time_bucket=? AND timestamp=?"
     prefixHijacksStmt = "INSERT INTO csu_bgp_derived.prefix_hijacks(time_bucket, timestamp, monitor_ip_address, monitor_mask, module_id) VALUES(?,?,?,?,?)"
 )
@@ -70,12 +70,13 @@ func (p PrefixHijackModule) Run() error {
 
 	//loop through time buckets
 	var (
-        timeuuid       string
-		timestamp      time.Time
-		ipAddress      string
-		mask, asNumber uint32
+        timeuuid                          string
+		timestamp                         time.Time
+		ipAddress                         string
+		mask, asNumber                    uint32
+        isAdvertisement                   bool
 
-        asPath         []int
+        asPath                            []int
         peerIpAddress, collectorIpAddress string
 	)
 
@@ -85,7 +86,12 @@ func (p PrefixHijackModule) Run() error {
                 for _, prefixNode := range p.prefixCache.prefixNodes {
                     //fmt.Printf("CHECKING FOR HIJACKS ON %s/%d\n", prefixNode.ipAddress, prefixNode.mask)
                     prefixRangeIter := session.CqlSession.Query(fmt.Sprintf(asNumberByPrefixStmt, keyspace), timeBucket, prefixNode.minAddress, prefixNode.maxAddress).Iter()
-                    for prefixRangeIter.Scan(&timeuuid, &timestamp, &ipAddress, &mask, &asNumber) {
+                    for prefixRangeIter.Scan(&timeuuid, &timestamp, &ipAddress, &mask, &asNumber, &isAdvertisement) {
+                        //make sure the message is an advertisement and not withdrawl
+                        if isAdvertisement == nil || !isAdvertisement {
+                            continue
+                        }
+
                         //check for valid mask, timestamp, and if source is a valid asNumber
                         if mask < prefixNode.mask {
                             continue

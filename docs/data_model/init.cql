@@ -9,31 +9,15 @@ CREATE TABLE csu_bgp_core.update_messages_by_time (
     time_bucket timestamp,
     timestamp timeuuid,
     collector_ip_address inet,
-    collector_mac_address blob, //REMOVE
-    collector_port int, //REMOVE
     peer_ip_address inet,
     as_path list< bigint >,
     next_hop inet,
     advertised_prefixes list< frozen< prefix> >,
     withdrawn_prefixes list< frozen< prefix> >,
+    protomsg blob,
     PRIMARY KEY (time_bucket, timestamp)
 ) WITH CLUSTERING ORDER BY (timestamp DESC)
     AND compaction = {'class': 'org.apache.cassandra.db.compaction.DateTieredCompactionStrategy'};
-
-CREATE TABLE csu_bgp_core.organization_by_as_number (
-    as_number bigint,
-    measure_time timeuuid,
-    organization_name text,
-    organization_abbreviation text,
-    local_registry text,
-    regional_registry text,
-    website text,
-    city text,
-    state text,
-    country text,
-    source text,
-    PRIMARY KEY (as_number, measure_time)
-) WITH CLUSTERING ORDER BY (measure_time DESC);
 
 /*
  * CSU BGP DERIVED TABLES
@@ -47,8 +31,8 @@ CREATE TABLE csu_bgp_derived.as_number_by_prefix_range (
     prefix_ip_address inet,
     prefix_mask int,
     timestamp timeuuid,
-    is_advertisement bool, //ADDED
     as_number bigint,
+    is_advertisement bool, //ADDED
     PRIMARY KEY (time_bucket, prefix_ip_address, prefix_mask, timestamp)
 ) WITH CLUSTERING ORDER BY (prefix_ip_address ASC, prefix_mask ASC, timestamp DESC);
 
