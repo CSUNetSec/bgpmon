@@ -98,7 +98,8 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 			}
 			capture := new(pb.BGPCapture)
 			bgphpb := bgp4h.(pp.BGP4MPHeaderer).GetHeader()
-			//capture.Timestamp = bgph.dest.Timestamp
+			mrtpb := mrth.GetHeader()
+			capture.Timestamp = mrtpb.Timestamp
 			capture.PeerAs = bgphpb.PeerAs
 			capture.LocalAs = bgphpb.LocalAs
 			capture.InterfaceIndex = bgphpb.InterfaceIndex
