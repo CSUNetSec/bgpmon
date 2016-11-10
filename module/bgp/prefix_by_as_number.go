@@ -24,6 +24,7 @@ type PrefixByAsNumberConfig struct {
 }
 
 type PrefixByAsNumberModule struct {
+    moduleId      string
 	startTime     int64
 	endTime       int64
 	inSessions    []session.CassandraSession
@@ -36,7 +37,7 @@ type PrefixByAsNumberStatus struct {
 	prefixCount int64
 }
 
-func NewPrefixByAsNumberModule(startTime int64, endTime int64, inSessions []session.Sessioner, config PrefixByAsNumberConfig) (*module.Module, error) {
+func NewPrefixByAsNumberModule(moduleId string, startTime int64, endTime int64, inSessions []session.Sessioner, config PrefixByAsNumberConfig) (*module.Module, error) {
 	//check that all sessions are cassandra sessions
 	inSess := []session.CassandraSession{}
 	for _, sess := range inSessions {
@@ -48,7 +49,7 @@ func NewPrefixByAsNumberModule(startTime int64, endTime int64, inSessions []sess
 		inSess = append(inSess, casSess)
 	}
 
-	return &module.Module{Moduler: PrefixByAsNumberModule{startTime, endTime, inSess, config.Keyspaces, config.WriteKeyspace, &PrefixByAsNumberStatus{0}}}, nil
+	return &module.Module{Moduler: PrefixByAsNumberModule{moduleId, startTime, endTime, inSess, config.Keyspaces, config.WriteKeyspace, &PrefixByAsNumberStatus{0}}}, nil
 }
 
 func (p PrefixByAsNumberModule) Run() error {

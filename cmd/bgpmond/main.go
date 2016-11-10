@@ -81,12 +81,12 @@ func (s Server) RunModule(ctx context.Context, request *pb.RunModuleRequest) (*p
 
 	switch request.Type {
 	case pb.ModuleType_PREFIX_HIJACK:
-		mod, err = s.createModule(request.GetPrefixHijackModule())
+		mod, err = s.createModule("", request.GetPrefixHijackModule())
 		if err != nil {
 			break
 		}
 	case pb.ModuleType_PREFIX_BY_AS_NUMBER:
-		mod, err = s.createModule(request.GetPrefixByAsNumberModule())
+		mod, err = s.createModule("", request.GetPrefixByAsNumberModule())
 		if err != nil {
 			break
 		}
@@ -114,7 +114,7 @@ func (s Server) StartModule(ctx context.Context, request *pb.StartModuleRequest)
 
 	switch request.Type {
 	case pb.ModuleType_GOBGP_LINK:
-		mod, err = s.createModule(request.GetGobgpLinkModule())
+		mod, err = s.createModule(request.ModuleId, request.GetGobgpLinkModule())
 		if err != nil {
 			break
 		}
@@ -122,7 +122,7 @@ func (s Server) StartModule(ctx context.Context, request *pb.StartModuleRequest)
 		mod.CommandChan <- module.ModuleCommand{module.COMRUN, nil}
 	case pb.ModuleType_PREFIX_HIJACK:
 		rpcConfig := request.GetPrefixHijackModule()
-		mod, err = s.createModule(rpcConfig)
+		mod, err = s.createModule(request.ModuleId, rpcConfig)
 		if err != nil {
 			break
 		}
@@ -258,7 +258,7 @@ func (s Server) Write(stream pb.Bgpmond_WriteServer) error {
 /*
  * Miscellaneous Functions
  */
-func (s Server) createModule(request interface{}) (*module.Module, error) {
+func (s Server) createModule(moduleId string, request interface{}) (*module.Module, error) {
 	var mod *module.Module
 
 	switch request.(type) {
@@ -269,7 +269,7 @@ func (s Server) createModule(request interface{}) (*module.Module, error) {
 			return nil, err
 		}
 
-		mod, err = gobgp.NewGoBGPLinkModule(rpcConfig.Address, outSessions, bgpmondConfig.Modules.GoBGPLink)
+		mod, err = gobgp.NewGoBGPLinkModule(moduleId, rpcConfig.Address, outSessions, bgpmondConfig.Modules.GoBGPLink)
 		if err != nil {
 			return nil, err
 		}
@@ -280,7 +280,7 @@ func (s Server) createModule(request interface{}) (*module.Module, error) {
 			return nil, err
 		}
 
-		mod, err = bgp.NewPrefixByAsNumberModule(rpcConfig.StartTime, rpcConfig.EndTime, inSessions, bgpmondConfig.Modules.PrefixByAsNumber)
+		mod, err = bgp.NewPrefixByAsNumberModule(moduleId, rpcConfig.StartTime, rpcConfig.EndTime, inSessions, bgpmondConfig.Modules.PrefixByAsNumber)
 		if err != nil {
 			return nil, err
 		}
@@ -291,7 +291,7 @@ func (s Server) createModule(request interface{}) (*module.Module, error) {
 			return nil, err
 		}
 
-		mod, err = bgp.NewPrefixHijackModule(rpcConfig.MonitorPrefixes, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack)
+		mod, err = bgp.NewPrefixHijackModule(moduleId, rpcConfig.MonitorPrefixes, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack)
 		if err != nil {
 			return nil, err
 		}

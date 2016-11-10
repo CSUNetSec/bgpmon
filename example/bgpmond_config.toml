@@ -18,13 +18,13 @@ ErrorOut = "stderr"
     TimeBucketSize = 86400
 
 # Configuration for Sessions
-[[Sessions.Cassandra.Writers.BGPUpdateMsgByTime]]
-    Keyspace = "csu_bgp_core"
-    TimeBucketSeconds = 86400
+#[[Sessions.Cassandra.Writers.BGPUpdateMsgByTime]]
+#    Keyspace = "csu_bgp_core"
+#    TimeBucketSeconds = 86400
 
-[[Sessions.Cassandra.Writers.BGPUpdateMsgByPrefixRange]]
-    Keyspace = "csu_bgp_derived"
-    TimeBucketSeconds = 86400
+#[[Sessions.Cassandra.Writers.BGPUpdateMsgByPrefixRange]]
+#    Keyspace = "csu_bgp_derived"
+#    TimeBucketSeconds = 86400
 
 [[Sessions.Cassandra.Writers.LocationByAS]]
     Keyspace = "csu_location_core"

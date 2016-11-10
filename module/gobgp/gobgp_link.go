@@ -19,19 +19,20 @@ type GoBGPLinkConfig struct {
 }
 
 type GoBGPLinkModule struct {
+    moduleId string
 	address  string
 	conn     *grpc.ClientConn
 	sessions []session.Sessioner
 }
 
-func NewGoBGPLinkModule(address string, sessions []session.Sessioner, config GoBGPLinkConfig) (*module.Module, error) {
+func NewGoBGPLinkModule(moduleId string, address string, sessions []session.Sessioner, config GoBGPLinkConfig) (*module.Module, error) {
 	//connect over grpc
 	conn, err := grpc.Dial(fmt.Sprintf("%s:50051", address), grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
 
-	return &module.Module{Moduler: GoBGPLinkModule{address, conn, sessions}}, nil
+	return &module.Module{Moduler: GoBGPLinkModule{moduleId, address, conn, sessions}}, nil
 }
 
 func (g GoBGPLinkModule) Run() error {

@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	asNumberByPrefixStmt    = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number, is_advertisement FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
+	asNumberByPrefixStmt    = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number, is_withdrawal FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
 	updateMessageSelectStmt = "SELECT as_path, peer_ip_address, collector_ip_address FROM csu_bgp_core.update_messages_by_time WHERE time_bucket=? AND timestamp=?"
-	prefixHijacksStmt       = "INSERT INTO csu_bgp_derived.prefix_hijacks(time_bucket, timestamp, module_id, advertised_ip_address, advertised_mask, monitor_ip_address, monitor_mask) VALUES(?,?,?,?,?,?,?)"
+	prefixHijacksStmt       = "INSERT INTO csu_bgp_derived.prefix_hijacks(time_bucket, module_id, timestamp, advertised_ip_address, advertised_mask, monitor_ip_address, monitor_mask) VALUES(?,?,?,?,?,?,?)"
 )
 
 //struct for use in parsing bgpmond toml configuration file
@@ -26,6 +26,7 @@ type PrefixHijackConfig struct {
 }
 
 type PrefixHijackModule struct {
+    moduleId        string
 	prefixCache     *PrefixCache
 	periodicSeconds int32
 	timeoutSeconds  int32
@@ -40,7 +41,7 @@ type PrefixHijackStatus struct {
 	LastExecutionTime time.Time
 }
 
-func NewPrefixHijackModule(monitorPrefixes []*pbbgpmon.PrefixHijackModule_MonitorPrefix, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config PrefixHijackConfig) (*module.Module, error) {
+func NewPrefixHijackModule(moduleId string, monitorPrefixes []*pbbgpmon.PrefixHijackModule_MonitorPrefix, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config PrefixHijackConfig) (*module.Module, error) {
 	//check that all sessions are cassandra sessions
 	inSess := []session.CassandraSession{}
 	for _, sess := range inSessions {
@@ -58,7 +59,7 @@ func NewPrefixHijackModule(monitorPrefixes []*pbbgpmon.PrefixHijackModule_Monito
 		prefixCache.AddPrefix(monitorPrefix.Prefix.Prefix.Ipv4, monitorPrefix.Prefix.Mask, monitorPrefix.AsNumber)
 	}
 
-	return &module.Module{Moduler: PrefixHijackModule{prefixCache, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, make(map[string]int64)}}, nil
+	return &module.Module{Moduler: PrefixHijackModule{moduleId, prefixCache, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, make(map[string]int64)}}, nil
 }
 
 func (p PrefixHijackModule) Run() error {
@@ -74,7 +75,7 @@ func (p PrefixHijackModule) Run() error {
 		timestamp       time.Time
 		ipAddress       string
 		mask, asNumber  uint32
-		isAdvertisement bool
+		isWithdrawal    bool
 
 		asPath                            []int
 		peerIpAddress, collectorIpAddress string
@@ -85,10 +86,10 @@ func (p PrefixHijackModule) Run() error {
 			for _, keyspace := range p.keyspaces {
 				for _, prefixNode := range p.prefixCache.prefixNodes {
 					//fmt.Printf("CHECKING FOR HIJACKS ON %s/%d\n", prefixNode.ipAddress, prefixNode.mask)
-					prefixRangeIter := session.CqlSession.Query(fmt.Sprintf(asNumberByPrefixStmt, keyspace), timeBucket, prefixNode.minAddress, prefixNode.maxAddress).Iter()
-					for prefixRangeIter.Scan(&timeuuid, &timestamp, &ipAddress, &mask, &asNumber, &isAdvertisement) {
+					prefixRangeIter := session.CqlSession.Query(fmt.Sprintf(asNumberByPrefixStmt, keyspace), timeBucket, net.IP(prefixNode.minAddress), net.IP(prefixNode.maxAddress)).Iter()
+					for prefixRangeIter.Scan(&timeuuid, &timestamp, &ipAddress, &mask, &asNumber, &isWithdrawal) {
 						//make sure the message is an advertisement and not withdrawl
-						if !isAdvertisement {
+						if isWithdrawal {
 							continue
 						}
 
@@ -129,8 +130,8 @@ func (p PrefixHijackModule) Run() error {
 						fmt.Printf("\tNOTIFICATION OF HIJACK - TIMESTAMP:%v IP_ADDRESS:%s MASK:%d AS_PATH:%d\n", timestamp, ipAddress, mask, asNumber)
                         p.hijackUUIDs[aggregateString] = time.Now().Unix()
 
-						//write hijack to cassandra - TODO get module id from somewhere
-						err := session.CqlSession.Query(prefixHijacksStmt, timeBucket, timeuuid, "", ipAddress, mask, prefixNode.ipAddress, prefixNode.mask).Exec()
+						//write hijack to cassandra
+						err := session.CqlSession.Query(prefixHijacksStmt, timeBucket, p.moduleId, timeuuid, ipAddress, mask, prefixNode.ipAddress, prefixNode.mask).Exec()
 						if err != nil {
 							return err
 						}
