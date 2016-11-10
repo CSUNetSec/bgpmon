@@ -32,7 +32,7 @@ type PrefixHijackModule struct {
 	inSessions      []session.CassandraSession
 	keyspaces       []string
 	status          *PrefixHijackStatus
-	hijackUUIDs     []string
+    hijackUUIDs     map[string]int64
 }
 
 type PrefixHijackStatus struct {
@@ -58,7 +58,7 @@ func NewPrefixHijackModule(monitorPrefixes []*pbbgpmon.PrefixHijackModule_Monito
 		prefixCache.AddPrefix(monitorPrefix.Prefix.Prefix.Ipv4, monitorPrefix.Prefix.Mask, monitorPrefix.AsNumber)
 	}
 
-	return &module.Module{Moduler: PrefixHijackModule{prefixCache, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, []string{}}}, nil
+	return &module.Module{Moduler: PrefixHijackModule{prefixCache, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, make(map[string]int64)}}, nil
 }
 
 func (p PrefixHijackModule) Run() error {
@@ -98,11 +98,10 @@ func (p PrefixHijackModule) Run() error {
 						}
 
 						//check if potential hijack has already been seen
-						for _, hijackUUID := range p.hijackUUIDs {
-							if hijackUUID == timeuuid {
-								continue
-							}
-						}
+                        aggregateString := fmt.Sprintf("%s-%s/%d->%s/%d", timeuuid, ipAddress, mask, prefixNode.ipAddress, prefixNode.mask)
+                        if _, ok := p.hijackUUIDs[aggregateString]; ok {
+                            continue
+                        }
 
 						//retrieve as path of message - query update_messages_by_time with timeuuid
 						updateMessageIter := session.CqlSession.Query(updateMessageSelectStmt, timeBucket, timeuuid).Iter()
@@ -128,7 +127,7 @@ func (p PrefixHijackModule) Run() error {
 						//TODO check historical data by querying prefix_by_as_number
 
 						fmt.Printf("\tNOTIFICATION OF HIJACK - TIMESTAMP:%v IP_ADDRESS:%s MASK:%d AS_PATH:%d\n", timestamp, ipAddress, mask, asNumber)
-						p.hijackUUIDs = append(p.hijackUUIDs, timeuuid)
+                        p.hijackUUIDs[aggregateString] = time.Now().Unix()
 
 						//write hijack to cassandra - TODO get module id from somewhere
 						err := session.CqlSession.Query(prefixHijacksStmt, timeBucket, timeuuid, "", ipAddress, mask, prefixNode.ipAddress, prefixNode.mask).Exec()
@@ -140,6 +139,8 @@ func (p PrefixHijackModule) Run() error {
 			}
 		}
 	}
+
+    //TODO remove prefix hijack UUIDs that are older than 2 days
 
 	//update status variables
 	p.status.ExecutionCount++
