@@ -17,7 +17,7 @@ import (
 const (
 	asNumberByPrefixStmt    = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number, is_advertisement FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
 	updateMessageSelectStmt = "SELECT as_path, peer_ip_address, collector_ip_address FROM csu_bgp_core.update_messages_by_time WHERE time_bucket=? AND timestamp=?"
-	prefixHijacksStmt       = "INSERT INTO csu_bgp_derived.prefix_hijacks(time_bucket, timestamp, monitor_ip_address, monitor_mask, module_id) VALUES(?,?,?,?,?)"
+	prefixHijacksStmt       = "INSERT INTO csu_bgp_derived.prefix_hijacks(time_bucket, timestamp, module_id, advertised_ip_address, advertised_mask, monitor_ip_address, monitor_mask) VALUES(?,?,?,?,?,?,?)"
 )
 
 //struct for use in parsing bgpmond toml configuration file
@@ -131,7 +131,7 @@ func (p PrefixHijackModule) Run() error {
 						p.hijackUUIDs = append(p.hijackUUIDs, timeuuid)
 
 						//write hijack to cassandra - TODO get module id from somewhere
-						err := session.CqlSession.Query(prefixHijacksStmt, timeBucket, timeuuid, prefixNode.ipAddress, prefixNode.mask, "").Exec()
+						err := session.CqlSession.Query(prefixHijacksStmt, timeBucket, timeuuid, "", ipAddress, mask, prefixNode.ipAddress, prefixNode.mask).Exec()
 						if err != nil {
 							return err
 						}
