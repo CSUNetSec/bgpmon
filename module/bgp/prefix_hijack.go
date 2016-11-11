@@ -16,6 +16,7 @@ import (
 
 const (
 	asNumberByPrefixStmt    = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number, is_withdrawal FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
+    monitorPrefixesStmt     = "SELECT as_number, enabled, ip_address, mask FROM csu_bgp_config.monitor_prefixes WHERE module_id = ?"
 	updateMessageSelectStmt = "SELECT as_path, peer_ip_address, collector_ip_address FROM csu_bgp_core.update_messages_by_time WHERE time_bucket=? AND timestamp=?"
 	prefixHijacksStmt       = "INSERT INTO csu_bgp_derived.prefix_hijacks(time_bucket, module_id, timestamp, advertised_ip_address, advertised_mask, monitor_ip_address, monitor_mask) VALUES(?,?,?,?,?,?,?)"
 )
@@ -27,7 +28,6 @@ type PrefixHijackConfig struct {
 
 type PrefixHijackModule struct {
     moduleId        string
-	prefixCache     *PrefixCache
 	periodicSeconds int32
 	timeoutSeconds  int32
 	inSessions      []session.CassandraSession
@@ -53,38 +53,44 @@ func NewPrefixHijackModule(moduleId string, monitorPrefixes []*pbbgpmon.PrefixHi
 		inSess = append(inSess, casSess)
 	}
 
-	//populate prefix cache
-	prefixCache := NewPrefixCache()
-	for _, monitorPrefix := range monitorPrefixes {
-		prefixCache.AddPrefix(monitorPrefix.Prefix.Prefix.Ipv4, monitorPrefix.Prefix.Mask, monitorPrefix.AsNumber)
-	}
-
-	return &module.Module{Moduler: PrefixHijackModule{moduleId, prefixCache, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, make(map[string]int64)}}, nil
+	return &module.Module{Moduler: PrefixHijackModule{moduleId, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, make(map[string]int64)}}, nil
 }
 
 func (p PrefixHijackModule) Run() error {
 	log.Debl.Printf("Running prefix hijack module\n")
+
+	var (
+		timeuuid                          string
+		timestamp                         time.Time
+		ipAddress                         net.IP
+		mask, asNumber                    uint32
+		enabled, isWithdrawal             bool
+
+		asPath                            []int
+		peerIpAddress, collectorIpAddress string
+	)
+    //populate prefix cache
+    prefixCache := NewPrefixCache()
+    for _, session := range p.inSessions {
+        monitorPrefixesIter := session.CqlSession.Query(monitorPrefixesStmt, p.moduleId).Iter()
+        for monitorPrefixesIter.Scan(&asNumber, &enabled, &ipAddress, &mask) {
+            if !enabled {
+                continue
+            }
+
+            prefixCache.AddPrefix(ipAddress, mask, asNumber)
+        }
+    }
 
 	//get execution time and initialize timebuckets to today and yesterday
 	executionTime := time.Now().UTC()
 	timeBuckets := []time.Time{getTimeBucket(executionTime), getTimeBucket(time.Unix(executionTime.Unix()-86400, 0))}
 
 	//loop through time buckets
-	var (
-		timeuuid        string
-		timestamp       time.Time
-		ipAddress       string
-		mask, asNumber  uint32
-		isWithdrawal    bool
-
-		asPath                            []int
-		peerIpAddress, collectorIpAddress string
-	)
-
 	for _, timeBucket := range timeBuckets {
 		for _, session := range p.inSessions {
 			for _, keyspace := range p.keyspaces {
-				for _, prefixNode := range p.prefixCache.prefixNodes {
+				for _, prefixNode := range prefixCache.prefixNodes {
 					//fmt.Printf("CHECKING FOR HIJACKS ON %s/%d\n", prefixNode.ipAddress, prefixNode.mask)
 					prefixRangeIter := session.CqlSession.Query(fmt.Sprintf(asNumberByPrefixStmt, keyspace), timeBucket, net.IP(prefixNode.minAddress), net.IP(prefixNode.maxAddress)).Iter()
 					for prefixRangeIter.Scan(&timeuuid, &timestamp, &ipAddress, &mask, &asNumber, &isWithdrawal) {
@@ -172,15 +178,18 @@ func NewPrefixCache() *PrefixCache {
 	}
 }
 
-func (p *PrefixCache) AddPrefix(ipAddress net.IP, mask uint32, asNumbers []uint32) error {
+func (p *PrefixCache) AddPrefix(ipAddress net.IP, mask uint32, asNumber uint32) error {
 	//create PrefxNode
-	prefixNode := NewPrefixNode(&ipAddress, mask, asNumbers)
+	prefixNode := NewPrefixNode(&ipAddress, mask, asNumber)
 	p.prefixNodes = append(p.prefixNodes, prefixNode)
 
 	//check if prefixNode is subprefix/superprefix of a root
 	removeIndex := -1
 	for i, node := range p.roots {
-		if prefixNode.SubPrefix(node) {
+        if prefixNode.Equals(node) {
+            node.asNumbers = append(node.asNumbers, asNumber)
+            return nil
+        } else if prefixNode.SubPrefix(node) {
 			//find correct node to insert on
 			insertNode := node
 			found := true
@@ -249,18 +258,26 @@ type PrefixNode struct {
 	children               []*PrefixNode
 }
 
-func NewPrefixNode(ipAddress *net.IP, mask uint32, asNumbers []uint32) *PrefixNode {
+func NewPrefixNode(ipAddress *net.IP, mask uint32, asNumber uint32) *PrefixNode {
 	minAddress, maxAddress, _ := getIPRange(*ipAddress, int(mask))
 
 	return &PrefixNode{
 		ipAddress:  ipAddress,
 		mask:       mask,
-		asNumbers:  asNumbers,
+		asNumbers:  []uint32{asNumber},
 		minAddress: minAddress,
 		maxAddress: maxAddress,
 		parent:     nil,
 		children:   []*PrefixNode{},
 	}
+}
+
+func (p *PrefixNode) Equals(prefixNode *PrefixNode) bool {
+    if p.ipAddress == prefixNode.ipAddress && p.mask == prefixNode.mask {
+        return true
+    }
+
+    return false
 }
 
 func (p *PrefixNode) SubPrefix(prefixNode *PrefixNode) bool {
