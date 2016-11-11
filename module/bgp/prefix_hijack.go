@@ -10,8 +10,6 @@ import (
 	"github.com/CSUNetSec/bgpmon/log"
 	"github.com/CSUNetSec/bgpmon/module"
 	"github.com/CSUNetSec/bgpmon/session"
-
-	pbbgpmon "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 )
 
 const (
@@ -41,7 +39,7 @@ type PrefixHijackStatus struct {
 	LastExecutionTime time.Time
 }
 
-func NewPrefixHijackModule(moduleId string, monitorPrefixes []*pbbgpmon.PrefixHijackModule_MonitorPrefix, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config PrefixHijackConfig) (*module.Module, error) {
+func NewPrefixHijackModule(moduleId string, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config PrefixHijackConfig) (*module.Module, error) {
 	//check that all sessions are cassandra sessions
 	inSess := []session.CassandraSession{}
 	for _, sess := range inSessions {
