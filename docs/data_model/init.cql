@@ -32,7 +32,7 @@ CREATE TABLE csu_bgp_derived.as_number_by_prefix_range (
     prefix_mask int,
     timestamp timeuuid,
     as_number bigint,
-    is_advertisement bool, //ADDED
+    is_withdrawal boolean,
     PRIMARY KEY (time_bucket, prefix_ip_address, prefix_mask, timestamp)
 ) WITH CLUSTERING ORDER BY (prefix_ip_address ASC, prefix_mask ASC, timestamp DESC);
 
@@ -54,13 +54,30 @@ CREATE TABLE csu_bgp_derived.prefix_by_as_number (
     PRIMARY KEY (as_number, measure_date, prefix_ip_address, prefix_mask)
 ) WITH CLUSTERING ORDER BY (measure_date DESC, prefix_ip_address ASC, prefix_mask ASC);
 
-CREATE TABLE csu_bgp_derived.prefix_hijacks ( //NEW TABLE
+CREATE TABLE csu_bgp_derived.prefix_hijacks (
     time_bucket timestamp,
+    module_id string,
     timestamp timeuuid,
+    advertised_ip_address inet,
+    advertised_mask int,
     monitor_ip_address inet,
     monitor_mask inet,
-    module_id string,
-    PRIMARY KEY (time_bucket, moduel_id, timeuuid)
+    PRIMARY KEY (time_bucket, module_id, timestamp, advertised_ip_address, advertised_mask, monitor_ip_address, monitor_mask)
+) WITH CLUSTERING ORDER BY (module_id ASC, timestamp DESC);
+
+/*
+ * CSU BGP CONFIG TABLES
+ */
+CREATE KEYSPACE csu_bgp_config WITH replication = {'class': 'NetworkTopologyStrategy', 'csu_dc': '2'}  AND durable_writes = true;
+
+CREATE TABLE csu_bgp_config.monitor_prefixes (
+    module_id text,
+    timestamp timeuuid,
+    ip_address inet,
+    mask int,
+    as_number bigint,
+    enabled boolean,
+    PRIMARY KEY (module_id, timestamp)
 ) WITH CLUSTERING ORDER BY (timestamp DESC);
 
 /*
