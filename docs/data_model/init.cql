@@ -54,6 +54,14 @@ CREATE TABLE csu_bgp_derived.advertised_prefix_by_as_number (
     PRIMARY KEY (time_bucket, as_number, prefix_ip_address, prefix_mask)
 ) WITH CLUSTERING ORDER BY (as_number ASC, prefix_ip_address ASC, prefix_mask ASC);
 
+CREATE TABLE csu_bgp_derived.withdrawn_prefix_by_time (
+    time_bucket timestamp,
+    prefix_ip_address inet,
+    prefix_mask int,
+    withdrawn_count counter,
+    PRIMARY KEY (time_bucket, prefix_ip_address, prefix_mask)
+) WITH CLUSTERING ORDER BY (prefix_ip_address ASC, prefix_mask ASC);
+
 CREATE TABLE csu_bgp_derived.prefix_hijacks (
     time_bucket timestamp,
     module_id string,
