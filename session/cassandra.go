@@ -234,7 +234,7 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 		return fmt.Errorf("BGPUpdate in BGPCapture message was nil")
 	}
 
-	batch := gocql.NewBatch(gocql.UnloggedBatch)
+	batch := gocql.NewBatch(gocql.LoggedBatch)
 	timestamp := gocql.UUIDFromTime(time.Unix(int64(msg.Timestamp), 0))
 	advertisedPrefixes := []IPPrefix{}
 	withdrawnPrefixes := []IPPrefix{}
