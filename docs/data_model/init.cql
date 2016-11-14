@@ -45,14 +45,14 @@ CREATE TABLE csu_bgp_derived.as_number_by_prefix (
     PRIMARY KEY ((prefix_ip_address, prefix_mask), measure_date, as_number)
 ) WITH CLUSTERING ORDER BY (measure_date DESC, as_number ASC);
 
-CREATE TABLE csu_bgp_derived.prefix_by_as_number (
+CREATE TABLE csu_bgp_derived.advertised_prefix_by_as_number (
+    time_bucket timestamp,
     as_number bigint,
-    measure_date timestamp,
     prefix_ip_address inet,
     prefix_mask int,
-    update_message_count int,
-    PRIMARY KEY (as_number, measure_date, prefix_ip_address, prefix_mask)
-) WITH CLUSTERING ORDER BY (measure_date DESC, prefix_ip_address ASC, prefix_mask ASC);
+    advertised_count counter,
+    PRIMARY KEY (time_bucket, as_number, prefix_ip_address, prefix_mask)
+) WITH CLUSTERING ORDER BY (as_number ASC, prefix_ip_address ASC, prefix_mask ASC);
 
 CREATE TABLE csu_bgp_derived.prefix_hijacks (
     time_bucket timestamp,
