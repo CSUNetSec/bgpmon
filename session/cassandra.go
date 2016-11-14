@@ -119,11 +119,13 @@ func addWriter(writers map[pb.WriteRequest_Type][]Writer, writeRequestType pb.Wr
  */
 
 const (
-	bgpCaptureByTimeStmt        = "INSERT INTO %s.update_messages_by_time(time_bucket, timestamp, advertised_prefixes, as_path, collector_ip_address, next_hop, peer_ip_address, withdrawn_prefixes, protomsg) VALUES(?,?,?,?,?,?,?,?,?)"
-	bgpCaptureByPrefixRangeStmt = "INSERT INTO %s.as_number_by_prefix_range(time_bucket, prefix_ip_address, prefix_mask, timestamp, is_withdrawal, as_number) VALUES(?,?,?,?,?,?)"
-	locationByASStmt            = "INSERT INTO %s.location_by_as_number(as_number, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
-	locationByIPAddressStmt     = "INSERT INTO %s.location_by_ip_address(ip_address, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
-	locationByPrefixStmt        = "INSERT INTO %s.location_by_prefix(prefix_ip_address, prefix_mask, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?,?)"
+	bgpCaptureByTimeStmt           = "INSERT INTO %s.update_messages_by_time(time_bucket, timestamp, advertised_prefixes, as_path, collector_ip_address, next_hop, peer_ip_address, withdrawn_prefixes, protomsg) VALUES(?,?,?,?,?,?,?,?,?)"
+	bgpCaptureByPrefixRangeStmt    = "INSERT INTO %s.as_number_by_prefix_range(time_bucket, prefix_ip_address, prefix_mask, timestamp, is_withdrawal, as_number) VALUES(?,?,?,?,?,?)"
+	advertisedPrefixByAsNumberStmt = "UPDATE %s.advertised_prefix_by_as_number SET advertised_count= advertised_count + 1 WHERE time_bucket=? AND as_number=? AND prefix_ip_address=? AND prefix_mask=?"
+	withdrawnPrefixByTimeStmt      = "UPDATE %s.withdrawn_prefix_by_time SET withdrawn_count= withdrawn_count + 1 WHERE time_bucket=? AND prefix_ip_address=? AND prefix_mask=?"
+	locationByASStmt               = "INSERT INTO %s.location_by_as_number(as_number, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
+	locationByIPAddressStmt        = "INSERT INTO %s.location_by_ip_address(ip_address, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?)"
+	locationByPrefixStmt           = "INSERT INTO %s.location_by_prefix(prefix_ip_address, prefix_mask, measure_date, country_code, state_code, city, latitude, longitude, source) VALUES(?,?,?,?,?,?,?,?,?)"
 )
 
 type CassandraWriter struct {
@@ -263,6 +265,15 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 					true,
 					nil,
 				)
+
+				//insert to withdrawnprefixesbytime cf
+				batch.Query(
+					fmt.Sprintf(withdrawnPrefixByTimeStmt, "csu_bgp_derived"),
+					time.Unix(int64(msg.Timestamp)-(int64(msg.Timestamp)%b.timeBucketSeconds), 0),
+					ip,
+					wr.Mask,
+				)
+
 			}
 		}
 	}
@@ -284,6 +295,15 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 						timestamp,
 						false,
 						asp[len(asp)-1],
+					)
+
+					//insert to advertisedprefixbyasnumber cf
+					batch.Query(
+						fmt.Sprintf(advertisedPrefixByAsNumberStmt, "csu_bgp_derived"),
+						time.Unix(int64(msg.Timestamp)-(int64(msg.Timestamp)%b.timeBucketSeconds), 0),
+						asp[len(asp)-1],
+						ip,
+						ar.Mask,
 					)
 				}
 
