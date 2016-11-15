@@ -26,7 +26,7 @@ CREATE KEYSPACE csu_bgp_derived WITH replication = {'class': 'NetworkTopologyStr
 
 CREATE TYPE csu_bgp_derived.prefix (ip_address inet, mask int);
 
-CREATE TABLE csu_bgp_derived.as_number_by_prefix_range (
+CREATE TABLE csu_test.as_number_by_prefix_range (
     time_bucket timestamp,
     prefix_ip_address inet,
     prefix_mask int,
