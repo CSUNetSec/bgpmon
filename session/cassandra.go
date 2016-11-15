@@ -279,6 +279,7 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 					).Exec()
 
 					if countererr != nil {
+						count++
 						goto withdrawn_retry
 					}
 				} else {
@@ -320,6 +321,7 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 						).Exec()
 
 						if countererr != nil {
+							count++
 							goto advertised_retry
 						}
 					} else {
