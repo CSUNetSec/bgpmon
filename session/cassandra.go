@@ -237,7 +237,7 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 		return fmt.Errorf("BGPUpdate in BGPCapture message was nil")
 	}
 
-	batch := gocql.NewBatch(gocql.LoggedBatch)
+	//batch := gocql.NewBatch(gocql.LoggedBatch)
 	timestamp := gocql.UUIDFromTime(time.Unix(int64(msg.Timestamp), 0))
 	advertisedPrefixes := []IPPrefix{}
 	withdrawnPrefixes := []IPPrefix{}
@@ -257,18 +257,28 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 					return err
 				}
 				withdrawnPrefixes = append(withdrawnPrefixes, IPPrefix{ip, uint8(wr.Mask)})
-				batch.Query( // this does what write to as table write type was doing.
-					fmt.Sprintf(bgpCaptureByPrefixRangeStmt, "csu_bgp_derived"),
-					time.Unix(int64(msg.Timestamp)-(int64(msg.Timestamp)%b.timeBucketSeconds), 0),
-					ip,
-					wr.Mask,
-					timestamp,
-					true,
-					nil,
-				)
+				count := 0
+			wroute_retry:
+				if count < writeretries {
+					werr := b.cqlSession.Query( // this does what write to as table write type was doing.
+						fmt.Sprintf(bgpCaptureByPrefixRangeStmt, "csu_bgp_derived"),
+						time.Unix(int64(msg.Timestamp)-(int64(msg.Timestamp)%b.timeBucketSeconds), 0),
+						ip,
+						wr.Mask,
+						timestamp,
+						true,
+						nil,
+					).Exec()
+					if werr != nil {
+						count++
+						goto wroute_retry
+					}
+				} else {
+					fmt.Printf("ERROR: too many write retries on wroute\n")
+				}
 
 				//insert to withdrawnprefixesbytime cf
-				count := 0
+				count = 0
 			withdrawn_retry:
 				if count < writeretries {
 					countererr := b.cqlSession.Query(
@@ -297,19 +307,29 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 					return err
 				}
 				advertisedPrefixes = append(advertisedPrefixes, IPPrefix{ip, uint8(ar.Mask)})
+				count := 0
 				if len(asp) != 0 {
-					batch.Query( // this does what write to as table write type was doing.
-						fmt.Sprintf(bgpCaptureByPrefixRangeStmt, "csu_bgp_derived"),
-						time.Unix(int64(msg.Timestamp)-(int64(msg.Timestamp)%b.timeBucketSeconds), 0),
-						ip,
-						ar.Mask,
-						timestamp,
-						false,
-						asp[len(asp)-1],
-					)
+				adroute_retry:
+					if count < writeretries {
+						uperr := b.cqlSession.Query( // this does what write to as table write type was doing.
+							fmt.Sprintf(bgpCaptureByPrefixRangeStmt, "csu_bgp_derived"),
+							time.Unix(int64(msg.Timestamp)-(int64(msg.Timestamp)%b.timeBucketSeconds), 0),
+							ip,
+							ar.Mask,
+							timestamp,
+							false,
+							asp[len(asp)-1],
+						)
+						if uperr != nil {
+							count++
+							goto adroute_retry
+						}
+					} else {
+						fmt.Printf("ERROR: too many write retries on adroute\n")
+					}
 
 					//insert to advertisedprefixbyasnumber cf
-					count := 0
+					count = 0
 				advertised_retry:
 					if count < writeretries {
 						countererr := b.cqlSession.Query(
@@ -347,7 +367,8 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 		return fmt.Errorf("failed to serialize BGPCapture proto:%s", err)
 	}
 
-	batch.Query(
+retry:
+	err = b.cqlSession.Query(
 		fmt.Sprintf(bgpCaptureByTimeStmt, b.keyspace),
 		time.Unix(int64(msg.Timestamp)-(int64(msg.Timestamp)%b.timeBucketSeconds), 0),
 		timestamp,
@@ -358,12 +379,9 @@ func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 		peerip,             //peer_ip_address
 		withdrawnPrefixes,  //withdrawn_prefixes
 		capbytes,           //msg bytes
-	)
+	).Exec()
 
-retry:
 	if errcount < writeretries {
-		//fmt.Printf("errcount: %d\n", errcount)
-		err = b.cqlSession.ExecuteBatch(batch)
 		if err != nil {
 			/*fmt.Printf("aprefix:%v\naspath:%v\ncip:%v\nnhop:%v\npip:%v\nwprefix:%v\n--------------------------\n",
 			advertisedPrefixes,
