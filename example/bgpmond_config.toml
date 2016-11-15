@@ -26,6 +26,10 @@ ErrorOut = "stderr"
 #    Keyspace = "csu_bgp_derived"
 #    TimeBucketSeconds = 86400
 
+[[Sessions.Cassandra.Writers.BGPCaptureByTime]]
+    Keyspace = "csu_bgp_core"
+    TimeBucketSeconds = 86400
+
 [[Sessions.Cassandra.Writers.LocationByAS]]
     Keyspace = "csu_location_core"
 
