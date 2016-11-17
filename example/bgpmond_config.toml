@@ -38,3 +38,8 @@ ErrorOut = "stderr"
 
 [[Sessions.Cassandra.Writers.LocationByPrefix]]
     Keyspace = "csu_location_core"
+
+# Configuration for CockroachDB
+[[Sessions.Cockroach.Writers.BGPCapture]]
+    Table = "updates"
+    Database = "bgpmon"

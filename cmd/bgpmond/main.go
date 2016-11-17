@@ -38,6 +38,7 @@ type ModuleConfig struct {
 type SessionConfig struct {
 	Cassandra session.CassandraConfig
 	File      session.FileConfig
+	Cockroach session.CockroachConfig
 }
 
 func main() {
@@ -204,6 +205,13 @@ func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest)
 	case pb.SessionType_CASSANDRA:
 		rpcConfig := request.GetCassandraSession()
 		sess, err = session.NewCassandraSession(rpcConfig.Username, rpcConfig.Password, rpcConfig.Hosts, rpcConfig.WorkerCount, bgpmondConfig.Sessions.Cassandra)
+		if err != nil {
+			break
+		}
+
+	case pb.SessionType_COCKROACH:
+		rpcConfig := request.GetCockroachSession()
+		sess, err = session.NewCockroachSession(rpcConfig.Username, rpcConfig.Hosts, rpcConfig.WorkerCount, rpcConfig.Certdir, bgpmondConfig.Sessions.Cockroach)
 		if err != nil {
 			break
 		}

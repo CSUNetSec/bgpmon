@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-    "net"
+	"net"
 	"os"
 
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
@@ -15,6 +15,7 @@ import (
 /*
 bgpmon open
 	cassandra
+	cockroach
 	file
 
 bgpmon close
@@ -59,6 +60,7 @@ func main() {
 
 	bgpmon.Command("open", "open a session on bgpmond host", func(cmd *cli.Cmd) {
 		cmd.Command("cassandra", "open a session over a cassandra cluster", OpenCassandra)
+		cmd.Command("cockroach", "open a session over a cockroach cluster", OpenCockroach)
 		cmd.Command("file", "open a session to a file", OpenFile)
 	})
 
@@ -103,11 +105,11 @@ func getRPCClient() (pb.BgpmondClient, error) {
 }
 
 func compareIpNet(a net.IP, b net.IP) bool {
-    for i := range a {
-        if a[i] != b[i] {
-            return false
-        }
-    }
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
 
-    return true
+	return true
 }
