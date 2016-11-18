@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/CSUNetSec/bgpmon/log"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 	pbcom "github.com/CSUNetSec/netsec-protobufs/common"
 	pbbgp "github.com/CSUNetSec/netsec-protobufs/protocol/bgp"
@@ -25,7 +26,6 @@ type CockroachWriterConfig struct {
 
 type CockroachSession struct {
 	*Session
-	SqlSession *sql.DB
 }
 
 func parseIpString(a pbcom.IPAddressWrapper) (string, error) {
@@ -56,11 +56,6 @@ func getAsPathString(a pbbgp.BGPUpdate) string {
 }
 
 func NewCockroachSession(username string, hosts []string, workerCount uint32, certdir string, config CockroachConfig) (Sessioner, error) {
-	db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:26257/?sslmode=verify-full&sslcert=%s/node.cert&sslrootcert=%s/ca.cert&sslkey=%s/node.key",
-		username, hosts[0], certdir, certdir, certdir))
-	if err != nil {
-		return nil, err
-	}
 
 	writers := make(map[pb.WriteRequest_Type][]Writer)
 	for writerType, writerConfigs := range config.Writers {
@@ -68,23 +63,67 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 			fmt.Printf("registering writer %s\n", writerType)
 			switch writerType {
 			case "BGPCapture":
-				addWriter(writers, pb.WriteRequest_BGP_CAPTURE, BGPCapture{CockroachWriter{db, writerConfig.Table, writerConfig.Database}})
+				addWriter(writers, pb.WriteRequest_BGP_CAPTURE, BGPCapture{CockroachWriter{table: writerConfig.Table, database: writerConfig.Database}})
 			default:
 				return nil, errors.New(fmt.Sprintf("Unknown writer type %s for cockroach session", writerType))
 			}
 		}
 	}
 
-	session, err := NewSession(writers, workerCount)
-	if err != nil {
-		return nil, err
+	workerChans := make([]chan *pb.WriteRequest, workerCount)
+
+	for i := 0; i < int(workerCount); i++ {
+		workerChan := make(chan *pb.WriteRequest)
+		go func(wc chan *pb.WriteRequest, id int) {
+			host := hosts[id%len(hosts)]
+			db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:26257/?sslmode=verify-full&sslcert=%s/node.cert&sslrootcert=%s/ca.cert&sslkey=%s/node.key",
+				username, host, certdir, certdir, certdir))
+			if err != nil {
+				log.Errl.Printf("Unable to open connection to %s error:%s", host, err)
+				return
+			}
+			for {
+				select {
+				case writeRequest, open := <-wc:
+					writers, exists := writers[writeRequest.Type]
+					if !exists {
+						//TODO get an error message back somehow
+						//panic(errors.New(fmt.Sprintf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)))
+						log.Errl.Printf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)
+					}
+
+					for _, writer := range writers {
+						//fmt.Printf("writing in writer :%v\n", writer)
+						//XXX: hack. force it to be a bgpcapture.
+						bc := writer.(BGPCapture)
+						if err := bc.WriteCon(db, writeRequest); err != nil {
+							log.Errl.Printf("error from worker for write request:%+v on writer:%+v error:%s\n", writeRequest, writer, err)
+							break
+						}
+					}
+					if !open {
+						wc = nil
+					}
+					if wc == nil {
+						break
+					}
+				}
+			}
+			log.Debl.Printf("worker exiting")
+		}(workerChan, i)
+
+		workerChans[i] = workerChan
 	}
 
-	return CockroachSession{&session, db}, nil
+	session := Session{workerChans, 0}
+
+	return CockroachSession{&session}, nil
 }
 
 func (c CockroachSession) Close() error {
-	c.SqlSession.Close()
+	for _, ch := range c.workerChans {
+		close(ch)
+	}
 	return nil
 }
 
@@ -135,4 +174,9 @@ func (b BGPCapture) Write(request *pb.WriteRequest) error {
 	}
 
 	return nil
+}
+
+func (b BGPCapture) WriteCon(con *sql.DB, request *pb.WriteRequest) error {
+	b.sqlSession = con
+	return b.Write(request)
 }
