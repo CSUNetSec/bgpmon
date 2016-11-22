@@ -28,31 +28,33 @@ type CockroachSession struct {
 	*Session
 }
 
-func parseIpString(a pbcom.IPAddressWrapper) (string, error) {
+func parseIpToIPString(a pbcom.IPAddressWrapper) (net.IP, string, error) {
 	if len(a.Ipv6) != 0 {
-		return net.IP(a.Ipv6).String(), nil
+		return net.IP(a.Ipv6), net.IP(a.Ipv6).String(), nil
 	} else if len(a.Ipv4) != 0 {
-		return net.IP(a.Ipv4).To4().String(), nil
+		return net.IP(a.Ipv4), net.IP(a.Ipv4).String(), nil
 	} else {
-		return "", fmt.Errorf("IP Prefix that is neither v4 or v6 found in BGPCapture msg")
+		return nil, "", fmt.Errorf("IP Prefix that is neither v4 or v6 found in BGPCapture msg")
 	}
 }
 
 func getAsPathString(a pbbgp.BGPUpdate) string {
-	ret := make([]uint32, 0)
+	ret := ""
 	if a.Attrs != nil {
 		for _, seg := range a.Attrs.AsPath {
 			if seg.AsSeq != nil {
-				ret = append(ret, seg.AsSeq...)
+				for _, as := range seg.AsSeq {
+					ret = ret + fmt.Sprintf(" %d ", as)
+				}
 			}
 			if seg.AsSet != nil {
-				ret = append(ret, seg.AsSet...)
+				for _, as := range seg.AsSet {
+					ret = ret + fmt.Sprintf(" %d ", as)
+				}
 			}
-
 		}
 	}
-	retstr := fmt.Sprintf("%s", ret)
-	return retstr
+	return ret
 }
 
 func NewCockroachSession(username string, hosts []string, workerCount uint32, certdir string, config CockroachConfig) (Sessioner, error) {
@@ -82,31 +84,25 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 				log.Errl.Printf("Unable to open connection to %s error:%s", host, err)
 				return
 			}
-			for {
-				select {
-				case writeRequest, open := <-wc:
-					writers, exists := writers[writeRequest.Type]
-					if !exists {
-						//TODO get an error message back somehow
-						//panic(errors.New(fmt.Sprintf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)))
-						log.Errl.Printf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)
-					}
+			for writeRequest := range wc {
+				log.Debl.Printf("go a write op")
+				writers, exists := writers[writeRequest.Type]
+				if !exists {
+					//TODO get an error message back somehow
+					//panic(errors.New(fmt.Sprintf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)))
+					log.Errl.Printf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)
+				}
 
-					for _, writer := range writers {
-						//fmt.Printf("writing in writer :%v\n", writer)
-						//XXX: hack. force it to be a bgpcapture.
-						bc := writer.(BGPCapture)
-						if err := bc.WriteCon(db, writeRequest); err != nil {
-							log.Errl.Printf("error from worker for write request:%+v on writer:%+v error:%s\n", writeRequest, writer, err)
-							break
-						}
-					}
-					if !open {
-						wc = nil
-					}
-					if wc == nil {
+				for _, writer := range writers {
+					//fmt.Printf("writing in writer :%v\n", writer)
+					//XXX: hack. force it to be a bgpcapture.
+					bc := writer.(BGPCapture)
+					log.Debl.Printf("calling write")
+					if err := bc.WriteCon(db, writeRequest); err != nil {
+						log.Errl.Printf("error from worker for write request:%+v on writer:%+v error:%s\n", writeRequest, writer, err)
 						break
 					}
+					log.Debl.Printf("ended write")
 				}
 			}
 			log.Debl.Printf("worker exiting")
@@ -132,7 +128,11 @@ func (c CockroachSession) Close() error {
  */
 
 const (
-	bgpCaptureStmt = "INSERT INTO %s.%s(timestamp, collector_ip, peer_ip, as_path, next_hop, advertised_prefixes, withdrawn_prefixes, protomsg) VALUES($1, $2, $3, $4, $5, $6, $7, $8);"
+	//relevant tables in schema
+	//updates (update_id SERIAL PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, collector_ip_str STRING, peer_ip BYTES, peer_ip_str STRING, as_path STRING, next_hop BYTES, next_hop_str STRING, protomsg BYTES);
+	//prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTES, ip_address_str STRING, mask INT, is_withdrawn BOOL);
+	bgpCaptureStmt = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES(DEFAULT, $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING update_id;"
+	bgpPrefixStmt  = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, is_withdrawn) VALUES (DEFAULT, $1, $2, $3, $4, $5);"
 )
 
 type CockroachWriter struct {
@@ -156,11 +156,11 @@ func (b BGPCapture) Write(request *pb.WriteRequest) error {
 	}
 
 	timestamp := time.Unix(int64(msg.Timestamp), 0)
-	colip, err := parseIpString(*msg.LocalIp)
+	colip, colipstr, err := parseIpToIPString(*msg.LocalIp)
 	if err != nil {
 		return fmt.Errorf("Capture Local IP parsing error:%s", err)
 	}
-	peerip, err := parseIpString(*msg.PeerIp)
+	peerip, peeripstr, err := parseIpToIPString(*msg.PeerIp)
 	if err != nil {
 		return fmt.Errorf("Capture Peer IP parsing error:%s", err)
 	}
@@ -168,10 +168,71 @@ func (b BGPCapture) Write(request *pb.WriteRequest) error {
 	if err != nil {
 		return fmt.Errorf("failed to serialize BGPCapture proto:%s", err)
 	}
-	if _, errdb := b.sqlSession.Exec(fmt.Sprintf(bgpCaptureStmt, b.database, b.table),
-		timestamp, colip, peerip, nil, nil, nil, nil, capbytes); errdb != nil {
-		return errdb
+	aspstr := getAsPathString(*msgUp)
+	//XXX func this
+	var (
+		nhip    net.IP
+		nhipstr string
+	)
+	if msgUp.Attrs != nil {
+		if msgUp.Attrs.NextHop != nil {
+			var errnh error
+			nhip, nhipstr, errnh = parseIpToIPString(*msgUp.Attrs.NextHop)
+			if errnh != nil {
+				log.Errl.Printf("Capture NextHop IP parsing error:%s", errnh)
+			}
+		}
 	}
+	var id, idcnt int
+	if rows, errdb := b.sqlSession.Query(fmt.Sprintf(bgpCaptureStmt, b.database, b.table),
+		timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes); errdb != nil {
+		return fmt.Errorf("error inserting in update table:%s", errdb)
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			if idcnt++; idcnt > 1 {
+				log.Debl.Printf("Query returned more than one unique ids")
+				break
+			}
+			if errid := rows.Scan(&id); errid != nil {
+				return fmt.Errorf("error in fetching id from last insert:%s", errid)
+			}
+		}
+	}
+	if msgUp.WithdrawnRoutes != nil && len(msgUp.WithdrawnRoutes.Prefixes) != 0 {
+		for _, wr := range msgUp.WithdrawnRoutes.Prefixes {
+			ip, ipstr, err := parseIpToIPString(*wr.Prefix)
+			if err != nil {
+				log.Errl.Printf("error:%s parsing withdrawn prefix", err)
+				continue
+			}
+			mask := int(wr.Mask)
+			///XXX hardcoded table
+			_, errpref := b.sqlSession.Exec(fmt.Sprintf(bgpPrefixStmt, b.database, "prefixes"),
+				id, []byte(ip), ipstr, mask, true)
+			if errpref != nil {
+				log.Errl.Printf("error:%s in inserting in prefix table", errpref)
+			}
+		}
+	}
+
+	if msgUp.AdvertizedRoutes != nil && len(msgUp.AdvertizedRoutes.Prefixes) != 0 {
+		for _, ar := range msgUp.AdvertizedRoutes.Prefixes {
+			ip, ipstr, err := parseIpToIPString(*ar.Prefix)
+			if err != nil {
+				log.Errl.Printf("error:%s parsing advertized prefix", err)
+				continue
+			}
+			mask := int(ar.Mask)
+			///XXX hardcoded table
+			_, errpref := b.sqlSession.Exec(fmt.Sprintf(bgpPrefixStmt, b.database, "prefixes"),
+				id, []byte(ip), ipstr, mask, false)
+			if errpref != nil {
+				log.Errl.Printf("error:%s in inserting in prefix table", errpref)
+			}
+		}
+	}
+	log.Debl.Printf("inserted msg")
 
 	return nil
 }
