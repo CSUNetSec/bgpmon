@@ -46,7 +46,7 @@ func OpenCockroach(cmd *cli.Cmd) {
 	certdir := cmd.StringArg("CERTDIR", "", "directory that contains ssl certs")
 	hosts := cmd.StringArg("HOSTS", "", "list of cockroach hosts")
 	sessionID := cmd.StringOpt("session_id", getUUID(), "id of the session")
-	workerCount := cmd.IntOpt("worker_count", 20000, "size of the data writing worker pool")
+	workerCount := cmd.IntOpt("worker_count", 400, "size of the data writing worker pool")
 	cmd.Action = func() {
 		client, err := getRPCClient()
 		if err != nil {
