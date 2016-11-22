@@ -11,6 +11,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	_ "github.com/lib/pq"
 	"net"
+	//"sort"
 	"time"
 )
 
@@ -26,6 +27,21 @@ type CockroachWriterConfig struct {
 
 type CockroachSession struct {
 	*Session
+}
+
+type writeduration struct {
+	dur time.Duration
+	num int
+}
+
+type ByDuration []writeduration
+
+func (b ByDuration) Len() int           { return len(b) }
+func (b ByDuration) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
+func (b ByDuration) Less(i, j int) bool { return b[i].dur < b[j].dur }
+
+func (w writeduration) String() string {
+	return fmt.Sprintf("[Time:%v Opnum:%d]", w.dur, w.num)
 }
 
 func parseIpToIPString(a pbcom.IPAddressWrapper) (net.IP, string, error) {
@@ -77,6 +93,8 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 	for i := 0; i < int(workerCount); i++ {
 		workerChan := make(chan *pb.WriteRequest)
 		go func(wc chan *pb.WriteRequest, id int) {
+			//		num := 0
+			//		writeTimes := new(ByDuration)
 			host := hosts[id%len(hosts)]
 			db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:26257/?sslmode=verify-full&sslcert=%s/node.cert&sslrootcert=%s/ca.cert&sslkey=%s/node.key",
 				username, host, certdir, certdir, certdir))
@@ -84,8 +102,12 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 				log.Errl.Printf("Unable to open connection to %s error:%s", host, err)
 				return
 			}
+			db.SetMaxIdleConns(100)
+			if err := db.Ping(); err != nil {
+				log.Errl.Printf("Unable to start connection to %s error:%s", host, err)
+				return
+			}
 			for writeRequest := range wc {
-				log.Debl.Printf("go a write op")
 				writers, exists := writers[writeRequest.Type]
 				if !exists {
 					//TODO get an error message back somehow
@@ -97,14 +119,19 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 					//fmt.Printf("writing in writer :%v\n", writer)
 					//XXX: hack. force it to be a bgpcapture.
 					bc := writer.(BGPCapture)
-					log.Debl.Printf("calling write")
+					//ts := time.Now()
+					//fmt.Printf("writing on dbcon :%+v\n", db)
 					if err := bc.WriteCon(db, writeRequest); err != nil {
 						log.Errl.Printf("error from worker for write request:%+v on writer:%+v error:%s\n", writeRequest, writer, err)
 						break
 					}
-					log.Debl.Printf("ended write")
+					//*writeTimes = append(*writeTimes, writeduration{time.Since(ts), num})
+					//num++
 				}
 			}
+			//log.Debl.Printf("sorting write times")
+			//sort.Sort(writeTimes)
+			//log.Debl.Printf("%v", writeTimes)
 			log.Debl.Printf("worker exiting")
 		}(workerChan, i)
 
@@ -183,21 +210,11 @@ func (b BGPCapture) Write(request *pb.WriteRequest) error {
 			}
 		}
 	}
-	var id, idcnt int
-	if rows, errdb := b.sqlSession.Query(fmt.Sprintf(bgpCaptureStmt, b.database, b.table),
-		timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes); errdb != nil {
-		return fmt.Errorf("error inserting in update table:%s", errdb)
-	} else {
-		defer rows.Close()
-		for rows.Next() {
-			if idcnt++; idcnt > 1 {
-				log.Debl.Printf("Query returned more than one unique ids")
-				break
-			}
-			if errid := rows.Scan(&id); errid != nil {
-				return fmt.Errorf("error in fetching id from last insert:%s", errid)
-			}
-		}
+	var id int
+	row := b.sqlSession.QueryRow(fmt.Sprintf(bgpCaptureStmt, b.database, b.table),
+		timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes)
+	if errid := row.Scan(&id); errid != nil {
+		return fmt.Errorf("error in fetching id from last insert:%s", errid)
 	}
 	if msgUp.WithdrawnRoutes != nil && len(msgUp.WithdrawnRoutes.Prefixes) != 0 {
 		for _, wr := range msgUp.WithdrawnRoutes.Prefixes {
@@ -232,7 +249,6 @@ func (b BGPCapture) Write(request *pb.WriteRequest) error {
 			}
 		}
 	}
-	log.Debl.Printf("inserted msg")
 
 	return nil
 }
