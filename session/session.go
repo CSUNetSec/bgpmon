@@ -58,3 +58,11 @@ type Sessioner interface {
 type Writer interface {
 	Write(*pb.WriteRequest) error
 }
+
+func addWriter(writers map[pb.WriteRequest_Type][]Writer, writeRequestType pb.WriteRequest_Type, writer Writer) {
+	if _, exists := writers[writeRequestType]; !exists {
+		writers[writeRequestType] = []Writer{}
+	}
+
+	writers[writeRequestType] = append(writers[writeRequestType], writer)
+}

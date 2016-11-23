@@ -38,6 +38,7 @@ type ModuleConfig struct {
 type SessionConfig struct {
 	Cassandra session.CassandraConfig
 	File      session.FileConfig
+	Cockroach session.CockroachConfig
 }
 
 func main() {
@@ -207,6 +208,13 @@ func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest)
 		if err != nil {
 			break
 		}
+
+	case pb.SessionType_COCKROACH:
+		rpcConfig := request.GetCockroachSession()
+		sess, err = session.NewCockroachSession(rpcConfig.Username, rpcConfig.Hosts, rpcConfig.WorkerCount, rpcConfig.Certdir, bgpmondConfig.Sessions.Cockroach)
+		if err != nil {
+			break
+		}
 	case pb.SessionType_FILE:
 		rpcConfig := request.GetFileSession()
 		sess, err = session.NewFileSession(rpcConfig.Filename, bgpmondConfig.Sessions.File)
@@ -237,14 +245,12 @@ func (s Server) Write(stream pb.Bgpmond_WriteServer) error {
 		} else if err != nil {
 			return err
 		}
-
 		sess, exists := s.sessions[writeRequest.SessionId]
 		if !exists {
 			fmt.Printf("session doesn't exist\n")
 			//panic(errors.New(fmt.Sprintf("Session '%s' does not exists", writeRequest.SessionId)))
 			return errors.New(fmt.Sprintf("Session '%s' does not exists", writeRequest.SessionId))
 		}
-
 		if err := sess.Write(writeRequest); err != nil {
 			fmt.Printf("error writing\n")
 			//panic(err)

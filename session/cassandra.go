@@ -107,14 +107,6 @@ func (c CassandraSession) Close() error {
 	return nil
 }
 
-func addWriter(writers map[pb.WriteRequest_Type][]Writer, writeRequestType pb.WriteRequest_Type, writer Writer) {
-	if _, exists := writers[writeRequestType]; !exists {
-		writers[writeRequestType] = []Writer{}
-	}
-
-	writers[writeRequestType] = append(writers[writeRequestType], writer)
-}
-
 /*
  * Writers
  */
@@ -227,8 +219,8 @@ type BGPCaptureByPrefixRange struct {
 
 func (b BGPCaptureByTime) Write(request *pb.WriteRequest) error {
 	//get message and convert timestamp to timeuuid
-	var(
-		errcount int
+	var (
+		errcount                              int
 		werr, wcnterr, aderr, adcnterr, uperr error
 	)
 	msg := request.GetBgpCapture()

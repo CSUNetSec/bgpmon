@@ -112,7 +112,6 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 			writeRequest.Type = pb.WriteRequest_BGP_CAPTURE
 			writeRequest.BgpCapture = capture
 			writeRequest.SessionId = *sessionID
-
 			if err := stream.Send(writeRequest); err != nil {
 				fmt.Println("FOUND ERROR")
 				panic(err)
