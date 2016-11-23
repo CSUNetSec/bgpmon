@@ -73,14 +73,23 @@ func getAsPathString(a pbbgp.BGPUpdate) string {
 	return ret
 }
 
+type cockroachContext struct {
+	db        *sql.DB
+	stmupdate *sql.Stmt
+	stmprefix *sql.Stmt
+}
+
 func NewCockroachSession(username string, hosts []string, workerCount uint32, certdir string, config CockroachConfig) (Sessioner, error) {
 
+	var tablestr, dbstr string
 	writers := make(map[pb.WriteRequest_Type][]Writer)
 	for writerType, writerConfigs := range config.Writers {
 		for _, writerConfig := range writerConfigs {
 			fmt.Printf("registering writer %s\n", writerType)
 			switch writerType {
 			case "BGPCapture":
+				//XXX this only works for one writer cause it sets the function scope vars that get passed on the goroutines
+				tablestr, dbstr = writerConfig.Table, writerConfig.Database
 				addWriter(writers, pb.WriteRequest_BGP_CAPTURE, BGPCapture{CockroachWriter{table: writerConfig.Table, database: writerConfig.Database}})
 			default:
 				return nil, errors.New(fmt.Sprintf("Unknown writer type %s for cockroach session", writerType))
@@ -88,13 +97,17 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 		}
 	}
 
-	workerChans := make([]chan *pb.WriteRequest, workerCount)
+	workerChans := make([]chan *pb.WriteRequest, len(hosts))
 
-	for i := 0; i < int(workerCount); i++ {
+	for i := 0; i < len(hosts); i++ {
 		workerChan := make(chan *pb.WriteRequest)
 		go func(wc chan *pb.WriteRequest, id int) {
-			//		num := 0
-			//		writeTimes := new(ByDuration)
+			//num := 0
+			//writeTimes := new(ByDuration)
+			var (
+				stupdate, stprefix *sql.Stmt
+				err                error
+			)
 			host := hosts[id%len(hosts)]
 			db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:26257/?sslmode=verify-full&sslcert=%s/node.cert&sslrootcert=%s/ca.cert&sslkey=%s/node.key",
 				username, host, certdir, certdir, certdir))
@@ -102,36 +115,38 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 				log.Errl.Printf("Unable to open connection to %s error:%s", host, err)
 				return
 			}
-			db.SetMaxIdleConns(100)
+			db.SetMaxIdleConns(10)
 			if err := db.Ping(); err != nil {
 				log.Errl.Printf("Unable to start connection to %s error:%s", host, err)
 				return
 			}
+			if stupdate, err = db.Prepare(fmt.Sprintf(bgpCaptureStmt, dbstr, tablestr)); err != nil {
+				log.Errl.Printf("Unable to prepare update statmements on host:%s error:%s", host, err)
+				return
+			}
+			if stprefix, err = db.Prepare(fmt.Sprintf(bgpPrefixStmt, dbstr, "prefixes")); err != nil {
+				log.Errl.Printf("Unable to prepare prefix statmements on host:%s error:%s", host, err)
+				return
+			}
+			cc := &cockroachContext{db, stupdate, stprefix}
+			workchan := make(chan *pb.WriteRequest)
+			for j := 0; j < int(workerCount); j++ {
+				go Write(cc, workchan)
+			}
 			for writeRequest := range wc {
-				writers, exists := writers[writeRequest.Type]
-				if !exists {
-					//TODO get an error message back somehow
-					//panic(errors.New(fmt.Sprintf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)))
-					log.Errl.Printf("Unable to write type '%v' because it doesn't exist", writeRequest.Type)
-				}
+				//ts := time.Now()
+				workchan <- writeRequest
+				//*writeTimes = append(*writeTimes, writeduration{time.Since(ts), num})
+				//num++
 
-				for _, writer := range writers {
-					//fmt.Printf("writing in writer :%v\n", writer)
-					//XXX: hack. force it to be a bgpcapture.
-					bc := writer.(BGPCapture)
-					//ts := time.Now()
-					//fmt.Printf("writing on dbcon :%+v\n", db)
-					if err := bc.WriteCon(db, writeRequest); err != nil {
-						log.Errl.Printf("error from worker for write request:%+v on writer:%+v error:%s\n", writeRequest, writer, err)
-						break
-					}
-					//*writeTimes = append(*writeTimes, writeduration{time.Since(ts), num})
-					//num++
-				}
 			}
 			//log.Debl.Printf("sorting write times")
 			//sort.Sort(writeTimes)
 			//log.Debl.Printf("%v", writeTimes)
+			close(workchan)
+			stupdate.Close()
+			stprefix.Close()
+			db.Close()
 			log.Debl.Printf("worker exiting")
 		}(workerChan, i)
 
@@ -163,9 +178,9 @@ const (
 )
 
 type CockroachWriter struct {
-	sqlSession *sql.DB
-	table      string
-	database   string
+	cc       *cockroachContext
+	table    string
+	database string
 }
 
 type BGPCapture struct {
@@ -173,87 +188,103 @@ type BGPCapture struct {
 }
 
 func (b BGPCapture) Write(request *pb.WriteRequest) error {
-	msg := request.GetBgpCapture()
-	if msg == nil {
-		return fmt.Errorf("BGPCapture WriteRequest message was nil")
-	}
-	msgUp := msg.GetUpdate()
-	if msgUp == nil {
-		return fmt.Errorf("BGPUpdate in BGPCapture message was nil")
-	}
-
-	timestamp := time.Unix(int64(msg.Timestamp), 0)
-	colip, colipstr, err := parseIpToIPString(*msg.LocalIp)
-	if err != nil {
-		return fmt.Errorf("Capture Local IP parsing error:%s", err)
-	}
-	peerip, peeripstr, err := parseIpToIPString(*msg.PeerIp)
-	if err != nil {
-		return fmt.Errorf("Capture Peer IP parsing error:%s", err)
-	}
-	capbytes, err := proto.Marshal(msg)
-	if err != nil {
-		return fmt.Errorf("failed to serialize BGPCapture proto:%s", err)
-	}
-	aspstr := getAsPathString(*msgUp)
-	//XXX func this
-	var (
-		nhip    net.IP
-		nhipstr string
-	)
-	if msgUp.Attrs != nil {
-		if msgUp.Attrs.NextHop != nil {
-			var errnh error
-			nhip, nhipstr, errnh = parseIpToIPString(*msgUp.Attrs.NextHop)
-			if errnh != nil {
-				log.Errl.Printf("Capture NextHop IP parsing error:%s", errnh)
-			}
-		}
-	}
-	var id int
-	row := b.sqlSession.QueryRow(fmt.Sprintf(bgpCaptureStmt, b.database, b.table),
-		timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes)
-	if errid := row.Scan(&id); errid != nil {
-		return fmt.Errorf("error in fetching id from last insert:%s", errid)
-	}
-	if msgUp.WithdrawnRoutes != nil && len(msgUp.WithdrawnRoutes.Prefixes) != 0 {
-		for _, wr := range msgUp.WithdrawnRoutes.Prefixes {
-			ip, ipstr, err := parseIpToIPString(*wr.Prefix)
-			if err != nil {
-				log.Errl.Printf("error:%s parsing withdrawn prefix", err)
-				continue
-			}
-			mask := int(wr.Mask)
-			///XXX hardcoded table
-			_, errpref := b.sqlSession.Exec(fmt.Sprintf(bgpPrefixStmt, b.database, "prefixes"),
-				id, []byte(ip), ipstr, mask, true)
-			if errpref != nil {
-				log.Errl.Printf("error:%s in inserting in prefix table", errpref)
-			}
-		}
-	}
-
-	if msgUp.AdvertizedRoutes != nil && len(msgUp.AdvertizedRoutes.Prefixes) != 0 {
-		for _, ar := range msgUp.AdvertizedRoutes.Prefixes {
-			ip, ipstr, err := parseIpToIPString(*ar.Prefix)
-			if err != nil {
-				log.Errl.Printf("error:%s parsing advertized prefix", err)
-				continue
-			}
-			mask := int(ar.Mask)
-			///XXX hardcoded table
-			_, errpref := b.sqlSession.Exec(fmt.Sprintf(bgpPrefixStmt, b.database, "prefixes"),
-				id, []byte(ip), ipstr, mask, false)
-			if errpref != nil {
-				log.Errl.Printf("error:%s in inserting in prefix table", errpref)
-			}
-		}
-	}
-
 	return nil
 }
 
-func (b BGPCapture) WriteCon(con *sql.DB, request *pb.WriteRequest) error {
-	b.sqlSession = con
+func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
+	for request := range wchan {
+		msg := request.GetBgpCapture()
+		if msg == nil {
+			log.Errl.Printf("BGPCapture WriteRequest message was nil")
+			continue
+		}
+		msgUp := msg.GetUpdate()
+		if msgUp == nil {
+			log.Errl.Printf("BGPUpdate in BGPCapture message was nil")
+			continue
+		}
+
+		timestamp := time.Unix(int64(msg.Timestamp), 0)
+		colip, colipstr, err := parseIpToIPString(*msg.LocalIp)
+		if err != nil {
+			log.Errl.Printf("Capture Local IP parsing error:%s", err)
+			continue
+		}
+		peerip, peeripstr, err := parseIpToIPString(*msg.PeerIp)
+		if err != nil {
+			log.Errl.Printf("Capture Peer IP parsing error:%s", err)
+			continue
+		}
+		capbytes, err := proto.Marshal(msg)
+		if err != nil {
+			log.Errl.Printf("failed to serialize BGPCapture proto:%s", err)
+			continue
+		}
+		aspstr := getAsPathString(*msgUp)
+		//XXX func this
+		var (
+			nhip    net.IP
+			nhipstr string
+		)
+		if msgUp.Attrs != nil {
+			if msgUp.Attrs.NextHop != nil {
+				var errnh error
+				nhip, nhipstr, errnh = parseIpToIPString(*msgUp.Attrs.NextHop)
+				if errnh != nil {
+					log.Errl.Printf("Capture NextHop IP parsing error:%s", errnh)
+					continue
+				}
+			}
+		}
+		var id int64
+		row := cc.stmupdate.QueryRow(
+			timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes)
+		if errid := row.Scan(&id); errid != nil {
+			log.Errl.Printf("error in fetching id from last insert:%s", errid)
+			continue
+		}
+		if msgUp.WithdrawnRoutes != nil && len(msgUp.WithdrawnRoutes.Prefixes) != 0 {
+			for _, wr := range msgUp.WithdrawnRoutes.Prefixes {
+				ip, ipstr, err := parseIpToIPString(*wr.Prefix)
+				if err != nil {
+					log.Errl.Printf("error:%s parsing withdrawn prefix", err)
+					continue
+				}
+				mask := int(wr.Mask)
+				///XXX hardcoded table
+				_, errpref := cc.stmprefix.Exec(
+					id, []byte(ip), ipstr, mask, true)
+				if errpref != nil {
+					log.Errl.Printf("error:%s in inserting in prefix table", errpref)
+					continue
+				}
+			}
+		}
+
+		if msgUp.AdvertizedRoutes != nil && len(msgUp.AdvertizedRoutes.Prefixes) != 0 {
+			for _, ar := range msgUp.AdvertizedRoutes.Prefixes {
+				ip, ipstr, err := parseIpToIPString(*ar.Prefix)
+				if err != nil {
+					log.Errl.Printf("error:%s parsing advertized prefix", err)
+					continue
+				}
+				mask := int(ar.Mask)
+				///XXX hardcoded table
+				_, errpref := cc.stmprefix.Exec(
+					id, []byte(ip), ipstr, mask, false)
+				if errpref != nil {
+					log.Errl.Printf("error:%s in inserting in prefix table", errpref)
+					continue
+				}
+			}
+		}
+	}
+	log.Debl.Printf("writer exiting")
+
+	return
+}
+
+func (b BGPCapture) WriteCon(cc *cockroachContext, request *pb.WriteRequest) error {
+	b.cc = cc
 	return b.Write(request)
 }
