@@ -73,6 +73,22 @@ func getAsPathString(a pbbgp.BGPUpdate) string {
 	return ret
 }
 
+// this will return the last AS in a AS-PATH.
+// if the last path element is a set it will return the last AS in that set
+func getLastAs(a pbbgp.BGPUpdate) (ret uint32) {
+	if a.Attrs != nil {
+		if len(a.Attrs.AsPath) > 0 {
+			seg := a.Attrs.AsPath[len(a.Attrs.AsPath)-1]
+			if seg.AsSeq != nil && len(seg.AsSeq) > 0 {
+				ret = seg.AsSeq[len(seg.AsSeq)-1]
+			} else if seg.AsSet != nil && len(seg.AsSet) > 0 {
+				ret = seg.AsSet[len(seg.AsSet)-1]
+			}
+		}
+	}
+	return
+}
+
 type cockroachContext struct {
 	db        *sql.DB
 	stmupdate *sql.Stmt
@@ -172,9 +188,9 @@ func (c CockroachSession) Close() error {
 const (
 	//relevant tables in schema
 	//updates (update_id SERIAL PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, collector_ip_str STRING, peer_ip BYTES, peer_ip_str STRING, as_path STRING, next_hop BYTES, next_hop_str STRING, protomsg BYTES);
-	//prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTES, ip_address_str STRING, mask INT, is_withdrawn BOOL);
+	//prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTES, ip_address_str STRING, mask INT, source_as INT, is_withdrawn BOOL);
 	bgpCaptureStmt = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES(DEFAULT, $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING update_id;"
-	bgpPrefixStmt  = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, is_withdrawn) VALUES (DEFAULT, $1, $2, $3, $4, $5);"
+	bgpPrefixStmt  = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, is_withdrawn) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6);"
 )
 
 type CockroachWriter struct {
@@ -221,6 +237,7 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			continue
 		}
 		aspstr := getAsPathString(*msgUp)
+		lastas := getLastAs(*msgUp)
 		//XXX func this
 		var (
 			nhip    net.IP
@@ -253,7 +270,7 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 				mask := int(wr.Mask)
 				///XXX hardcoded table
 				_, errpref := cc.stmprefix.Exec(
-					id, []byte(ip), ipstr, mask, true)
+					id, []byte(ip), ipstr, mask, lastas, true)
 				if errpref != nil {
 					log.Errl.Printf("error:%s in inserting in prefix table", errpref)
 					continue
@@ -271,7 +288,7 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 				mask := int(ar.Mask)
 				///XXX hardcoded table
 				_, errpref := cc.stmprefix.Exec(
-					id, []byte(ip), ipstr, mask, false)
+					id, []byte(ip), ipstr, mask, lastas, false)
 				if errpref != nil {
 					log.Errl.Printf("error:%s in inserting in prefix table", errpref)
 					continue
