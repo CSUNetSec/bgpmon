@@ -3,7 +3,6 @@ package bgp
 import (
 	"errors"
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/CSUNetSec/bgpmon/log"
@@ -12,51 +11,53 @@ import (
 )
 
 const (
-	asNumberByPrefixStmt    = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number, is_withdrawal FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
-    monitorPrefixesStmt     = "SELECT as_number, enabled, ip_address, mask FROM csu_bgp_config.monitor_prefixes WHERE module_id = ?"
-	updateMessageSelectStmt = "SELECT as_path, peer_ip_address, collector_ip_address FROM csu_bgp_core.update_messages_by_time WHERE time_bucket=? AND timestamp=?"
-	prefixHijacksStmt       = "INSERT INTO csu_bgp_derived.prefix_hijacks(time_bucket, module_id, timestamp, advertised_ip_address, advertised_mask, monitor_ip_address, monitor_mask) VALUES(?,?,?,?,?,?,?)"
+	//asNumberByPrefixStmt    = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number, is_withdrawal FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
+    //monitorPrefixesStmt     = "SELECT as_number, enabled, ip_address, mask FROM csu_bgp_config.monitor_prefixes WHERE module_id = ?"
+	//updateMessageSelectStmt = "SELECT as_path, peer_ip_address, collector_ip_address FROM csu_bgp_core.update_messages_by_time WHERE time_bucket=? AND timestamp=?"
+	//prefixHijacksStmt       = "INSERT INTO csu_bgp_derived.prefix_hijacks(time_bucket, module_id, timestamp, advertised_ip_address, advertised_mask, monitor_ip_address, monitor_mask) VALUES(?,?,?,?,?,?,?)"
 )
 
 //struct for use in parsing bgpmond toml configuration file
-type PrefixHijackConfig struct {
+type CockroachPrefixHijackConfig struct {
 	Keyspaces []string
 }
 
-type PrefixHijackModule struct {
+type CockroachPrefixHijackModule struct {
     moduleId        string
 	periodicSeconds int32
 	timeoutSeconds  int32
-	inSessions      []session.CassandraSession
+	inSessions      []session.CockroachSession
 	keyspaces       []string
-	status          *PrefixHijackStatus
+	status          *CockroachPrefixHijackStatus
     hijackUUIDs     map[string]int64
 }
 
-type PrefixHijackStatus struct {
+type CockroachPrefixHijackStatus struct {
 	ExecutionCount    uint
 	LastExecutionTime time.Time
 }
 
-func NewPrefixHijackModule(moduleId string, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config PrefixHijackConfig) (*module.Module, error) {
-	//check that all sessions are cassandra sessions
-	inSess := []session.CassandraSession{}
+func NewCockroachPrefixHijackModule(moduleId string, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config CockroachPrefixHijackConfig) (*module.Module, error) {
+	//check that all sessions are cockroadch sessions
+	inSess := []session.CockroachSession{}
 	for _, sess := range inSessions {
-		casSess, ok := sess.(session.CassandraSession)
+		casSess, ok := sess.(session.CockroachSession)
 		if !ok {
-			return nil, errors.New("Only cassandra sessions are supported for prefix hijack module")
+			return nil, errors.New("Only cockroach sessions are supported for cockroach prefix hijack module")
 		}
 
 		inSess = append(inSess, casSess)
 	}
 
-	return &module.Module{Moduler: PrefixHijackModule{moduleId, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, make(map[string]int64)}}, nil
+	return &module.Module{Moduler: CockroachPrefixHijackModule{moduleId, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &CockroachPrefixHijackStatus{0, time.Now()}, make(map[string]int64)}}, nil
 }
 
-func (p PrefixHijackModule) Run() error {
+func (p CockroachPrefixHijackModule) Run() error {
 	log.Debl.Printf("Running prefix hijack module\n")
 
-	var (
+    //get execution time
+	executionTime := time.Now().UTC()
+	/*var (
 		timeuuid                          string
 		timestamp                         time.Time
 		ipAddress                         net.IP
@@ -142,7 +143,7 @@ func (p PrefixHijackModule) Run() error {
 				}
 			}
 		}
-	}
+	}*/
 
     //TODO remove prefix hijack UUIDs that are older than 2 days
 
@@ -152,10 +153,10 @@ func (p PrefixHijackModule) Run() error {
 	return nil
 }
 
-func (p PrefixHijackModule) Status() string {
+func (p CockroachPrefixHijackModule) Status() string {
 	return fmt.Sprintf("%v", p.status)
 }
 
-func (p PrefixHijackModule) Cleanup() error {
+func (p CockroachPrefixHijackModule) Cleanup() error {
 	return nil
 }
