@@ -27,6 +27,9 @@ type CockroachWriterConfig struct {
 
 type CockroachSession struct {
 	*Session
+    username string
+    hosts    []string
+    certdir  string
 }
 
 type writeduration struct {
@@ -171,7 +174,7 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 
 	session := Session{workerChans, 0}
 
-	return CockroachSession{&session}, nil
+	return CockroachSession{&session, username, hosts, certdir}, nil
 }
 
 func (c CockroachSession) Close() error {
@@ -179,6 +182,11 @@ func (c CockroachSession) Close() error {
 		close(ch)
 	}
 	return nil
+}
+
+func (c CockroachSession) GetDbConnection() (*sql.DB, error) {
+    return sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:26257/?sslmode=verify-full&sslcert=%s/node.cert&sslrootcert=%s/ca.cert&sslkey=%s/node.key",
+        c.username, c.hosts[0], c.certdir, c.certdir, c.certdir))
 }
 
 /*
