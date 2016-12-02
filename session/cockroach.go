@@ -128,7 +128,7 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 				err                error
 			)
 			host := hosts[id%len(hosts)]
-			db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:26257/?sslmode=verify-full&sslcert=%s/node.cert&sslrootcert=%s/ca.cert&sslkey=%s/node.key",
+			db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:26257/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key",
 				username, host, certdir, certdir, certdir))
 			if err != nil {
 				log.Errl.Printf("Unable to open connection to %s error:%s", host, err)
