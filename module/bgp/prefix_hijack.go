@@ -12,7 +12,9 @@ import (
 )
 
 const (
-    monitorPrefixesStmt = "SELECT as_number, enabled, ip_address, mask FROM monitor_prefixes WHERE module_id = $1 AND enabled = true"
+    monitorAsesStmt     = "SELECT as_number FROM bgpmon.monitor_ases WHERE module_id = $1 AND enabled = true"
+    monitorPrefixesStmt = "SELECT ip_address, mask FROM bgpmon.prefixes WHERE source_as = $1 AND is_withdrawn = false"
+
     prefixesStmt        = "SELECT prefix_id, update_id, ip_adddress, mask, source_as FROM prefixes WHERE ip_address > $1 AND ip_address < $2 AND mask >= $3 AND timestamp < $4 AND timestamp > $5 AND is_withdrawal = false"
 
 	//asNumberByPrefixStmt    = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number, is_withdrawal FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
@@ -65,7 +67,6 @@ func (p PrefixHijackModule) Run() error {
     var (
         ipAddress          net.IP
         mask, asNumber     uint32
-        enabled            bool
 
         prefixId, updateId string
     )
@@ -79,26 +80,50 @@ func (p PrefixHijackModule) Run() error {
             continue
         }
 
-        rows, err := db.Query(monitorPrefixesStmt, p.moduleId)
+        //retrieve monitored ASes
+        asRows, err := db.Query(monitorAsesStmt, p.moduleId)
         if err != nil {
-            log.Errl.Printf("Failed to retrieve monitor prefixes: %s", err)
+            log.Errl.Printf("Failed to query monitored ASes: %s", err)
             continue
         }
 
-        //populate prefix cache
-        prefixCache := NewPrefixCache()
-        for rows.Next() {
-            if rows.Err() != nil {
-                log.Errl.Printf("Failed to retrieve next row for monitor prefix: %s", rows.Err())
+        monitoredAsNumbers := make([]uint32, 0)
+        for asRows.Next() {
+            err := asRows.Scan(&asNumber)
+            if err != nil {
+                log.Errl.Printf("Failed to parse next monitored AS: %s", err)
                 continue
             }
 
-            err := rows.Scan(&asNumber, &enabled, &ipAddress, &mask)
+            monitoredAsNumbers = append(monitoredAsNumbers, asNumber)
+        }
+
+        if asRows.Err() != nil {
+            log.Errl.Printf("Failed to retrieve monitored ASes: %s", asRows.Err())
+        }
+
+        //retrieve monitored prefixes
+        prefixCache := NewPrefixCache()
+        for _, monitoredAsNumber := range monitoredAsNumbers {
+            prefixRows, err := db.Query(monitorPrefixesStmt, monitoredAsNumber)
             if err != nil {
-                log.Errl.Printf("Failed to parse fields for montior prefix: %s", err)
+                log.Errl.Printf("Failed to query prefixes for AS '%d': %s", monitoredAsNumber, err)
+                continue
             }
 
-            prefixCache.AddPrefix(ipAddress, mask, asNumber)
+            for prefixRows.Next() {
+                err := prefixRows.Scan(&ipAddress, &mask)
+                if err != nil {
+                    log.Errl.Printf("Failed to parse next prefixes for AS '%d': %s", monitoredAsNumber, err)
+                    continue
+                }
+
+                prefixCache.AddPrefix(ipAddress, mask, monitoredAsNumber)
+            }
+
+            if prefixRows.Err() != nil {
+                log.Errl.Printf("Failed to retrieve prefixes for AS '%d': %s", monitoredAsNumber, prefixRows.Err())
+            }
         }
 
         //check each prefix node for a hijack
