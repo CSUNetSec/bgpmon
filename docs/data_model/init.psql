@@ -1,0 +1,5 @@
+CREATE SCHEMA bgpmon;
+CREATE TABLE bgpmon.updates (update_id SERIAL PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTEA, collector_ip_str TEXT, peer_ip BYTEA, peer_ip_str TEXT, as_path TEXT, next_hop BYTEA, next_hop_str TEXT, protomsg BYTEA);
+CREATE TABLE bgpmon.prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTEA, ip_address_str TEXT, mask INT, source_as INT, timestamp TIMESTAMP, is_withdrawn BOOLEAN);
+
+CREATE TABLE bgpmon.monitor_ases (module_id TEXT, as_number INT, enabled BOOLEAN, timestamp TIMESTAMP, PRIMARY KEY (module_id, as_number));

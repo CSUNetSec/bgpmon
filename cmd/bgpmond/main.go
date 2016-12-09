@@ -211,7 +211,7 @@ func (s Server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest)
 
 	case pb.SessionType_COCKROACH:
 		rpcConfig := request.GetCockroachSession()
-		sess, err = session.NewCockroachSession(rpcConfig.Username, rpcConfig.Hosts, rpcConfig.WorkerCount, rpcConfig.Certdir, bgpmondConfig.Sessions.Cockroach)
+		sess, err = session.NewCockroachSession(rpcConfig.Username, rpcConfig.Hosts, rpcConfig.Port, rpcConfig.WorkerCount, rpcConfig.Certdir, bgpmondConfig.Sessions.Cockroach)
 		if err != nil {
 			break
 		}

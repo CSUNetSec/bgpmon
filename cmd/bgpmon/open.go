@@ -41,11 +41,12 @@ func OpenCassandra(cmd *cli.Cmd) {
 }
 
 func OpenCockroach(cmd *cli.Cmd) {
-	cmd.Spec = "USERNAME CERTDIR HOSTS [--session_id] [--worker_count]"
+    cmd.Spec = "USERNAME CERTDIR HOSTS [--session_id] [--port] [--worker_count]"
 	username := cmd.StringArg("USERNAME", "", "username for cockroach connection")
 	certdir := cmd.StringArg("CERTDIR", "", "directory that contains ssl certs")
 	hosts := cmd.StringArg("HOSTS", "", "list of cockroach hosts")
 	sessionID := cmd.StringOpt("session_id", getUUID(), "id of the session")
+    portNumber := cmd.IntOpt("port", 26257, "port where service is running on host(s)")
 	workerCount := cmd.IntOpt("worker_count", 40, "size of the data writing worker pool")
 	cmd.Action = func() {
 		client, err := getRPCClient()
@@ -57,7 +58,7 @@ func OpenCockroach(cmd *cli.Cmd) {
 		request.Type = pb.SessionType_COCKROACH
 		request.SessionId = *sessionID
 		fmt.Printf("HOSTS string is %s USERNAME is %s\n", *hosts, *username)
-		request.CockroachSession = &pb.CockroachSession{Username: *username, Hosts: strings.Split(*hosts, ","), WorkerCount: uint32(*workerCount), Certdir: *certdir}
+        request.CockroachSession = &pb.CockroachSession{Username: *username, Hosts: strings.Split(*hosts, ","), Port: uint32(*portNumber), WorkerCount: uint32(*workerCount), Certdir: *certdir}
 
 		ctx := context.Background()
 		reply, err := client.OpenSession(ctx, request)

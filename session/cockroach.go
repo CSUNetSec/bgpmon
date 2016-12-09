@@ -98,7 +98,7 @@ type cockroachContext struct {
 	stmprefix *sql.Stmt
 }
 
-func NewCockroachSession(username string, hosts []string, workerCount uint32, certdir string, config CockroachConfig) (Sessioner, error) {
+func NewCockroachSession(username string, hosts []string, port uint32, workerCount uint32, certdir string, config CockroachConfig) (Sessioner, error) {
 
 	var tablestr, dbstr string
 	writers := make(map[pb.WriteRequest_Type][]Writer)
@@ -128,8 +128,8 @@ func NewCockroachSession(username string, hosts []string, workerCount uint32, ce
 				err                error
 			)
 			host := hosts[id%len(hosts)]
-			db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:26257/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key",
-				username, host, certdir, certdir, certdir))
+			db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key",
+				username, host, port, certdir, certdir, certdir))
 			if err != nil {
 				log.Errl.Printf("Unable to open connection to %s error:%s", host, err)
 				return
