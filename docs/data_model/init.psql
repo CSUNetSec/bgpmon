@@ -3,3 +3,4 @@ CREATE TABLE bgpmon.updates (update_id SERIAL PRIMARY KEY, timestamp TIMESTAMP, 
 CREATE TABLE bgpmon.prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTEA, ip_address_str TEXT, mask INT, source_as INT, timestamp TIMESTAMP, is_withdrawn BOOLEAN);
 
 CREATE TABLE bgpmon.monitor_ases (module_id TEXT, as_number INT, enabled BOOLEAN, timestamp TIMESTAMP, PRIMARY KEY (module_id, as_number));
+CREATE TABLE bgpmon.hijacks (module_id TEXT, update_id INT, prefix_id INT, monitor_ip_address BYTEA, monitor_mask INT, PRIMARY KEY (module_id, update_id, prefix_id));
