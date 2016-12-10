@@ -1,6 +1,6 @@
 CREATE DATABASE bgpmon;
 GRANT ALL ON DATABASE bgpmon TO root;
-CREATE TABLE bgpmon.updates (update_id SERIAL PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, collector_ip_str STRING, peer_ip BYTES, peer_ip_str STRING, as_path STRING, next_hop BYTES, next_hop_str STRING, protomsg BYTES);
-CREATE TABLE bgpmon.prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTES, ip_address_str STRING, mask INT, source_as INT, timestamp TIMESTAMP, is_withdrawn BOOL);
+CREATE TABLE bgpmon.updates (update_id STRING PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, collector_ip_str STRING, peer_ip BYTES, peer_ip_str STRING, as_path STRING, next_hop BYTES, next_hop_str STRING, protomsg BYTES);
+CREATE TABLE bgpmon.prefixes (prefix_id SERIAL PRIMARY KEY, update_id STRING, ip_address BYTES, ip_address_str STRING, mask INT, source_as INT, timestamp TIMESTAMP, is_withdrawn BOOL);
 
 CREATE TABLE bgpmon.monitor_ases (module_id STRING, as_number INT, enabled BOOL, timestamp TIMESTAMP, PRIMARY KEY (module_id, as_number));
