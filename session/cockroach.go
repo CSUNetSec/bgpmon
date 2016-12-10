@@ -31,6 +31,7 @@ type CockroachSession struct {
 	*Session
 	username string
 	hosts    []string
+	port     uint32
 	certdir  string
 }
 
@@ -180,7 +181,7 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 
 	session := Session{workerChans, 0}
 
-	return CockroachSession{&session, username, hosts, certdir}, nil
+	return CockroachSession{&session, username, hosts, port, certdir}, nil
 }
 
 func (c CockroachSession) Close() error {
@@ -191,8 +192,8 @@ func (c CockroachSession) Close() error {
 }
 
 func (c CockroachSession) GetDbConnection() (*sql.DB, error) {
-	return sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:26257/?sslmode=verify-full&sslcert=%s/node.cert&sslrootcert=%s/ca.cert&sslkey=%s/node.key",
-		c.username, c.hosts[0], c.certdir, c.certdir, c.certdir))
+	return sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key",
+		c.username, c.hosts[0], c.port, c.certdir, c.certdir, c.certdir))
 }
 
 /*

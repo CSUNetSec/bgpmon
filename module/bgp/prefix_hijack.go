@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+    "strconv"
+    "strings"
 	"time"
 
 	"github.com/CSUNetSec/bgpmon/log"
@@ -12,10 +14,11 @@ import (
 )
 
 const (
-    monitorAsesStmt     = "SELECT as_number FROM bgpmon.monitor_ases WHERE module_id = $1 AND enabled = true"
-    monitorPrefixesStmt = "SELECT ip_address, mask FROM bgpmon.prefixes WHERE source_as = $1 AND is_withdrawn = false"
-
-    prefixesStmt        = "SELECT prefix_id, update_id, ip_adddress, mask, source_as FROM prefixes WHERE ip_address > $1 AND ip_address < $2 AND mask >= $3 AND timestamp < $4 AND timestamp > $5 AND is_withdrawal = false"
+    monitorAsesStmt         = "SELECT as_number FROM bgpmon.monitor_ases WHERE module_id = $1 AND enabled = true"
+    monitorPrefixesStmt     = "SELECT ip_address, mask FROM bgpmon.prefixes WHERE source_as = $1 AND timestamp >= $2 AND timestamp < $3 AND is_withdrawn = false GROUP BY ip_address, mask"
+    prefixesStmt            = "SELECT prefix_id, update_id, ip_address, mask, source_as FROM bgpmon.prefixes WHERE ip_address >= $1 AND ip_address <= $2 AND mask >= $3 AND timestamp >= $4 AND timestamp < $5 AND is_withdrawn = false"
+    updateMessageSelectStmt = "SELECT as_path FROM bgpmon.updates WHERE update_id = $1"
+    hijackStmt              = "INSERT INTO bgpmon.hijacks(module_id, update_id, prefix_id, monitor_ip_address, monitor_mask) VALUES($1, $2, $3, $4, $5)"
 
 	//asNumberByPrefixStmt    = "SELECT timestamp, dateOf(timestamp), prefix_ip_address, prefix_mask, as_number, is_withdrawal FROM %s.as_number_by_prefix_range WHERE time_bucket=? AND prefix_ip_address>=? AND prefix_ip_address<=?"
     //monitorPrefixesStmt     = "SELECT as_number, enabled, ip_address, mask FROM csu_bgp_config.monitor_prefixes WHERE module_id = ?"
@@ -105,7 +108,14 @@ func (p PrefixHijackModule) Run() error {
         //retrieve monitored prefixes
         prefixCache := NewPrefixCache()
         for _, monitoredAsNumber := range monitoredAsNumbers {
-            prefixRows, err := db.Query(monitorPrefixesStmt, monitoredAsNumber)
+            //duration, err := time.ParseDuration("-168h") //7 days
+            duration, err := time.ParseDuration("-240h") //10 days
+            if err != nil {
+                log.Errl.Printf("Failed to parse duration: %s", err)
+                continue
+            }
+
+            prefixRows, err := db.Query(monitorPrefixesStmt, monitoredAsNumber, executionTime.Add(duration), executionTime)
             if err != nil {
                 log.Errl.Printf("Failed to query prefixes for AS '%d': %s", monitoredAsNumber, err)
                 continue
@@ -122,19 +132,25 @@ func (p PrefixHijackModule) Run() error {
             }
 
             if prefixRows.Err() != nil {
-                log.Errl.Printf("Failed to retrieve prefixes for AS '%d': %s", monitoredAsNumber, prefixRows.Err())
+                log.Errl.Printf("Failed to retrieve prefixes for AS '%d': %s", monitoredAsNumber, prefixRows.Err)
             }
         }
 
         //check each prefix node for a hijack
         for _, prefixNode := range prefixCache.prefixNodes {
-			log.Debl.Printf("CHECKING FOR HIJACKS ON %s/%d\n", prefixNode.ipAddress, prefixNode.mask)
+			//log.Debl.Printf("CHECKING FOR HIJACKS ON %s/%d\n", prefixNode.ipAddress, prefixNode.mask)
 
-            //TODO decrement min time
             //query for potential hijacks
-            rows, err := db.Query(prefixesStmt, prefixNode.minAddress, prefixNode.maxAddress, prefixNode.mask, executionTime, executionTime)
+            //duration, err := time.ParseDuration("-168h") //7 days
+            duration, err := time.ParseDuration("-240h") //10 days
             if err != nil {
-                log.Errl.Printf("")
+                log.Errl.Printf("Failed to parse duration: %s", err)
+                continue
+            }
+
+            rows, err := db.Query(prefixesStmt, prefixNode.minAddress, prefixNode.maxAddress, prefixNode.mask, executionTime.Add(duration), executionTime)
+            if err != nil {
+                log.Errl.Printf("Failed to query potential hijacks: %s", err)
                 continue
             }
 
@@ -154,15 +170,45 @@ func (p PrefixHijackModule) Run() error {
                     continue
                 }
 
-                //TODO retrieve as path of message - query update_messages_by_time with timeuuid
+                //check if AS path is valid
+                var asPathStr string
+                if err := db.QueryRow(updateMessageSelectStmt, updateId).Scan(&asPathStr); err != nil {
+                    log.Errl.Printf("Failed to query update message: %s", err)
+                    continue
+                }
+
+                validAs := false
+                for _, asNumberStr := range strings.Split(strings.Trim(asPathStr, " "), "  ") {
+                    if asNumberStr == "" {
+                        continue
+                    }
+
+                    asPathElement, err := strconv.ParseInt(asNumberStr, 10, 32)
+                    if err != nil {
+                        log.Errl.Printf("Unable to parse AS number '%s' into int: %s", asNumberStr, err)
+                        continue
+                    }
+
+                    if prefixNode.ValidAsNumber(uint32(asPathElement)) {
+                        validAs = true
+                        break
+                    }
+                }
+
+                if validAs {
+                    continue
+                }
 
                 //TODO check historical data
 
-                //fmt.Printf("\tNOTIFICATION OF HIJACK - TIMESTAMP:%v IP_ADDRESS:%s MASK:%d AS_PATH:%d\n", ipAddress, mask, asNumber)
                 log.Debl.Printf("\tNOTIFICATION OF HIJACK - IP_ADDRESS:%s MASK:%d AS_NUMBER:%d\n", ipAddress, mask, asNumber)
                 p.hijackIds[prefixId] = time.Now().Unix()
 
-                //TODO write hijack to cockroach
+                //write hijack to database
+                _, err = db.Query(hijackStmt, p.moduleId, updateId, prefixId, []byte(*prefixNode.ipAddress), prefixNode.mask)
+                if err != nil {
+                    log.Errl.Printf("Failed to write hijack to db: %s", err)
+                }
             }
         }
 
