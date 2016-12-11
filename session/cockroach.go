@@ -126,7 +126,7 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 
 	for i := 0; i < len(hosts); i++ {
 		workerChan := make(chan *pb.WriteRequest)
-		go func(wc chan *pb.WriteRequest, id int) {
+		go func(wc chan *pb.WriteRequest, id int, username string, hosts []string, port uint32, certdir string) {
 			//num := 0
 			//writeTimes := new(ByDuration)
 			var (
@@ -177,7 +177,7 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 			//stprefix.Close()
 			db.Close()
 			log.Debl.Printf("worker exiting")
-		}(workerChan, i)
+		}(workerChan, i, username, hosts, port, certdir)
 
 		workerChans[i] = workerChan
 	}
@@ -233,14 +233,20 @@ type buffer struct {
 	size     int
 	initstmt string
 	cc       *cockroachContext
+	firstdef bool
 }
 
-func newbuffer(stmt string, sz int, cc *cockroachContext) *buffer {
-	return &buffer{stmt, make([]interface{}, 0, sz), sz, stmt, cc}
+func newbuffer(stmt string, sz int, cc *cockroachContext, firstdef bool) *buffer {
+	return &buffer{stmt, make([]interface{}, 0, sz), sz, stmt, cc, firstdef}
 }
 
-func valstrgen(start, amount int) string {
-	ret := "("
+func valstrgen(start, amount int, last bool, firstdef bool) string {
+	ret := ""
+	if firstdef {
+		ret += "(DEFAULT,"
+	} else {
+		ret += "("
+	}
 	for i := 1; i <= amount; i++ {
 		if i == amount {
 			ret += fmt.Sprintf("$%d", start+i)
@@ -248,7 +254,11 @@ func valstrgen(start, amount int) string {
 			ret += fmt.Sprintf("$%d,", start+i)
 		}
 	}
-	ret += "),"
+	if last {
+		ret += ");"
+	} else {
+		ret += "),"
+	}
 	return ret
 }
 
@@ -261,7 +271,11 @@ func (b *buffer) add(vals ...interface{}) {
 		b.flush()
 		b.add(vals...)
 	} else {
-		b.stmt += valstrgen(len(b.buf), len(vals))
+		if b.size-len(b.buf)-(2*len(vals)) < 0 { // take care of predicting the last statement
+			b.stmt += valstrgen(len(b.buf), len(vals), true, b.firstdef)
+		} else {
+			b.stmt += valstrgen(len(b.buf), len(vals), false, b.firstdef)
+		}
 		for i := range vals {
 			b.buf = append(b.buf, vals[i])
 		}
@@ -269,10 +283,15 @@ func (b *buffer) add(vals ...interface{}) {
 }
 
 func (b *buffer) flush() {
-	b.cc.db.Query(b.stmt, b.buf...)
+	if len(b.buf) > 0 {
+		_, err := b.cc.db.Query(b.stmt, b.buf...)
+		if err != nil {
+			log.Errl.Printf("executed query:%s with vals:%+v error:%s", b.stmt, b.buf, err)
+		}
+		b.buf = nil
+		b.stmt = b.initstmt
+	}
 	//log.Debl.Printf("buffer flush:%+v\n", b)
-	b.buf = nil
-	b.stmt = b.initstmt
 }
 
 //write buffers messages that arrive on wchan and writes them if they hit a number.
@@ -282,8 +301,8 @@ func (b *buffer) flush() {
 func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 	ticker := time.NewTicker(1 * time.Second)
 	idleticks := 0
-	upbuf := newbuffer(cc.stmtupstr, 1000, cc)   // fits 100 objects
-	prefbuf := newbuffer(cc.stmtprstr, 3000, cc) // fits 200 objects
+	upbuf := newbuffer(cc.stmtupstr, 1000, cc, false)  // fits around 100 objects do not include a default first arg in stmt
+	prefbuf := newbuffer(cc.stmtprstr, 3000, cc, true) // fits around 300 objects include a default first arg in stmt
 	for {
 		select {
 		case request, wchopen := <-wchan:
@@ -388,8 +407,8 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			}
 		case <-ticker.C:
 			idleticks++
-			if idleticks > 2 { // 2 or more seconds passed since a msg arrived. flush
-				log.Debl.Printf("flushing due to inacivity\n")
+			if idleticks > 10 { // 10 or more seconds passed since a msg arrived. flush
+				//log.Debl.Printf("flushing due to inacivity\n")
 				upbuf.flush()
 				prefbuf.flush()
 				idleticks = 0
