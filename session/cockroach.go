@@ -100,10 +100,11 @@ type cockroachContext struct {
 	stmupdate *sql.Stmt
 	stmprefix *sql.Stmt
 	uuidgen   *fastuuid.Generator
+	stmtupstr string
+	stmtprstr string
 }
 
 func NewCockroachSession(username string, hosts []string, port uint32, workerCount uint32, certdir string, config CockroachConfig) (Sessioner, error) {
-
 	var tablestr, dbstr string
 	uug := fastuuid.MustNewGenerator()
 	writers := make(map[pb.WriteRequest_Type][]Writer)
@@ -112,7 +113,7 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 			fmt.Printf("registering writer %s\n", writerType)
 			switch writerType {
 			case "BGPCapture":
-				//XXX this only works for one writer cause it sets the function scope vars that get passed on the goroutines
+				//XXX pass also the prefix table str from the client cause now we hardcode it
 				tablestr, dbstr = writerConfig.Table, writerConfig.Database
 				addWriter(writers, pb.WriteRequest_BGP_CAPTURE, BGPCapture{CockroachWriter{table: writerConfig.Table, database: writerConfig.Database}})
 			default:
@@ -129,8 +130,8 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 			//num := 0
 			//writeTimes := new(ByDuration)
 			var (
-				stupdate, stprefix *sql.Stmt
-				err                error
+				//stupdate, stprefix *sql.Stmt
+				err error
 			)
 			host := hosts[id%len(hosts)]
 			db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key",
@@ -154,7 +155,9 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 			}
 			cc := &cockroachContext{db, stupdate, stprefix, uug}
 			*/
-			cc := &cockroachContext{db, nil, nil, uug}
+			stmtupstr := fmt.Sprintf(bgpCaptureStmt1, dbstr, tablestr)
+			stmtprstr := fmt.Sprintf(bgpPrefixStmt1, dbstr, tablestr)
+			cc := &cockroachContext{db, nil, nil, uug, stmtupstr, stmtprstr}
 			workchan := make(chan *pb.WriteRequest)
 			for j := 0; j < int(workerCount); j++ {
 				go Write(cc, workchan)
@@ -266,8 +269,8 @@ func (b *buffer) add(vals ...interface{}) {
 }
 
 func (b *buffer) flush() {
-	//cc.db.Query(b.stmt, b.buf...)
-	log.Debl.Printf("buffer flush:%+v\n", b)
+	b.cc.db.Query(b.stmt, b.buf...)
+	//log.Debl.Printf("buffer flush:%+v\n", b)
 	b.buf = nil
 	b.stmt = b.initstmt
 }
@@ -279,8 +282,8 @@ func (b *buffer) flush() {
 func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 	ticker := time.NewTicker(1 * time.Second)
 	idleticks := 0
-	upbuf := newbuffer(bgpCaptureStmt1, 100, cc)  // fits 100 objects
-	prefbuf := newbuffer(bgpPrefixStmt1, 200, cc) // fits 200 objects
+	upbuf := newbuffer(cc.stmtupstr, 1000, cc)   // fits 100 objects
+	prefbuf := newbuffer(cc.stmtprstr, 3000, cc) // fits 200 objects
 	for {
 		select {
 		case request, wchopen := <-wchan:
@@ -336,9 +339,9 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 					}
 				}
 			}
-			var id int64
+			var id string
 			uuid := cc.uuidgen.Next()
-			id := hex.EncodeToString(uuid)
+			id = hex.EncodeToString(uuid[:])
 			upbuf.add(id, timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes)
 			/*row := cc.stmupdate.QueryRow(
 				timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes)
@@ -384,6 +387,7 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 				}
 			}
 		case <-ticker.C:
+			idleticks++
 			if idleticks > 2 { // 2 or more seconds passed since a msg arrived. flush
 				log.Debl.Printf("flushing due to inacivity\n")
 				upbuf.flush()
