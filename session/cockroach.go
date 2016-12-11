@@ -156,7 +156,7 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 			cc := &cockroachContext{db, stupdate, stprefix, uug}
 			*/
 			stmtupstr := fmt.Sprintf(bgpCaptureStmt1, dbstr, tablestr)
-			stmtprstr := fmt.Sprintf(bgpPrefixStmt1, dbstr, tablestr)
+			stmtprstr := fmt.Sprintf(bgpPrefixStmt1, dbstr, "prefixes") //XXX hardcoded prefixes
 			cc := &cockroachContext{db, nil, nil, uug, stmtupstr, stmtprstr}
 			workchan := make(chan *pb.WriteRequest)
 			for j := 0; j < int(workerCount); j++ {
