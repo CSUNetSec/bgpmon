@@ -106,6 +106,7 @@ type cockroachContext struct {
 
 func NewCockroachSession(username string, hosts []string, port uint32, workerCount uint32, certdir string, config CockroachConfig) (Sessioner, error) {
 	var tablestr, dbstr string
+	//var tablestr string
 	uug := fastuuid.MustNewGenerator()
 	writers := make(map[pb.WriteRequest_Type][]Writer)
 	for writerType, writerConfigs := range config.Writers {
@@ -122,64 +123,29 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 		}
 	}
 
-	workerChans := make([]chan *pb.WriteRequest, len(hosts))
+	workerChans := make([]chan *pb.WriteRequest, 1) // all the workers now will listen on this one chanel
+	workerChan := make(chan *pb.WriteRequest)       //this
+	workerChans[0] = workerChan
 
+	cccontexts := []*cockroachContext{}
 	for i := 0; i < len(hosts); i++ {
-		workerChan := make(chan *pb.WriteRequest)
-		go func(wc chan *pb.WriteRequest, id int, username string, hosts []string, port uint32, certdir string) {
-			//num := 0
-			//writeTimes := new(ByDuration)
-			var (
-				//stupdate, stprefix *sql.Stmt
-				err error
-			)
-			host := hosts[id%len(hosts)]
-			db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key",
-				username, host, port, certdir, certdir, certdir))
-			if err != nil {
-				log.Errl.Printf("Unable to open connection to %s error:%s", host, err)
-				return
-			}
-			db.SetMaxIdleConns(10)
-			if err := db.Ping(); err != nil {
-				log.Errl.Printf("Unable to start connection to %s error:%s", host, err)
-				return
-			}
-			/*if stupdate, err = db.Prepare(fmt.Sprintf(bgpCaptureStmt, dbstr, tablestr)); err != nil {
-				log.Errl.Printf("Unable to prepare update statmements on host:%s error:%s", host, err)
-				return
-			}
-			if stprefix, err = db.Prepare(fmt.Sprintf(bgpPrefixStmt, dbstr, "prefixes")); err != nil {
-				log.Errl.Printf("Unable to prepare prefix statmements on host:%s error:%s", host, err)
-				return
-			}
-			cc := &cockroachContext{db, stupdate, stprefix, uug}
-			*/
-			stmtupstr := fmt.Sprintf(bgpCaptureStmt1, dbstr, tablestr)
-			stmtprstr := fmt.Sprintf(bgpPrefixStmt1, dbstr, "prefixes") //XXX hardcoded prefixes
-			cc := &cockroachContext{db, nil, nil, uug, stmtupstr, stmtprstr}
-			workchan := make(chan *pb.WriteRequest)
-			for j := 0; j < int(workerCount); j++ {
-				go Write(cc, workchan)
-			}
-			for writeRequest := range wc {
-				//ts := time.Now()
-				workchan <- writeRequest
-				//*writeTimes = append(*writeTimes, writeduration{time.Since(ts), num})
-				//num++
-
-			}
-			//log.Debl.Printf("sorting write times")
-			//sort.Sort(writeTimes)
-			//log.Debl.Printf("%v", writeTimes)
-			close(workchan)
-			//stupdate.Close()
-			//stprefix.Close()
-			db.Close()
-			log.Debl.Printf("worker exiting")
-		}(workerChan, i, username, hosts, port, certdir)
-
-		workerChans[i] = workerChan
+		host := hosts[i]
+		db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key",
+			username, host, port, certdir, certdir, certdir))
+		//db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s:papakia@%s:%d/bgpmon?sslmode=disable", username, host, port))
+		if err != nil {
+			log.Errl.Printf("Unable to open connection to %s error:%s", host, err)
+			continue
+		}
+		//db.SetMaxIdleConns(10)
+		stmtupstr := fmt.Sprintf(bgpCaptureStmt1, dbstr, tablestr)
+		//stmtupstr := fmt.Sprintf(bgpCaptureStmt1, tablestr) //postgres
+		stmtprstr := fmt.Sprintf(bgpPrefixStmt1, dbstr, "prefixes") //XXX hardcoded prefixes
+		//stmtprstr := fmt.Sprintf(bgpPrefixStmt1, "prefixes") //posgres
+		cccontexts = append(cccontexts, &cockroachContext{db, nil, nil, uug, stmtupstr, stmtprstr})
+	}
+	for j := 0; j < int(workerCount); j++ {
+		go Write(cccontexts[j%len(cccontexts)], workerChans[0])
 	}
 
 	session := Session{workerChans, 0}
@@ -209,8 +175,10 @@ const (
 	//prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTES, ip_address_str STRING, mask INT, source_as INT, is_withdrawn BOOL);
 	bgpCaptureStmt  = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
 	bgpCaptureStmt1 = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES"
-	bgpPrefixStmt   = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6, $7);"
-	bgpPrefixStmt1  = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES"
+	//bgpCaptureStmt1 = "INSERT INTO %s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES"
+	bgpPrefixStmt  = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6, $7);"
+	bgpPrefixStmt1 = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES"
+	//bgpPrefixStmt1  = "INSERT INTO %s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES"
 )
 
 type CockroachWriter struct {
@@ -263,12 +231,14 @@ func valstrgen(start, amount int, last bool, firstdef bool) string {
 }
 
 func (b *buffer) add(vals ...interface{}) {
+	//fmt.Printf("adding %d\n", len(vals))
 	if len(vals) > b.size {
 		log.Errl.Printf("can' add more elements at one step to the buffer than it's size")
 		return
 	}
 	if b.size-len(b.buf)-len(vals) < 0 {
-		b.flush()
+		//fmt.Printf("calling flush from add\n")
+		b.flush(false)
 		b.add(vals...)
 	} else {
 		if b.size-len(b.buf)-(2*len(vals)) < 0 { // take care of predicting the last statement
@@ -282,9 +252,14 @@ func (b *buffer) add(vals ...interface{}) {
 	}
 }
 
-func (b *buffer) flush() {
+func (b *buffer) flush(notfull bool) {
 	if len(b.buf) > 0 {
-		_, err := b.cc.db.Query(b.stmt, b.buf...)
+		if notfull {
+			b.stmt = b.stmt[:len(b.stmt)-1] + ";"
+		}
+		log.Debl.Printf("trying to run query on flush")
+		_, err := b.cc.db.Exec(b.stmt, b.buf...)
+		log.Debl.Printf("done")
 		if err != nil {
 			log.Errl.Printf("executed query:%s with vals:%+v error:%s", b.stmt, b.buf, err)
 		}
@@ -299,18 +274,22 @@ func (b *buffer) flush() {
 //if the ticker detects that it didn't get any messages it fluses the queue.
 //when wchan closes it will detect it and close the ticket too so the goroutine can die
 func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	idleticks := 0
-	upbuf := newbuffer(cc.stmtupstr, 1000, cc, false)  // fits around 100 objects do not include a default first arg in stmt
-	prefbuf := newbuffer(cc.stmtprstr, 3000, cc, true) // fits around 300 objects include a default first arg in stmt
+	upbuf := newbuffer(cc.stmtupstr, 50, cc, false)   // fits around 100 objects do not include a default first arg in stmt
+	prefbuf := newbuffer(cc.stmtprstr, 150, cc, true) // fits around 300 objects include a default first arg in stmt
 	for {
 		select {
 		case request, wchopen := <-wchan:
 			//check if someone closed our chan and signal the ticker
 			if !wchopen {
 				//XXX flush
+				fmt.Printf("chan closed. calling flush\n")
+				upbuf.flush(true)
+				prefbuf.flush(true)
 				wchan = nil
 				ticker.Stop()
+				cc.db.Close()
 				break
 			}
 			idleticks = 0 //reset the idle counter
@@ -407,10 +386,10 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			}
 		case <-ticker.C:
 			idleticks++
-			if idleticks > 10 { // 10 or more seconds passed since a msg arrived. flush
+			if idleticks > 1 { // 10 or more seconds passed since a msg arrived. flush
 				//log.Debl.Printf("flushing due to inacivity\n")
-				upbuf.flush()
-				prefbuf.flush()
+				upbuf.flush(true)
+				prefbuf.flush(true)
 				idleticks = 0
 			}
 		}

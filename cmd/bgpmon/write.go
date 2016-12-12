@@ -116,6 +116,9 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 				fmt.Println("FOUND ERROR")
 				panic(err)
 			}
+			if messageCount%1000 == 0 {
+				fmt.Printf("message:%d time elapsed:%v\n", messageCount, time.Since(startTime))
+			}
 
 		}
 
