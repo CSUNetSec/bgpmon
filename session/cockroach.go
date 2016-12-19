@@ -276,8 +276,8 @@ func (b *buffer) flush(notfull bool) {
 func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 	ticker := time.NewTicker(10 * time.Second)
 	idleticks := 0
-	upbuf := newbuffer(cc.stmtupstr, 50, cc, false)   // fits around 100 objects do not include a default first arg in stmt
-	prefbuf := newbuffer(cc.stmtprstr, 150, cc, true) // fits around 300 objects include a default first arg in stmt
+	upbuf := newbuffer(cc.stmtupstr, 1000, cc, false)  // fits around 100 objects do not include a default first arg in stmt
+	prefbuf := newbuffer(cc.stmtprstr, 3000, cc, true) // fits around 300 objects include a default first arg in stmt
 	for {
 		select {
 		case request, wchopen := <-wchan:
