@@ -19,7 +19,7 @@ type GoBGPLinkConfig struct {
 }
 
 type GoBGPLinkModule struct {
-    moduleId string
+	moduleId string
 	address  string
 	conn     *grpc.ClientConn
 	sessions []session.Sessioner

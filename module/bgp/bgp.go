@@ -1,9 +1,9 @@
 package bgp
 
 import (
-    "bytes"
+	"bytes"
 	"errors"
-    "fmt"
+	"fmt"
 	"net"
 	"time"
 )
@@ -47,7 +47,7 @@ func getTimeBuckets(startTime, endTime time.Time) ([]time.Time, error) {
 }
 
 func getTimeBucket(t time.Time) time.Time {
-    return time.Unix(t.Unix() - (t.Unix() % timeBucketInterval), 0)
+	return time.Unix(t.Unix()-(t.Unix()%timeBucketInterval), 0)
 }
 
 /*
@@ -73,10 +73,10 @@ func (p *PrefixCache) AddPrefix(ipAddress net.IP, mask uint32, asNumber uint32) 
 	//check if prefixNode is subprefix/superprefix of a root
 	removeIndex := -1
 	for i, node := range p.roots {
-        if prefixNode.Equals(node) {
-            node.asNumbers = append(node.asNumbers, asNumber)
-            return nil
-        } else if prefixNode.SubPrefix(node) {
+		if prefixNode.Equals(node) {
+			node.asNumbers = append(node.asNumbers, asNumber)
+			return nil
+		} else if prefixNode.SubPrefix(node) {
 			//find correct node to insert on
 			insertNode := node
 			found := true
@@ -160,11 +160,11 @@ func NewPrefixNode(ipAddress *net.IP, mask uint32, asNumber uint32) *PrefixNode 
 }
 
 func (p *PrefixNode) Equals(prefixNode *PrefixNode) bool {
-    if p.ipAddress == prefixNode.ipAddress && p.mask == prefixNode.mask {
-        return true
-    }
+	if p.ipAddress == prefixNode.ipAddress && p.mask == prefixNode.mask {
+		return true
+	}
 
-    return false
+	return false
 }
 
 func (p *PrefixNode) SubPrefix(prefixNode *PrefixNode) bool {

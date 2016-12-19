@@ -54,17 +54,17 @@ func RunPrefixByAsNumberModule(cmd *cli.Cmd) {
 }
 
 func RunPrefixHijackModule(cmd *cli.Cmd) {
-    cmd.Spec = ""
-    timeoutSeconds := cmd.IntOpt("timeout_secs", 60, "stop module execution if time exeeds this limit")
+	cmd.Spec = ""
+	timeoutSeconds := cmd.IntOpt("timeout_secs", 60, "stop module execution if time exeeds this limit")
 	inSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to use as input")
 
-    cmd.Action = func() {
-        client, err := getRPCClient()
-        if err != nil {
-            panic(err)
-        }
+	cmd.Action = func() {
+		client, err := getRPCClient()
+		if err != nil {
+			panic(err)
+		}
 
-        //create request
+		//create request
 		prefixHijack := pbbgpmon.PrefixHijackModule{
 			PeriodicSeconds: 0,
 			TimeoutSeconds:  int32(*timeoutSeconds),
@@ -75,13 +75,13 @@ func RunPrefixHijackModule(cmd *cli.Cmd) {
 		request.Type = pbbgpmon.ModuleType_PREFIX_HIJACK
 		request.PrefixHijackModule = &prefixHijack
 
-        //send request
+		//send request
 		ctx := context.Background()
 		reply, err := client.RunModule(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-        fmt.Println(reply)
-    }
+		fmt.Println(reply)
+	}
 }

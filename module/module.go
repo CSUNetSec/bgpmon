@@ -75,7 +75,7 @@ func (m *Module) SchedulePeriodic(periodicSeconds, timeoutSeconds int32) error {
 	m.timeoutTimer = timeoutTimer
 	timeoutChan := timeoutTimer.C
 
-    m.CommandChan <- ModuleCommand{COMRUN, nil}
+	m.CommandChan <- ModuleCommand{COMRUN, nil}
 	go func() {
 		for {
 			select {

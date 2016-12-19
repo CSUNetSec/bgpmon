@@ -24,7 +24,7 @@ type PrefixByAsNumberConfig struct {
 }
 
 type PrefixByAsNumberModule struct {
-    moduleId      string
+	moduleId      string
 	startTime     int64
 	endTime       int64
 	inSessions    []session.CassandraSession

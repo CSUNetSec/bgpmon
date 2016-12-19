@@ -38,19 +38,19 @@ func StartGoBGPDLinkModule(cmd *cli.Cmd) {
 }
 
 func StartPrefixHijackModule(cmd *cli.Cmd) {
-    cmd.Spec = ""
-    moduleID := cmd.StringArg("MODULE_ID", "", "id of new module")
+	cmd.Spec = ""
+	moduleID := cmd.StringArg("MODULE_ID", "", "id of new module")
 	inSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to use as input")
 	periodicSeconds := cmd.IntOpt("periodic_secs", 3600, "delay between monitoring checks for a prefix hijack")
 	timeoutSeconds := cmd.IntOpt("timeout_secs", 3600, "stop module execution if time exceeds this limit")
 
-    cmd.Action = func() {
-        client, err := getRPCClient()
-        if err != nil {
-            panic(err)
-        }
+	cmd.Action = func() {
+		client, err := getRPCClient()
+		if err != nil {
+			panic(err)
+		}
 
-        //create request
+		//create request
 		prefixHijack := pbbgpmon.PrefixHijackModule{
 			PeriodicSeconds: int32(*periodicSeconds),
 			TimeoutSeconds:  int32(*timeoutSeconds),
@@ -62,13 +62,13 @@ func StartPrefixHijackModule(cmd *cli.Cmd) {
 		request.ModuleId = *moduleID
 		request.PrefixHijackModule = &prefixHijack
 
-        //send request
+		//send request
 		ctx := context.Background()
 		reply, err := client.StartModule(ctx, request)
 		if err != nil {
 			panic(err)
 		}
 
-        fmt.Println(reply)
-    }
+		fmt.Println(reply)
+	}
 }
