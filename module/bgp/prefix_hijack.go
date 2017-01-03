@@ -98,6 +98,7 @@ func (p PrefixHijackModule) Run() error {
 				continue
 			}
 
+            log.Debl.Printf("adding monitor as: %d\n", asNumber);
 			monitoredAsNumbers = append(monitoredAsNumbers, asNumber)
 		}
 
@@ -108,6 +109,8 @@ func (p PrefixHijackModule) Run() error {
 		//retrieve monitored prefixes
 		prefixCache := NewPrefixCache()
 		for _, monitoredAsNumber := range monitoredAsNumbers {
+            log.Debl.Printf("Querying for monitored AS: %d\n", monitoredAsNumber)
+
 			//duration, err := time.ParseDuration("-168h") //7 days
 			duration, err := time.ParseDuration("-240h") //10 days
 			if err != nil {
@@ -128,6 +131,7 @@ func (p PrefixHijackModule) Run() error {
 					continue
 				}
 
+                log.Debl.Printf("adding prefix %v:%d\n", ipAddress, mask);
 				prefixCache.AddPrefix(ipAddress, mask, monitoredAsNumber)
 			}
 
