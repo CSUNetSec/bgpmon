@@ -297,7 +297,8 @@ func (s Server) createModule(moduleId string, request interface{}) (*module.Modu
 			return nil, err
 		}
 
-		mod, err = bgp.NewPrefixHijackModule(moduleId, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack)
+		mod, err = bgp.NewPrefixHijackModule(moduleId, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack,
+			 rpcConfig.StartTimeSecondsFromEpoch, rpcConfig.LookbackDurationSeconds)
 		if err != nil {
 			return nil, err
 		}

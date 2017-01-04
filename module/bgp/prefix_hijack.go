@@ -32,13 +32,15 @@ type PrefixHijackConfig struct {
 }
 
 type PrefixHijackModule struct {
-	moduleId        string
-	periodicSeconds int32
-	timeoutSeconds  int32
-	inSessions      []session.CockroachSession
-	keyspaces       []string
-	status          *PrefixHijackStatus
-	hijackIds       map[string]int64
+	moduleId           string
+	periodicSeconds    int32
+	timeoutSeconds     int32
+	inSessions         []session.CockroachSession
+	keyspaces          []string
+	status             *PrefixHijackStatus
+	hijackIds          map[string]int64
+	startSecsFromEpoch int64
+	lookBackSecs       int64
 }
 
 type PrefixHijackStatus struct {
@@ -46,7 +48,7 @@ type PrefixHijackStatus struct {
 	LastExecutionTime time.Time
 }
 
-func NewPrefixHijackModule(moduleId string, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config PrefixHijackConfig) (*module.Module, error) {
+func NewPrefixHijackModule(moduleId string, periodicSeconds, timeoutSeconds int32, inSessions []session.Sessioner, config PrefixHijackConfig, startSecsFromEpoch, lookBackSecs int64) (*module.Module, error) {
 	//check that all sessions are cockroach sessions
 	inSess := []session.CockroachSession{}
 	for _, sess := range inSessions {
@@ -58,14 +60,19 @@ func NewPrefixHijackModule(moduleId string, periodicSeconds, timeoutSeconds int3
 		inSess = append(inSess, casSess)
 	}
 
-	return &module.Module{Moduler: PrefixHijackModule{moduleId, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, make(map[string]int64)}}, nil
+	return &module.Module{Moduler: PrefixHijackModule{moduleId, periodicSeconds, timeoutSeconds, inSess, config.Keyspaces, &PrefixHijackStatus{0, time.Now()}, make(map[string]int64), startSecsFromEpoch, lookBackSecs}}, nil
 }
 
 func (p PrefixHijackModule) Run() error {
 	log.Debl.Printf("Running prefix hijack module\n")
+	var executionTime time.Time
 
 	//get execution time
-	executionTime := time.Now().UTC()
+	if p.startSecsFromEpoch == 0 {//we've been called from start and this isn't populated
+		executionTime = time.Now().UTC()
+	} else {
+		executionTime = time.Unix(p.startSecsFromEpoch, 0)
+	}
 
 	var (
 		ipAddress      net.IP
@@ -112,7 +119,7 @@ func (p PrefixHijackModule) Run() error {
 			log.Debl.Printf("Querying for monitored AS: %d\n", monitoredAsNumber)
 
 			//duration, err := time.ParseDuration("-168h") //7 days
-			duration, err := time.ParseDuration("-240h") //10 days
+			duration, err := time.ParseDuration(fmt.Sprintf("-%ds",p.lookBackSecs)) 
 			if err != nil {
 				log.Errl.Printf("Failed to parse duration: %s", err)
 				continue
@@ -146,7 +153,7 @@ func (p PrefixHijackModule) Run() error {
 
 			//query for potential hijacks
 			//duration, err := time.ParseDuration("-168h") //7 days
-			duration, err := time.ParseDuration("-240h") //10 days
+			duration, err := time.ParseDuration(fmt.Sprintf("-%dh", p.lookBackSecs))
 			if err != nil {
 				log.Errl.Printf("Failed to parse duration: %s", err)
 				continue
