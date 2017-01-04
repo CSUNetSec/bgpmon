@@ -375,7 +375,7 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 					}
 					mask := int(ar.Mask)
 					///XXX hardcoded table
-					prefbuf.add(id, []byte(ip), ipstr, mask, lastas, timestamp, true)
+					prefbuf.add(id, []byte(ip), ipstr, mask, lastas, timestamp, false)
 					/*_, errpref := cc.stmprefix.Exec(
 						id, []byte(ip), ipstr, mask, lastas, timestamp, false)
 					if errpref != nil {
