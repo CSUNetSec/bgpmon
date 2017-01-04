@@ -57,6 +57,14 @@ func RunPrefixHijackModule(cmd *cli.Cmd) {
 	cmd.Spec = ""
 	timeoutSeconds := cmd.IntOpt("timeout_secs", 60, "stop module execution if time exeeds this limit")
 	inSessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to use as input")
+	startDateStr := cmd.StringArg("start_date", "dontparse", "date string in format 2006-Jan-02. Times will be UTC")
+	loobackdays := cmd.IntOpt("lookback days", 7, "number of days to look back for hijacks")
+	const shortForm = "2006-Jan-02"
+	t, err := time.Parse(shortForm, *startDateStr)
+	if err != nil {
+		panic(err)
+	}
+	secsfromepoch := t.Unix()
 
 	cmd.Action = func() {
 		client, err := getRPCClient()
@@ -69,6 +77,8 @@ func RunPrefixHijackModule(cmd *cli.Cmd) {
 			PeriodicSeconds: 0,
 			TimeoutSeconds:  int32(*timeoutSeconds),
 			InSessionId:     strings.Split(*inSessions, ","),
+			LookbackDurationSeconds: int64(*loobackdays*24*3600),
+			StartTimeSecondsFromEpoch: secsfromepoch,
 		}
 
 		request := new(pbbgpmon.RunModuleRequest)
