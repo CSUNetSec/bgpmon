@@ -1,14 +1,10 @@
 CREATE DATABASE bgpmon;
 GRANT ALL ON DATABASE bgpmon TO root;
-CREATE TABLE bgpmon.updates (update_id STRING PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, collector_ip_str STRING, peer_ip BYTES, peer_ip_str STRING, as_path STRING, next_hop BYTES, next_hop_str STRING, protomsg BYTES);
-CREATE TABLE bgpmon.prefixes (prefix_id SERIAL PRIMARY KEY, update_id STRING, ip_address BYTES, ip_address_str STRING, mask INT, source_as INT, timestamp TIMESTAMP, is_withdrawn BOOL);
-CREATE INDEX ON bgpmon.prefixes (source_as, is_withdrawn, timestamp) STORING (prefix_id, update_id, ip_address, mask);
+
+CREATE TABLE bgpmon.updates (update_id STRING PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, peer_ip BYTES, as_path STRING, next_hop BYTES, protomsg BYTES);
+CREATE TABLE bgpmon.prefixes (prefix_id SERIAL PRIMARY KEY, update_id STRING, ip_address BYTES, mask INT, source_as INT, timestamp TIMESTAMP, is_withdrawn BOOL);
+CREATE INDEX ON bgpmon.prefixes (timestamp, source_as, is_withdrawn) STORING (prefix_id, update_id, ip_address, mask);
+CREATE INDEX ON bgpmon.prefixes (timestamp, ip_address, mask, is_withdrawn) STORING (prefix_id, update_id, source_as);
 
 CREATE TABLE bgpmon.monitor_ases (module_id STRING, as_number BIGINT, enabled BOOL, timestamp TIMESTAMP, PRIMARY KEY (module_id, as_number));
 CREATE TABLE bgpmon.hijacks (module_id STRING, update_id STRING, prefix_id STRING, monitor_ip_address BYTES, monitor_mask INT, PRIMARY KEY (module_id, update_id, prefix_id));
-
-
-
-
-CREATE TABLE bgpmon.updates (update_id BIGINT PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTEA, peer_ip BYTEA, as_path STRING, next_hop BYTEA, protomsg BYTEA);
-CREATE TABLE bgpmon.prefixes (prefix_id BIGINT PRIMARY KEY, update_id BIGINT, ip_address BYTEA, mask SMALLINT, source_as BIGINT, timestamp TIMESTAMP, is_withdrawn BOOL);

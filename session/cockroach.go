@@ -173,11 +173,11 @@ const (
 	//relevant tables in schema
 	//updates (update_id SERIAL PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, collector_ip_str STRING, peer_ip BYTES, peer_ip_str STRING, as_path STRING, next_hop BYTES, next_hop_str STRING, protomsg BYTES);
 	//prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTES, ip_address_str STRING, mask INT, source_as INT, is_withdrawn BOOL);
-	bgpCaptureStmt  = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
-	bgpCaptureStmt1 = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES"
+	//bgpCaptureStmt  = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+	bgpCaptureStmt1 = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, protomsg) VALUES"
 	//bgpCaptureStmt1 = "INSERT INTO %s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES"
-	bgpPrefixStmt  = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6, $7);"
-	bgpPrefixStmt1 = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES"
+	//bgpPrefixStmt  = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6, $7);"
+	bgpPrefixStmt1 = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, mask, source_as, timestamp, is_withdrawn) VALUES"
 	//bgpPrefixStmt1  = "INSERT INTO %s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES"
 )
 
@@ -305,12 +305,12 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			}
 
 			timestamp := time.Unix(int64(msg.Timestamp), 0)
-			colip, colipstr, err := parseIpToIPString(*msg.LocalIp)
+			colip, _, err := parseIpToIPString(*msg.LocalIp)
 			if err != nil {
 				log.Errl.Printf("Capture Local IP parsing error:%s", err)
 				continue
 			}
-			peerip, peeripstr, err := parseIpToIPString(*msg.PeerIp)
+			peerip, _, err := parseIpToIPString(*msg.PeerIp)
 			if err != nil {
 				log.Errl.Printf("Capture Peer IP parsing error:%s", err)
 				continue
@@ -325,12 +325,11 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			//XXX func this
 			var (
 				nhip    net.IP
-				nhipstr string
 			)
 			if msgUp.Attrs != nil {
 				if msgUp.Attrs.NextHop != nil {
 					var errnh error
-					nhip, nhipstr, errnh = parseIpToIPString(*msgUp.Attrs.NextHop)
+					nhip, _, errnh = parseIpToIPString(*msgUp.Attrs.NextHop)
 					if errnh != nil {
 						log.Errl.Printf("Capture NextHop IP parsing error:%s", errnh)
 						continue
@@ -340,7 +339,7 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			var id string
 			uuid := cc.uuidgen.Next()
 			id = hex.EncodeToString(uuid[:])
-			upbuf.add(id, timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes)
+			upbuf.add(id, timestamp, []byte(colip), []byte(peerip), aspstr, []byte(nhip), capbytes)
 			/*row := cc.stmupdate.QueryRow(
 				timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes)
 			if errid := row.Scan(&id); errid != nil {
@@ -349,14 +348,14 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			}*/
 			if msgUp.WithdrawnRoutes != nil && len(msgUp.WithdrawnRoutes.Prefixes) != 0 {
 				for _, wr := range msgUp.WithdrawnRoutes.Prefixes {
-					ip, ipstr, err := parseIpToIPString(*wr.Prefix)
+					ip, _, err := parseIpToIPString(*wr.Prefix)
 					if err != nil {
 						log.Errl.Printf("error:%s parsing withdrawn prefix", err)
 						continue
 					}
 					mask := int(wr.Mask)
 					///XXX hardcoded table
-					prefbuf.add(id, []byte(ip), ipstr, mask, lastas, timestamp, true)
+					prefbuf.add(id, []byte(ip), mask, lastas, timestamp, true)
 					/*_, errpref := cc.stmprefix.Exec(
 						id, []byte(ip), ipstr, mask, lastas, timestamp, true)
 					if errpref != nil {
@@ -368,14 +367,14 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 
 			if msgUp.AdvertizedRoutes != nil && len(msgUp.AdvertizedRoutes.Prefixes) != 0 {
 				for _, ar := range msgUp.AdvertizedRoutes.Prefixes {
-					ip, ipstr, err := parseIpToIPString(*ar.Prefix)
+					ip, _, err := parseIpToIPString(*ar.Prefix)
 					if err != nil {
 						log.Errl.Printf("error:%s parsing advertized prefix", err)
 						continue
 					}
 					mask := int(ar.Mask)
 					///XXX hardcoded table
-					prefbuf.add(id, []byte(ip), ipstr, mask, lastas, timestamp, false)
+					prefbuf.add(id, []byte(ip), mask, lastas, timestamp, false)
 					/*_, errpref := cc.stmprefix.Exec(
 						id, []byte(ip), ipstr, mask, lastas, timestamp, false)
 					if errpref != nil {
