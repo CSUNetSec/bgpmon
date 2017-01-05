@@ -71,7 +71,6 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 		headerLengthZeroCount := 0
 		unableToParseBodyCount := 0
 		notBGPUpdateCount := 0
-		asPathLengthZeroCount := 0
 		for scanner.Scan() {
 			messageCount++
 			data := scanner.Bytes()
@@ -116,9 +115,9 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 				fmt.Println("FOUND ERROR")
 				panic(err)
 			}
-			if messageCount%1000 == 0 {
+			/*if messageCount%1000 == 0 {
 				fmt.Printf("message:%d time elapsed:%v\n", messageCount, time.Since(startTime))
-			}
+			}*/
 
 		}
 
@@ -126,17 +125,18 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 			fmt.Printf("Failed to parse message:%s", err)
 		}
 
-		fmt.Printf("processed %d total messages in %v\n"+
+        fmt.Printf("time_elapsed:%v total_messages:%d messages/second:%d\n", time.Since(startTime), messageCount, float64(messageCount) / time.Since(startTime).Seconds())
+		/*fmt.Printf("processed %d total messages in %v\n"+
 			"\theaderLengthZeroCount:%d\n"+
 			"\tunableToParseBodyCount:%d\n"+
 			"\tnotBGPUpdateCount:%d\n"+
-			"\tasPathLengthZeroCount:%d\n",
+			"\taUnixsPathLengthZeroCount:%d\n",
 			messageCount,
 			time.Since(startTime),
 			headerLengthZeroCount,
 			unableToParseBodyCount,
 			notBGPUpdateCount,
-			asPathLengthZeroCount)
+			asPathLengthZeroCount)*/
 	}
 }
 
