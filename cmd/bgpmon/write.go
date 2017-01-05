@@ -125,7 +125,7 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 			fmt.Printf("Failed to parse message:%s", err)
 		}
 
-        fmt.Printf("time_elapsed:%v total_messages:%d messages/second:%d\n", time.Since(startTime), messageCount, float64(messageCount) / time.Since(startTime).Seconds())
+        fmt.Printf("time_elapsed:%v total_messages:%d messages/second:%f\n", time.Since(startTime), messageCount, float64(messageCount) / time.Since(startTime).Seconds())
 		/*fmt.Printf("processed %d total messages in %v\n"+
 			"\theaderLengthZeroCount:%d\n"+
 			"\tunableToParseBodyCount:%d\n"+

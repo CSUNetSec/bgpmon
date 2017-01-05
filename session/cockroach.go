@@ -257,9 +257,9 @@ func (b *buffer) flush(notfull bool) {
 		if notfull {
 			b.stmt = b.stmt[:len(b.stmt)-1] + ";"
 		}
-		log.Debl.Printf("trying to run query on flush")
+		//log.Debl.Printf("trying to run query on flush")
 		_, err := b.cc.db.Exec(b.stmt, b.buf...)
-		log.Debl.Printf("done")
+		//log.Debl.Printf("done")
 		if err != nil {
 			log.Errl.Printf("executed query:%s with vals:%+v error:%s", b.stmt, b.buf, err)
 		}
