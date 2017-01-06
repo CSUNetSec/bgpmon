@@ -32,7 +32,13 @@ func NewTimeRangeGenerator(start, end time.Time, quantum time.Duration) (*TimeRa
 }
 
 func (t TimeRangeGenerator) Next() bool {
-	if t.cur.Add(t.quantum).After(t.end) {
+	if t.quantum > 0 {
+		if t.cur.Add(t.quantum).After(t.end) {
+			return false
+		}
+		return true
+	}
+	if t.cur.Add(t.quantum).Before(t.end) {
 		return false
 	}
 	return true
