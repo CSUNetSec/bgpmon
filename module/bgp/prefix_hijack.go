@@ -86,7 +86,7 @@ func (p PrefixHijackModule) Run() error {
 		log.Errl.Printf("Failed to parse duration: %s", err)
 		return err
 	}
-	quantum, _ := time.ParseDuration(fmt.Sprintf("-10m"))
+	quantum, _ := time.ParseDuration(fmt.Sprintf("-1h"))
 	trg, err := util.NewTimeRangeGenerator(executionTime.Add(duration), executionTime, quantum)
 	if err != nil {
 		log.Errl.Printf("Failed to create a TimeRangeGenerator:%s", err)
@@ -130,7 +130,7 @@ func (p PrefixHijackModule) Run() error {
 		for trg.Next() {
 			datea, dateb := trg.DatePair()
 			for _, monitoredAsNumber := range monitoredAsNumbers {
-				log.Debl.Printf("Querying for monitored AS: %d\n", monitoredAsNumber)
+				log.Debl.Printf("Querying for monitored AS:%d for dates %v - %v\n", monitoredAsNumber, dateb, datea)
 				prefixRows, err := db.Query(monitorPrefixesStmt, monitoredAsNumber, dateb.UTC().Format(time.RFC3339Nano), datea.UTC().Format(time.RFC3339Nano))
 				if err != nil {
 					log.Errl.Printf("Failed to query prefixes for AS '%d': %s", monitoredAsNumber, err)
@@ -152,13 +152,14 @@ func (p PrefixHijackModule) Run() error {
 					log.Errl.Printf("Failed to retrieve prefixes for AS '%d': %s", monitoredAsNumber, prefixRows.Err)
 				}
 			}
-
+		}
+		log.Debl.Printf("finished adding prefixes to cache")
+		trg.Reset()
+		for trg.Next() {
+			datea, dateb := trg.DatePair()
 			//check each prefix node for a hijack
 			for _, prefixNode := range prefixCache.prefixNodes {
-				//log.Debl.Printf("CHECKING FOR HIJACKS ON %s/%d\n", prefixNode.ipAddress, prefixNode.mask)
-
-				//query for potential hijacks
-
+				log.Debl.Printf("CHECKING FOR HIJACKS ON %s/%d for dates:%v - %v/\n", prefixNode.ipAddress, prefixNode.mask, dateb, datea)
 				rows, err := db.Query(prefixesStmt, prefixNode.minAddress, prefixNode.maxAddress, prefixNode.mask, dateb.UTC().Format(time.RFC3339Nano), datea.UTC().Format(time.RFC3339Nano))
 				if err != nil {
 					log.Errl.Printf("Failed to query potential hijacks: %s", err)

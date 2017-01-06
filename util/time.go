@@ -16,6 +16,7 @@ type TimeRangeGenerator struct {
 	end     time.Time
 	quantum time.Duration
 	cur     time.Time
+	starts  *time.Time
 }
 
 func NewTimeRangeGenerator(start, end time.Time, quantum time.Duration) (*TimeRangeGenerator, error) {
@@ -26,9 +27,9 @@ func NewTimeRangeGenerator(start, end time.Time, quantum time.Duration) (*TimeRa
 		return nil, errzeroquant
 	}
 	if quantum < 0 {
-		return &TimeRangeGenerator{end, start, quantum, end}, nil
+		return &TimeRangeGenerator{end, start, quantum, end, &end}, nil
 	}
-	return &TimeRangeGenerator{start, end, quantum, start}, nil
+	return &TimeRangeGenerator{start, end, quantum, start, &start}, nil
 }
 
 func (t TimeRangeGenerator) Next() bool {
@@ -48,4 +49,8 @@ func (t *TimeRangeGenerator) DatePair() (A, B time.Time) {
 	A, B = t.cur, t.cur.Add(t.quantum)
 	t.cur = B
 	return
+}
+
+func (t *TimeRangeGenerator) Reset() {
+	t.cur = *t.starts
 }

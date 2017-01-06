@@ -130,7 +130,7 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 	cccontexts := []*cockroachContext{}
 	for i := 0; i < len(hosts); i++ {
 		host := hosts[i]
-		db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key",
+		db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key&statement_timeout=10000",
 			username, host, port, certdir, certdir, certdir))
 		//db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s:papakia@%s:%d/bgpmon?sslmode=disable", username, host, port))
 		if err != nil {
@@ -161,7 +161,7 @@ func (c CockroachSession) Close() error {
 }
 
 func (c CockroachSession) GetDbConnection() (*sql.DB, error) {
-	return sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key",
+	return sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key&statement_timeout=10000",
 		c.username, c.hosts[0], c.port, c.certdir, c.certdir, c.certdir))
 }
 
@@ -324,7 +324,7 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			lastas := getLastAs(*msgUp)
 			//XXX func this
 			var (
-				nhip    net.IP
+				nhip net.IP
 			)
 			if msgUp.Attrs != nil {
 				if msgUp.Attrs.NextHop != nil {
