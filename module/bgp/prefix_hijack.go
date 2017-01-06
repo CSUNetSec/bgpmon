@@ -124,6 +124,7 @@ func (p PrefixHijackModule) Run() error {
 		if asRows.Err() != nil {
 			log.Errl.Printf("Failed to retrieve monitored ASes: %s", asRows.Err())
 		}
+		asRows.Close()
 
 		//retrieve monitored prefixes
 		prefixCache := NewPrefixCache()
@@ -151,6 +152,7 @@ func (p PrefixHijackModule) Run() error {
 				if prefixRows.Err() != nil {
 					log.Errl.Printf("Failed to retrieve prefixes for AS '%d': %s", monitoredAsNumber, prefixRows.Err)
 				}
+				prefixRows.Close()
 			}
 		}
 		log.Debl.Printf("finished adding prefixes to cache")
@@ -222,6 +224,7 @@ func (p PrefixHijackModule) Run() error {
 						log.Errl.Printf("Failed to write hijack to db: %s", err)
 					}
 				}
+				rows.Close()
 			}
 		}
 
