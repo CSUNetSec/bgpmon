@@ -11,6 +11,7 @@ import (
 	"github.com/CSUNetSec/bgpmon/log"
 	"github.com/CSUNetSec/bgpmon/module"
 	"github.com/CSUNetSec/bgpmon/session"
+	"github.com/CSUNetSec/bgpmon/util"
 )
 
 const (
@@ -68,7 +69,7 @@ func (p PrefixHijackModule) Run() error {
 	var executionTime time.Time
 
 	//get execution time
-	if p.startSecsFromEpoch == 0 {//we've been called from start and this isn't populated
+	if p.startSecsFromEpoch == 0 { //we've been called from start and this isn't populated
 		executionTime = time.Now().UTC()
 	} else {
 		executionTime = time.Unix(p.startSecsFromEpoch, 0)
@@ -80,6 +81,17 @@ func (p PrefixHijackModule) Run() error {
 
 		prefixId, updateId string
 	)
+	duration, err := time.ParseDuration(fmt.Sprintf("-%ds", p.lookBackSecs))
+	if err != nil {
+		log.Errl.Printf("Failed to parse duration: %s", err)
+		return err
+	}
+	quantum, _ := time.ParseDuration(fmt.Sprintf("-10m"))
+	trg, err := util.NewTimeRangeGenerator(executionTime.Add(duration), executionTime, quantum)
+	if err != nil {
+		log.Errl.Printf("Failed to create a TimeRangeGenerator:%s", err)
+		return err
+	}
 
 	//loop over sessions
 	for _, session := range p.inSessions {
@@ -115,110 +127,99 @@ func (p PrefixHijackModule) Run() error {
 
 		//retrieve monitored prefixes
 		prefixCache := NewPrefixCache()
-		for _, monitoredAsNumber := range monitoredAsNumbers {
-			log.Debl.Printf("Querying for monitored AS: %d\n", monitoredAsNumber)
-
-			//duration, err := time.ParseDuration("-168h") //7 days
-			duration, err := time.ParseDuration(fmt.Sprintf("-%ds",p.lookBackSecs)) 
-			if err != nil {
-				log.Errl.Printf("Failed to parse duration: %s", err)
-				continue
-			}
-
-			prefixRows, err := db.Query(monitorPrefixesStmt, monitoredAsNumber, executionTime.Add(duration), executionTime)
-			if err != nil {
-				log.Errl.Printf("Failed to query prefixes for AS '%d': %s", monitoredAsNumber, err)
-				continue
-			}
-
-			for prefixRows.Next() {
-				err := prefixRows.Scan(&ipAddress, &mask)
+		for trg.Next() {
+			datea, dateb := trg.DatePair()
+			for _, monitoredAsNumber := range monitoredAsNumbers {
+				log.Debl.Printf("Querying for monitored AS: %d\n", monitoredAsNumber)
+				prefixRows, err := db.Query(monitorPrefixesStmt, monitoredAsNumber, dateb.UTC().Format(time.RFC3339Nano), datea.UTC().Format(time.RFC3339Nano))
 				if err != nil {
-					log.Errl.Printf("Failed to parse next prefixes for AS '%d': %s", monitoredAsNumber, err)
+					log.Errl.Printf("Failed to query prefixes for AS '%d': %s", monitoredAsNumber, err)
 					continue
 				}
 
-				log.Debl.Printf("adding prefix %v:%d\n", ipAddress, mask)
-				prefixCache.AddPrefix(ipAddress, mask, monitoredAsNumber)
-			}
-
-			if prefixRows.Err() != nil {
-				log.Errl.Printf("Failed to retrieve prefixes for AS '%d': %s", monitoredAsNumber, prefixRows.Err)
-			}
-		}
-
-		//check each prefix node for a hijack
-		for _, prefixNode := range prefixCache.prefixNodes {
-			//log.Debl.Printf("CHECKING FOR HIJACKS ON %s/%d\n", prefixNode.ipAddress, prefixNode.mask)
-
-			//query for potential hijacks
-			//duration, err := time.ParseDuration("-168h") //7 days
-			duration, err := time.ParseDuration(fmt.Sprintf("-%dh", p.lookBackSecs))
-			if err != nil {
-				log.Errl.Printf("Failed to parse duration: %s", err)
-				continue
-			}
-
-			rows, err := db.Query(prefixesStmt, prefixNode.minAddress, prefixNode.maxAddress, prefixNode.mask, executionTime.Add(duration), executionTime)
-			if err != nil {
-				log.Errl.Printf("Failed to query potential hijacks: %s", err)
-				continue
-			}
-
-			for rows.Next() {
-				if rows.Err() != nil {
-					log.Errl.Printf("Failed to retrieve row for potential hijack: %s", err)
-					continue
-				}
-
-				err := rows.Scan(&prefixId, &updateId, &ipAddress, &mask, &asNumber)
-				if err != nil {
-					log.Errl.Printf("Failed to parse fields on potential hijack: %s", err)
-				}
-
-				//check if potential hijack has already been seen
-				if _, ok := p.hijackIds[prefixId]; ok {
-					continue
-				}
-
-				//check if AS path is valid
-				var asPathStr string
-				if err := db.QueryRow(updateMessageSelectStmt, updateId).Scan(&asPathStr); err != nil {
-					log.Errl.Printf("Failed to query update message: %s", err)
-					continue
-				}
-
-				validAs := false
-				for _, asNumberStr := range strings.Split(strings.Trim(asPathStr, " "), "  ") {
-					if asNumberStr == "" {
-						continue
-					}
-
-					asPathElement, err := strconv.ParseInt(asNumberStr, 10, 32)
+				for prefixRows.Next() {
+					err := prefixRows.Scan(&ipAddress, &mask)
 					if err != nil {
-						log.Errl.Printf("Unable to parse AS number '%s' into int: %s", asNumberStr, err)
+						log.Errl.Printf("Failed to parse next prefixes for AS '%d': %s", monitoredAsNumber, err)
 						continue
 					}
 
-					if prefixNode.ValidAsNumber(uint32(asPathElement)) {
-						validAs = true
-						break
-					}
+					log.Debl.Printf("adding prefix %v:%d\n", ipAddress, mask)
+					prefixCache.AddPrefix(ipAddress, mask, monitoredAsNumber)
 				}
 
-				if validAs {
+				if prefixRows.Err() != nil {
+					log.Errl.Printf("Failed to retrieve prefixes for AS '%d': %s", monitoredAsNumber, prefixRows.Err)
+				}
+			}
+
+			//check each prefix node for a hijack
+			for _, prefixNode := range prefixCache.prefixNodes {
+				//log.Debl.Printf("CHECKING FOR HIJACKS ON %s/%d\n", prefixNode.ipAddress, prefixNode.mask)
+
+				//query for potential hijacks
+
+				rows, err := db.Query(prefixesStmt, prefixNode.minAddress, prefixNode.maxAddress, prefixNode.mask, dateb.UTC().Format(time.RFC3339Nano), datea.UTC().Format(time.RFC3339Nano))
+				if err != nil {
+					log.Errl.Printf("Failed to query potential hijacks: %s", err)
 					continue
 				}
 
-				//TODO check historical data
+				for rows.Next() {
+					if rows.Err() != nil {
+						log.Errl.Printf("Failed to retrieve row for potential hijack: %s", err)
+						continue
+					}
 
-				log.Debl.Printf("\tNOTIFICATION OF HIJACK - IP_ADDRESS:%s MASK:%d AS_NUMBER:%d\n", ipAddress, mask, asNumber)
-				p.hijackIds[prefixId] = time.Now().Unix()
+					err := rows.Scan(&prefixId, &updateId, &ipAddress, &mask, &asNumber)
+					if err != nil {
+						log.Errl.Printf("Failed to parse fields on potential hijack: %s", err)
+					}
 
-				//write hijack to database
-				_, err = db.Query(hijackStmt, p.moduleId, updateId, prefixId, []byte(*prefixNode.ipAddress), prefixNode.mask)
-				if err != nil {
-					log.Errl.Printf("Failed to write hijack to db: %s", err)
+					//check if potential hijack has already been seen
+					if _, ok := p.hijackIds[prefixId]; ok {
+						continue
+					}
+
+					//check if AS path is valid
+					var asPathStr string
+					if err := db.QueryRow(updateMessageSelectStmt, updateId).Scan(&asPathStr); err != nil {
+						log.Errl.Printf("Failed to query update message: %s", err)
+						continue
+					}
+
+					validAs := false
+					for _, asNumberStr := range strings.Split(strings.Trim(asPathStr, " "), "  ") {
+						if asNumberStr == "" {
+							continue
+						}
+
+						asPathElement, err := strconv.ParseInt(asNumberStr, 10, 32)
+						if err != nil {
+							log.Errl.Printf("Unable to parse AS number '%s' into int: %s", asNumberStr, err)
+							continue
+						}
+
+						if prefixNode.ValidAsNumber(uint32(asPathElement)) {
+							validAs = true
+							break
+						}
+					}
+
+					if validAs {
+						continue
+					}
+
+					//TODO check historical data
+
+					log.Debl.Printf("\tNOTIFICATION OF HIJACK - IP_ADDRESS:%s MASK:%d AS_NUMBER:%d\n", ipAddress, mask, asNumber)
+					p.hijackIds[prefixId] = time.Now().Unix()
+
+					//write hijack to database
+					_, err = db.Query(hijackStmt, p.moduleId, updateId, prefixId, []byte(*prefixNode.ipAddress), prefixNode.mask)
+					if err != nil {
+						log.Errl.Printf("Failed to write hijack to db: %s", err)
+					}
 				}
 			}
 		}
