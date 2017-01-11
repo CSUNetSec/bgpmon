@@ -106,7 +106,20 @@ func (p *PrefixCache) AddPrefix(ipAddress net.IP, mask uint32, asNumber uint32) 
 					if prefixNode.SubPrefix(child) {
 						insertNode = child
 						found = true
-					}
+					} else if prefixNode.Equals(child) {
+                        //equals a child - add as number
+                        found := false
+                        for _, asNum := range child.asNumbers {
+                            if asNum == asNumber {
+                                found = true
+                            }
+                        }
+
+                        if !found {
+                            child.asNumbers = append(child.asNumbers, asNumber)
+                        }
+                        return nil
+                    }
 				}
 			}
 
@@ -180,7 +193,7 @@ func NewPrefixNode(ipAddress *net.IP, mask uint32, asNumber uint32) *PrefixNode 
 }
 
 func (p *PrefixNode) Equals(prefixNode *PrefixNode) bool {
-	if p.ipAddress == prefixNode.ipAddress && p.mask == prefixNode.mask {
+	if p.ipAddress.Equal(*prefixNode.ipAddress) && p.mask == prefixNode.mask {
 		return true
 	}
 
