@@ -68,13 +68,33 @@ func NewPrefixCache() *PrefixCache {
 func (p *PrefixCache) AddPrefix(ipAddress net.IP, mask uint32, asNumber uint32) error {
 	//create PrefxNode
 	prefixNode := NewPrefixNode(&ipAddress, mask, asNumber)
-	p.prefixNodes = append(p.prefixNodes, prefixNode)
+
+    //check if node already exists on prefix nodes slice
+    found := false
+    for _, node := range p.prefixNodes {
+        if prefixNode.Equals(node) {
+            found = true
+        }
+    }
+
+    if !found {
+	    p.prefixNodes = append(p.prefixNodes, prefixNode)
+    }
 
 	//check if prefixNode is subprefix/superprefix of a root
 	removeIndex := -1
 	for i, node := range p.roots {
 		if prefixNode.Equals(node) {
-			node.asNumbers = append(node.asNumbers, asNumber)
+            found := false
+            for _, asNum := range node.asNumbers {
+                if asNum == asNumber {
+                    found = true
+                }
+            }
+
+            if !found {
+			    node.asNumbers = append(node.asNumbers, asNumber)
+            }
 			return nil
 		} else if prefixNode.SubPrefix(node) {
 			//find correct node to insert on

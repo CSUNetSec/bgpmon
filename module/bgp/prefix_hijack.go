@@ -155,6 +155,7 @@ func (p PrefixHijackModule) Run() error {
 				prefixRows.Close()
 			}
 		}
+        prefixCache.Print();
 		log.Debl.Printf("finished adding prefixes to cache")
 		trg.Reset()
 		for trg.Next() {
