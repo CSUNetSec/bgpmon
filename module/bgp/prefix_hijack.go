@@ -155,14 +155,14 @@ func (p PrefixHijackModule) Run() error {
 				prefixRows.Close()
 			}
 		}
-        prefixCache.Print();
+		prefixCache.Print()
 		log.Debl.Printf("finished adding prefixes to cache")
 		trg.Reset()
 		for trg.Next() {
 			datea, dateb := trg.DatePair()
 			//check each prefix node for a hijack
+			log.Debl.Printf("CHECKING FOR HIJACKS ON %d prefixes for dates:%v - %v/\n", len(prefixCache.prefixNodes), dateb, datea)
 			for _, prefixNode := range prefixCache.prefixNodes {
-				log.Debl.Printf("CHECKING FOR HIJACKS ON %s/%d for dates:%v - %v/\n", prefixNode.ipAddress, prefixNode.mask, dateb, datea)
 				rows, err := db.Query(prefixesStmt, prefixNode.minAddress, prefixNode.maxAddress, prefixNode.mask, dateb.UTC().Format(time.RFC3339Nano), datea.UTC().Format(time.RFC3339Nano))
 				if err != nil {
 					log.Errl.Printf("Failed to query potential hijacks: %s", err)
