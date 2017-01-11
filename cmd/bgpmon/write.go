@@ -2,8 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"compress/bzip2"
 	"fmt"
+	radix "github.com/armon/go-radix"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -36,13 +39,58 @@ func getScanner(file *os.File) (scanner *bufio.Scanner) {
 	return
 }
 
+func IpToRadixkey(b []byte, mask uint8) string {
+	var buffer bytes.Buffer
+	for i := 0; i < len(b) && i < int(mask); i++ {
+		buffer.WriteString(fmt.Sprintf("%08b", b[i]))
+	}
+	return buffer.String()[:mask]
+}
+
+func maskstr2uint8(m string) (uint8, error) {
+	mask, err := strconv.ParseUint(m, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint8(mask), nil
+}
+
 func WriteMRTFile2(cmd *cli.Cmd) {
-	cmd.Spec = "FILENAME SESSION_ID"
+	cmd.Spec = "FILENAME SESSION_ID PREFIX_FILE"
 	filename := cmd.StringArg("FILENAME", "", "filename of mrt file")
 	sessionID := cmd.StringArg("SESSION_ID", "", "session to write data")
+	prefixfile := cmd.StringArg("PREFIX_FILE", "", "Filename that contains prefixes of interest to be written")
 
+	var rt *radix.Tree
 	cmd.Action = func() {
 		//open mrt file
+		if *prefixfile != "" {
+			pfile, err := os.Open(*prefixfile)
+			if err != nil {
+				panic(err)
+			}
+			defer pfile.Close()
+			ls := bufio.NewScanner(pfile)
+			rt = radix.New()
+			for ls.Scan() {
+				parts := strings.Split(ls.Text(), ",")
+				if len(parts) != 4 {
+					fmt.Printf("malformed line %s\n", ls.Text())
+					continue
+				}
+				mask, err := maskstr2uint8(parts[2])
+				if err != nil {
+					fmt.Printf("error parsing mask:%s err:%s", parts[2], err)
+					continue
+				}
+				rt.Insert(IpToRadixkey(net.ParseIP(parts[1]).To4(), mask), true)
+			}
+			if err := ls.Err(); err != nil {
+				fmt.Printf("prefix file scanner error:%s\n", err)
+			}
+			fmt.Printf("Set up a prefix tree with %d entries\n", rt.Len())
+		}
+
 		mrtFile, err := os.Open(*filename)
 		if err != nil {
 			panic(err)
@@ -66,11 +114,8 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 		defer stream.CloseAndRecv()
 
 		//loop over mrt messsages
-		messageCount := 0
 		startTime := time.Now()
-		headerLengthZeroCount := 0
-		unableToParseBodyCount := 0
-		notBGPUpdateCount := 0
+		headerLengthZeroCount, messageCount, unableToParseBodyCount, noAsPathCount, notBGPUpdateCount, monitoredCount, notMonitoredCount := 0, 0, 0, 0, 0, 0, 0
 		for scanner.Scan() {
 			messageCount++
 			data := scanner.Bytes()
@@ -79,21 +124,25 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 			if errmrt != nil {
 				notBGPUpdateCount++
 				fmt.Printf("Failed parsing MRT header %d :%s\n", messageCount, errmrt)
+				continue
 			}
 			bgph, errbgph := bgp4h.Parse()
 			if errbgph != nil {
 				notBGPUpdateCount++
 				fmt.Printf("Failed parsing BGP4MP header %d :%s\n", messageCount, errbgph)
+				continue
 			}
 			bgpup, errbgpup := bgph.Parse()
 			if errbgpup != nil {
 				headerLengthZeroCount++
 				fmt.Printf("Failed parsing BGP Header  %d :%s\n", messageCount, errbgpup)
+				continue
 			}
 			_, errup := bgpup.Parse()
 			if errup != nil {
 				unableToParseBodyCount++
 				fmt.Printf("Failed parsing BGP Update  %d :%s\n", messageCount, errup)
+				continue
 			}
 			capture := new(pb.BGPCapture)
 			bgphpb := bgp4h.(pp.BGP4MPHeaderer).GetHeader()
@@ -106,14 +155,45 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 			capture.PeerIp = bgphpb.PeerIp
 			capture.LocalIp = bgphpb.LocalIp
 			capture.Update = bgpup.(pp.BGPUpdater).GetUpdate()
+			if capture.Update == nil {
+				fmt.Printf("\n Update is nil! \n")
+			}
+			adr := capture.Update.GetAdvertizedRoutes()
+			//look for advertized routes with no as path
+			if att := capture.Update.GetAttrs(); att != nil {
+				if len(att.GetAsPath()) == 0 && adr != nil && len(adr.GetPrefixes()) != 0 {
+					fmt.Printf("no AS_PATH info on message:%d while advertised routes are present\n", messageCount)
+					noAsPathCount++
+					continue
+				}
+			}
+			//look only for prefixes of interest
+			monitoring_update := false
+			if rt == nil { // noone started the radix tree. monitoring all prefixes
+				monitoring_update = true
+			}
 
-			writeRequest := new(pb.WriteRequest)
-			writeRequest.Type = pb.WriteRequest_BGP_CAPTURE
-			writeRequest.BgpCapture = capture
-			writeRequest.SessionId = *sessionID
-			if err := stream.Send(writeRequest); err != nil {
-				fmt.Println("FOUND ERROR")
-				panic(err)
+			if adr != nil && len(adr.GetPrefixes()) != 0 && rt != nil {
+				prefixes := adr.GetPrefixes()
+				for i := range prefixes {
+					if _, _, found := rt.LongestPrefix(IpToRadixkey(prefixes[i].GetPrefix().GetIpv4(), uint8(prefixes[i].GetMask()))); found {
+						monitoring_update = true
+					}
+				}
+			}
+			if monitoring_update {
+				monitoredCount++
+				writeRequest := new(pb.WriteRequest)
+				writeRequest.Type = pb.WriteRequest_BGP_CAPTURE
+				writeRequest.BgpCapture = capture
+				writeRequest.SessionId = *sessionID
+				if err := stream.Send(writeRequest); err != nil {
+					fmt.Println("FOUND ERROR")
+					panic(err)
+				}
+			}
+			if !monitoring_update && rt != nil {
+				notMonitoredCount++
 			}
 			/*if messageCount%1000 == 0 {
 				fmt.Printf("message:%d time elapsed:%v\n", messageCount, time.Since(startTime))
@@ -125,18 +205,19 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 			fmt.Printf("Failed to parse message:%s", err)
 		}
 
-        fmt.Printf("time_elapsed:%v total_messages:%d messages/second:%f\n", time.Since(startTime), messageCount, float64(messageCount) / time.Since(startTime).Seconds())
+		fmt.Printf("time_elapsed:%v total_messages:%d messages/second:%f notUpdate:%d FailedParse:%d noAsPathCount:%d monitored:%d notMonitored:%d\n",
+			time.Since(startTime), messageCount, float64(messageCount)/time.Since(startTime).Seconds(), notBGPUpdateCount, unableToParseBodyCount, noAsPathCount, monitoredCount, notMonitoredCount)
 		/*fmt.Printf("processed %d total messages in %v\n"+
-			"\theaderLengthZeroCount:%d\n"+
-			"\tunableToParseBodyCount:%d\n"+
-			"\tnotBGPUpdateCount:%d\n"+
-			"\taUnixsPathLengthZeroCount:%d\n",
-			messageCount,
-			time.Since(startTime),
-			headerLengthZeroCount,
-			unableToParseBodyCount,
-			notBGPUpdateCount,
-			asPathLengthZeroCount)*/
+		"\theaderLengthZeroCount:%d\n"+
+		"\tunableToParseBodyCount:%d\n"+
+		"\tnotBGPUpdateCount:%d\n"+
+		"\taUnixsPathLengthZeroCount:%d\n",
+		messageCount,
+		time.Since(startTime),
+		headerLengthZeroCount,
+		unableToParseBodyCount,
+		notBGPUpdateCount,
+		asPathLengthZeroCount)*/
 	}
 }
 
