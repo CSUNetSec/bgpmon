@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/CSUNetSec/bgpmon/log"
 	"github.com/CSUNetSec/bgpmon/module"
 	"github.com/CSUNetSec/bgpmon/session"
