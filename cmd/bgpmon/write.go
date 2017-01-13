@@ -15,6 +15,7 @@ import (
 	"time"
 
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
+	common "github.com/CSUNetSec/netsec-protobufs/common"
 
 	pp "github.com/CSUNetSec/protoparse"
 	ppmrt "github.com/CSUNetSec/protoparse/protocol/mrt"
@@ -219,6 +220,228 @@ func WriteMRTFile2(cmd *cli.Cmd) {
 		notBGPUpdateCount,
 		asPathLengthZeroCount)*/
 	}
+}
+
+func WriteBGPHistory(cmd *cli.Cmd) {
+    cmd.Spec = "FILENAME SESSION_ID"
+    filename := cmd.StringArg("FILENAME", "", "filename of mrt file")
+	sessionId := cmd.StringArg("SESSION_ID", "", "session to write data")
+
+    timestamp := uint32(0)
+
+    cmd.Action = func() {
+		//open mrt file
+		mrtFile, err := os.Open(*filename)
+		if err != nil {
+			panic(err)
+		}
+		defer mrtFile.Close()
+
+		//open scanner
+		scanner := getScanner(mrtFile)
+
+        //create map for storing information (collector_ip -> as_number -> ip_addres -> mask -> count
+        collectorMap := make(map[string]map[uint32]map[string]map[int]uint32)
+
+		//loop over mrt messsages
+		messageCount := 0
+		startTime := time.Now()
+		for scanner.Scan() {
+			//parse mrt header
+			mrtHeader := &gomrt.MRTHeader{}
+			data := scanner.Bytes()
+			mrtHeader.DecodeFromBytes(data[:gomrt.MRT_COMMON_HEADER_LEN])
+			if mrtHeader.Len == 0 {
+				continue //header length = 0
+			}
+
+			//parse mrt body
+			mrt, err := gomrt.ParseMRTBody(mrtHeader, data[gomrt.MRT_COMMON_HEADER_LEN:])
+			if err != nil {
+				panic(err) //unable to parse body
+			}
+
+			switch mrtHeader.Type {
+			case gomrt.BGP4MP:
+				//parse bgp4mp message
+				bgp4mp, ok := mrt.Body.(*gomrt.BGP4MPMessage)
+				if !ok {
+					continue //not a bgpupdate message
+				}
+
+				//parse bgp4mp header
+				bgp4mpHeader := bgp4mp.BGP4MPHeader
+				bgpHeader := bgp4mp.BGPMessage.Header
+				if bgpHeader.Type != gobgp.BGP_MSG_UPDATE {
+					continue //not a bgpupdate message
+				}
+
+				//populate bgp update message protobuf
+                if timestamp == 0 {
+                    timestamp = uint32(mrtHeader.Timestamp)
+                    timestamp = timestamp - (timestamp % 900) //get 15 minute interval this belongs to
+                }
+                collectorIpAddress := fmt.Sprintf("%s", bgp4mpHeader.LocalIpAddress)
+				//peerIpAddress = fmt.Sprintf("%s", bgp4mpHeader.PeerIpAddress)
+
+				bgpUpdate := bgp4mp.BGPMessage.Body.(*gobgp.BGPUpdate)
+				var asPath []uint32
+				for _, pathAttribute := range bgpUpdate.PathAttributes {
+					if pathAttribute.GetType() == gobgp.BGP_ATTR_TYPE_AS_PATH {
+						pathAttrASPath := pathAttribute.(*gobgp.PathAttributeAsPath)
+						for _, asPathAttr := range pathAttrASPath.Value {
+							switch asPathParam := asPathAttr.(type) {
+							case *gobgp.AsPathParam:
+								asPath = make([]uint32, asPathParam.Num)
+								for i, asNumber := range asPathParam.AS {
+									asPath[i] = uint32(asNumber)
+								}
+							case *gobgp.As4PathParam:
+								//because a fallthrough isn't allowed in a type switch
+								asPath = make([]uint32, asPathParam.Num)
+								for i, asNumber := range asPathParam.AS {
+									asPath[i] = uint32(asNumber)
+								}
+							}
+						}
+					}
+				}
+
+				if len(asPath) == 0 {
+					continue //as path length = 0
+				}
+                asNumber := asPath[len(asPath)-1]
+
+				//advertisedPrefixes := []*pb.IPPrefix{}
+				for _, ipAddrPrefix := range bgpUpdate.NLRI {
+                    ipAddress := fmt.Sprintf("%v", ipAddrPrefix.Prefix)
+                    mask := int(ipAddrPrefix.Length)
+					//advertisedPrefixes = append(advertisedPrefixes, ipPrefix)
+
+                    //process prefix
+                    asNumberMap, exists := collectorMap[collectorIpAddress]
+                    if !exists {
+                        asNumberMap = make(map[uint32]map[string]map[int]uint32)
+                        collectorMap[collectorIpAddress] = asNumberMap
+                    }
+
+                    ipAddressMap, exists := asNumberMap[asNumber]
+                    if !exists {
+                        ipAddressMap = make(map[string]map[int]uint32)
+                        asNumberMap[asNumber] = ipAddressMap
+                    }
+
+                    maskMap, exists := ipAddressMap[ipAddress]
+                    if !exists {
+                        maskMap = make(map[int]uint32)
+                        ipAddressMap[ipAddress] = maskMap
+                    }
+
+                    _, exists = maskMap[mask]
+                    if !exists {
+                        maskMap[mask] = 1
+                    } else {
+                        maskMap[mask] = maskMap[mask] + 1
+                    }
+				}
+
+				/*withdrawnPrefixes := []*pb.IPPrefix{}
+				for _, ipAddrPrefix := range bgpUpdate.WithdrawnRoutes {
+					ipPrefix := new(pb.IPPrefix)
+					ipPrefix.PrefixIpAddress = fmt.Sprintf("%v", ipAddrPrefix.Prefix)
+					ipPrefix.PrefixMask = uint32(ipAddrPrefix.Length)
+					withdrawnPrefixes = append(withdrawnPrefixes, ipPrefix)
+				}*/
+
+				/*writeRequest := new(pb.WriteRequest)
+				writeRequest.Type = pb.WriteRequest_BGP_UPDATE
+				writeRequest.BgpUpdateMessage = bgpUpdateMessage
+				writeRequest.SessionId = *sessionID
+
+				if err := stream.Send(writeRequest); err != nil {
+					fmt.Println("FOUND ERROR")
+					panic(err)
+				}*/
+
+				messageCount++
+			default:
+				fmt.Printf("unsupported mrt message type '%v'", mrtHeader.Type)
+				continue
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			panic(err)
+		}
+
+		mrtFile.Close()
+
+		//open stream
+		client, err := getRPCClient()
+		if err != nil {
+			panic(err)
+		}
+
+		ctx := context.Background()
+		stream, err := client.Write(ctx)
+		if err != nil {
+			panic(err)
+		}
+		defer stream.CloseAndRecv()
+
+        //process map
+        for collector, asNumberMap := range collectorMap {
+            collectorIpAddress := net.ParseIP(collector)
+            if collectorIpAddress == nil {
+                fmt.Printf("Failed to parse collector ip address: %s\n", collector)
+                continue
+            }
+
+            collectorIpWrapper := new(common.IPAddressWrapper)
+            collectorIpWrapper.Ipv4 = []byte(collectorIpAddress)
+
+            for asNumber, ipAddressMap := range asNumberMap {
+                for ipAddress, maskMap := range ipAddressMap {
+                    ip := net.ParseIP(ipAddress)
+                    if ip == nil {
+                        fmt.Printf("Failed to parse prefix ip address: %s\n", ipAddress)
+                        continue
+                    }
+
+                    ipWrapper := new(common.IPAddressWrapper)
+                    ipWrapper.Ipv4 = []byte(ip)
+
+                    for mask, count := range maskMap {
+                        prefixWrapper := new(common.PrefixWrapper)
+                        prefixWrapper.Prefix = ipWrapper
+                        prefixWrapper.Mask = uint32(mask)
+
+                        prefixAdvertisementCount := new(pb.PrefixAdvertisementCount)
+                        prefixAdvertisementCount.Timestamp = timestamp
+                        prefixAdvertisementCount.CollectorIp = collectorIpWrapper
+                        prefixAdvertisementCount.AsNumber = asNumber
+                        prefixAdvertisementCount.Prefix = prefixWrapper
+                        prefixAdvertisementCount.Count = count
+
+                        //create write request
+                        writeRequest := new(pb.WriteRequest)
+                        writeRequest.Type = pb.WriteRequest_PREFIX_ADVERTISEMENT_COUNT
+                        writeRequest.PrefixAdvertisementCount = prefixAdvertisementCount
+                        writeRequest.SessionId = *sessionId
+
+                        //fmt.Printf("%v\n", writeRequest)
+
+                        //send write request
+                        if err := stream.Send(writeRequest); err != nil {
+                            panic(err)
+                        }
+                    }
+                }
+            }
+        }
+
+		fmt.Printf("processed %d total messages in %v\n", messageCount, time.Since(startTime))
+    }
 }
 
 func WriteMRTFile(cmd *cli.Cmd) {
