@@ -240,7 +240,7 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 		//open scanner
 		scanner := getScanner(mrtFile)
 
-		//create map for storing information (collector_ip -> as_number -> ip_addres -> mask -> count
+		//create map for storing information (collector_ip -> as_number -> ip_address -> mask -> count
 		collectorMap := make(map[string]map[uint32]map[string]map[int]uint32)
 
 		//loop over mrt messsages
@@ -248,76 +248,68 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 		startTime := time.Now()
 		for scanner.Scan() {
 			//parse mrt header
-			mrtHeader := &gomrt.MRTHeader{}
 			data := scanner.Bytes()
-			mrtHeader.DecodeFromBytes(data[:gomrt.MRT_COMMON_HEADER_LEN])
-			if mrtHeader.Len == 0 {
-				continue //header length = 0
+			mrth := ppmrt.NewMrtHdrBuf(data)
+			bgp4h, errmrt := mrth.Parse()
+			if errmrt != nil {
+				fmt.Printf("Failed parsing MRT header %d :%s\n", messageCount, errmrt)
+				continue
 			}
-
-			//parse mrt body
-			mrt, err := gomrt.ParseMRTBody(mrtHeader, data[gomrt.MRT_COMMON_HEADER_LEN:])
-			if err != nil {
-				panic(err) //unable to parse body
+			bgph, errbgph := bgp4h.Parse()
+			if errbgph != nil {
+				fmt.Printf("Failed parsing BGP4MP header %d :%s\n", messageCount, errbgph)
+				continue
 			}
+			bgpup, errbgpup := bgph.Parse()
+			if errbgpup != nil {
+				fmt.Printf("Failed parsing BGP Header  %d :%s\n", messageCount, errbgpup)
+				continue
+			}
+			_, errup := bgpup.Parse()
+			if errup != nil {
+				fmt.Printf("Failed parsing BGP Update  %d :%s\n", messageCount, errup)
+				continue
+			}
+			bgphpb := bgp4h.(pp.BGP4MPHeaderer).GetHeader()
+			mrtpb := mrth.GetHeader()
+			upd := bgpup.(pp.BGPUpdater).GetUpdate()
+			if upd == nil {
+				fmt.Printf("\n Update is nil! \n")
+				continue
+			}
+			adr := upd.GetAdvertizedRoutes()
 
-			switch mrtHeader.Type {
-			case gomrt.BGP4MP:
-				//parse bgp4mp message
-				bgp4mp, ok := mrt.Body.(*gomrt.BGP4MPMessage)
-				if !ok {
-					continue //not a bgpupdate message
-				}
-
-				//parse bgp4mp header
-				bgp4mpHeader := bgp4mp.BGP4MPHeader
-				bgpHeader := bgp4mp.BGPMessage.Header
-				if bgpHeader.Type != gobgp.BGP_MSG_UPDATE {
-					continue //not a bgpupdate message
-				}
-
-				//populate bgp update message protobuf
-				if timestamp == 0 {
-					timestamp = uint32(mrtHeader.Timestamp)
-					timestamp = timestamp - (timestamp % 900) //get 15 minute interval this belongs to
-				}
-				collectorIpAddress := fmt.Sprintf("%s", bgp4mpHeader.LocalIpAddress)
-				//peerIpAddress = fmt.Sprintf("%s", bgp4mpHeader.PeerIpAddress)
-
-				bgpUpdate := bgp4mp.BGPMessage.Body.(*gobgp.BGPUpdate)
-				var asPath []uint32
-				for _, pathAttribute := range bgpUpdate.PathAttributes {
-					if pathAttribute.GetType() == gobgp.BGP_ATTR_TYPE_AS_PATH {
-						pathAttrASPath := pathAttribute.(*gobgp.PathAttributeAsPath)
-						for _, asPathAttr := range pathAttrASPath.Value {
-							switch asPathParam := asPathAttr.(type) {
-							case *gobgp.AsPathParam:
-								asPath = make([]uint32, asPathParam.Num)
-								for i, asNumber := range asPathParam.AS {
-									asPath[i] = uint32(asNumber)
-								}
-							case *gobgp.As4PathParam:
-								//because a fallthrough isn't allowed in a type switch
-								asPath = make([]uint32, asPathParam.Num)
-								for i, asNumber := range asPathParam.AS {
-									asPath[i] = uint32(asNumber)
-								}
+			if timestamp == 0 {
+				timestamp = uint32(mrtpb.Timestamp)
+				timestamp = timestamp - (timestamp % 900) //get 15 minute interval this belongs to
+			}
+			collectorIpAddress := fmt.Sprintf("%s", net.IP(bgphpb.LocalIp.GetIpv4()))
+			var asPath []uint32
+			if att := upd.GetAttrs(); att != nil {
+				if asp := att.GetAsPath(); len(asp) != 0 {
+					for _, seg := range asp {
+						if seg.AsSeq != nil {
+							for _, as := range seg.AsSeq {
+								asPath = append(asPath, as)
 							}
 						}
+						if seg.AsSet != nil {
+							//XXX: actually create more aspaths with all set elements
+							asPath = append(asPath, seg.AsSet[0])
+						}
 					}
+
 				}
-
-				if len(asPath) == 0 {
-					continue //as path length = 0
-				}
-				asNumber := asPath[len(asPath)-1]
-
-				//advertisedPrefixes := []*pb.IPPrefix{}
-				for _, ipAddrPrefix := range bgpUpdate.NLRI {
-					ipAddress := fmt.Sprintf("%v", ipAddrPrefix.Prefix)
-					mask := int(ipAddrPrefix.Length)
-					//advertisedPrefixes = append(advertisedPrefixes, ipPrefix)
-
+			}
+			if len(asPath) == 0 {
+				continue //as path length = 0
+			}
+			asNumber := asPath[len(asPath)-1]
+			if adr != nil && len(adr.GetPrefixes()) != 0 {
+				prefixes := adr.GetPrefixes()
+				for i := range prefixes {
+					ipAddress := fmt.Sprintf("%s", net.IP(prefixes[i].GetPrefix().GetIpv4()))
+					mask := int(prefixes[i].GetMask())
 					//process prefix
 					asNumberMap, exists := collectorMap[collectorIpAddress]
 					if !exists {
@@ -344,29 +336,6 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 						maskMap[mask] = maskMap[mask] + 1
 					}
 				}
-
-				/*withdrawnPrefixes := []*pb.IPPrefix{}
-				for _, ipAddrPrefix := range bgpUpdate.WithdrawnRoutes {
-					ipPrefix := new(pb.IPPrefix)
-					ipPrefix.PrefixIpAddress = fmt.Sprintf("%v", ipAddrPrefix.Prefix)
-					ipPrefix.PrefixMask = uint32(ipAddrPrefix.Length)
-					withdrawnPrefixes = append(withdrawnPrefixes, ipPrefix)
-				}*/
-
-				/*writeRequest := new(pb.WriteRequest)
-				writeRequest.Type = pb.WriteRequest_BGP_UPDATE
-				writeRequest.BgpUpdateMessage = bgpUpdateMessage
-				writeRequest.SessionId = *sessionID
-
-				if err := stream.Send(writeRequest); err != nil {
-					fmt.Println("FOUND ERROR")
-					panic(err)
-				}*/
-
-				messageCount++
-			default:
-				fmt.Printf("unsupported mrt message type '%v'", mrtHeader.Type)
-				continue
 			}
 		}
 
@@ -429,7 +398,7 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 						writeRequest.PrefixAdvertisementCount = prefixAdvertisementCount
 						writeRequest.SessionId = *sessionId
 
-						//fmt.Printf("%v\n", writeRequest)
+						//fmt.Printf("SENDING REQUEST %v\n", writeRequest)
 
 						//send write request
 						if err := stream.Send(writeRequest); err != nil {
