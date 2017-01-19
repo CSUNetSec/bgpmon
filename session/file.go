@@ -1,7 +1,7 @@
 package session
 
 import (
-	"errors"
+	"fmt"
 
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 )
@@ -29,5 +29,6 @@ func (f FileSession) Close() error {
 }
 
 func (f FileSession) Write(w *pb.WriteRequest) error {
-	return errors.New("unimplemented")
+	fmt.Printf("got request:%+v\n", w)
+	return nil
 }

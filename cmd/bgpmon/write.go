@@ -350,33 +350,6 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 				}
 				stats.DestAsToPrefixCounts[asstr] = destpr
 			}
-			/*		//process prefix
-						asNumberMap, exists := collectorMap[collectorIpAddress]
-						if !exists {
-							asNumberMap = make(map[uint32]map[string]map[int]uint32)
-							collectorMap[collectorIpAddress] = asNumberMap
-						}
-
-						ipAddressMap, exists := asNumberMap[asNumber]
-						if !exists {
-							ipAddressMap = make(map[string]map[int]uint32)
-							asNumberMap[asNumber] = ipAddressMap
-						}
-
-						maskMap, exists := ipAddressMap[ipAddress]
-						if !exists {
-							maskMap = make(map[int]uint32)
-							ipAddressMap[ipAddress] = maskMap
-						}
-
-						_, exists = maskMap[mask]
-						if !exists {
-							maskMap[mask] = 1
-						} else {
-							maskMap[mask] = maskMap[mask] + 1
-						}
-					}
-				}*/
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -384,75 +357,31 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 		}
 
 		mrtFile.Close()
-		for k, v := range colstats {
-			fmt.Printf("session %s collector:%s stats:%+v\n ------------------------ \n", *sessionId, k, v)
+		//open stream
+		client, err := getRPCClient()
+		if err != nil {
+			panic(err)
 		}
-		/*
-			//open stream
-			client, err := getRPCClient()
-			if err != nil {
+
+		ctx := context.Background()
+		stream, err := client.Write(ctx)
+		if err != nil {
+			panic(err)
+		}
+		defer stream.CloseAndRecv()
+
+		//send write request
+		for _, v := range colstats {
+			writeRequest := new(pb.WriteRequest)
+			writeRequest.Type = pb.WriteRequest_BGP_STATS
+			writeRequest.BgpStats = v
+			writeRequest.SessionId = *sessionId
+
+			if err := stream.Send(writeRequest); err != nil {
 				panic(err)
 			}
-
-			ctx := context.Background()
-			stream, err := client.Write(ctx)
-			if err != nil {
-				panic(err)
-			}
-			defer stream.CloseAndRecv()
-
-			//process map
-			for collector, asNumberMap := range collectorMap {
-				collectorIpAddress := net.ParseIP(collector)
-				if collectorIpAddress == nil {
-					fmt.Printf("Failed to parse collector ip address: %s\n", collector)
-					continue
-				}
-
-				collectorIpWrapper := new(common.IPAddressWrapper)
-				collectorIpWrapper.Ipv4 = []byte(collectorIpAddress)
-
-				for asNumber, ipAddressMap := range asNumberMap {
-					for ipAddress, maskMap := range ipAddressMap {
-						ip := net.ParseIP(ipAddress)
-						if ip == nil {
-							fmt.Printf("Failed to parse prefix ip address: %s\n", ipAddress)
-							continue
-						}
-
-						ipWrapper := new(common.IPAddressWrapper)
-						ipWrapper.Ipv4 = []byte(ip)
-
-						for mask, count := range maskMap {
-							prefixWrapper := new(common.PrefixWrapper)
-							prefixWrapper.Prefix = ipWrapper
-							prefixWrapper.Mask = uint32(mask)
-
-							prefixAdvertisementCount := new(pb.PrefixAdvertisementCount)
-							prefixAdvertisementCount.Timestamp = timestamp
-							prefixAdvertisementCount.CollectorIp = collectorIpWrapper
-							prefixAdvertisementCount.AsNumber = asNumber
-							prefixAdvertisementCount.Prefix = prefixWrapper
-							prefixAdvertisementCount.Count = count
-
-							//create write request
-							writeRequest := new(pb.WriteRequest)
-							writeRequest.Type = pb.WriteRequest_PREFIX_ADVERTISEMENT_COUNT
-							writeRequest.PrefixAdvertisementCount = prefixAdvertisementCount
-							writeRequest.SessionId = *sessionId
-
-							//fmt.Printf("SENDING REQUEST %v\n", writeRequest)
-
-							//send write request
-							if err := stream.Send(writeRequest); err != nil {
-								panic(err)
-							}
-						}
-					}
-				}
-			}*/
-
-		fmt.Printf("processed %d total messages in %v\n", messageCount, time.Since(startTime))
+		}
+		fmt.Printf("processed %d total messages in %v. sent %d messages to the server\n", messageCount, time.Since(startTime), len(colstats))
 	}
 }
 
