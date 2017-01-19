@@ -5,24 +5,21 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"fmt"
-	radix "github.com/armon/go-radix"
-	"net"
-	"os"
-	"strconv"
-	"strings"
-
-	"path/filepath"
-	"time"
-
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
-	common "github.com/CSUNetSec/netsec-protobufs/common"
-
 	pp "github.com/CSUNetSec/protoparse"
 	ppmrt "github.com/CSUNetSec/protoparse/protocol/mrt"
+	pputil "github.com/CSUNetSec/protoparse/util"
+	radix "github.com/armon/go-radix"
 	cli "github.com/jawher/mow.cli"
 	gobgp "github.com/osrg/gobgp/packet/bgp"
 	gomrt "github.com/osrg/gobgp/packet/mrt"
 	"golang.org/x/net/context"
+	"net"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 func getScanner(file *os.File) (scanner *bufio.Scanner) {
@@ -227,7 +224,7 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 	filename := cmd.StringArg("FILENAME", "", "filename of mrt file")
 	sessionId := cmd.StringArg("SESSION_ID", "", "session to write data")
 
-	timestamp := uint32(0)
+	//timestamp := uint32(0)
 
 	cmd.Action = func() {
 		//open mrt file
@@ -241,11 +238,16 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 		scanner := getScanner(mrtFile)
 
 		//create map for storing information (collector_ip -> as_number -> ip_address -> mask -> count
-		collectorMap := make(map[string]map[uint32]map[string]map[int]uint32)
+		//collectorMap := make(map[string]map[uint32]map[string]map[int]uint32)
 
 		//loop over mrt messsages
 		messageCount := 0
 		startTime := time.Now()
+		var (
+			stats  *pb.BGPStats
+			exists bool
+		)
+		colstats := make(map[string]*pb.BGPStats)
 		for scanner.Scan() {
 			//parse mrt header
 			data := scanner.Bytes()
@@ -279,11 +281,20 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 			}
 			adr := upd.GetAdvertizedRoutes()
 
-			if timestamp == 0 {
-				timestamp = uint32(mrtpb.Timestamp)
-				timestamp = timestamp - (timestamp % 900) //get 15 minute interval this belongs to
+			colip := net.IP(pputil.GetIP(bgphpb.LocalIp))
+			ipstr := colip.String()
+			if stats, exists = colstats[ipstr]; !exists {
+				stats = new(pb.BGPStats)
+				stats.TimeStartSecEpoch = uint64(mrtpb.Timestamp)
+				stats.DurationSec = (15 * 60)
+				stats.MsgCounts = new(pb.Count)
+				stats.MsgCounts.Count = make(map[string]uint32)
+				stats.DestAsToASPCounts = make(map[string]*pb.Count)
+				stats.DestAsToPrefixCounts = make(map[string]*pb.Count)
+				colstats[ipstr] = stats
 			}
-			collectorIpAddress := fmt.Sprintf("%s", net.IP(bgphpb.LocalIp.GetIpv4()))
+			messageCount++
+			stats.MsgCounts.Count["UpdateCount"] = uint32(messageCount)
 			var asPath []uint32
 			if att := upd.GetAttrs(); att != nil {
 				if asp := att.GetAsPath(); len(asp) != 0 {
@@ -305,38 +316,67 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 				continue //as path length = 0
 			}
 			asNumber := asPath[len(asPath)-1]
-			if adr != nil && len(adr.GetPrefixes()) != 0 {
-				prefixes := adr.GetPrefixes()
-				for i := range prefixes {
-					ipAddress := fmt.Sprintf("%s", net.IP(prefixes[i].GetPrefix().GetIpv4()))
-					mask := int(prefixes[i].GetMask())
-					//process prefix
-					asNumberMap, exists := collectorMap[collectorIpAddress]
-					if !exists {
-						asNumberMap = make(map[uint32]map[string]map[int]uint32)
-						collectorMap[collectorIpAddress] = asNumberMap
-					}
-
-					ipAddressMap, exists := asNumberMap[asNumber]
-					if !exists {
-						ipAddressMap = make(map[string]map[int]uint32)
-						asNumberMap[asNumber] = ipAddressMap
-					}
-
-					maskMap, exists := ipAddressMap[ipAddress]
-					if !exists {
-						maskMap = make(map[int]uint32)
-						ipAddressMap[ipAddress] = maskMap
-					}
-
-					_, exists = maskMap[mask]
-					if !exists {
-						maskMap[mask] = 1
-					} else {
-						maskMap[mask] = maskMap[mask] + 1
-					}
+			asstr := fmt.Sprintf("%d", asNumber)
+			destasp, exists := stats.DestAsToASPCounts[asstr]
+			if !exists {
+				destasp = new(pb.Count)
+				destasp.Count = make(map[string]uint32)
+			}
+			for i := 0; i < len(asPath)-1; i++ {
+				key := fmt.Sprintf("%d,%d", asPath[i], asPath[i+1])
+				if num, exval := destasp.Count[key]; exval {
+					destasp.Count[key] = num + 1
+				} else {
+					destasp.Count[key] = 1
 				}
 			}
+			stats.DestAsToASPCounts[asstr] = destasp
+			if adr != nil && len(adr.GetPrefixes()) != 0 {
+				destpr, exists := stats.DestAsToPrefixCounts[asstr]
+				if !exists {
+					destpr = new(pb.Count)
+					destpr.Count = make(map[string]uint32)
+				}
+				prefixes := adr.GetPrefixes()
+				for i := range prefixes {
+					ipAddress := fmt.Sprintf("%s", net.IP(pputil.GetIP(prefixes[i].GetPrefix())))
+					mask := int(prefixes[i].GetMask())
+					key := fmt.Sprintf("%s/%d", ipAddress, mask)
+					if num, exval := destpr.Count[key]; exval {
+						destpr.Count[key] = num + 1
+					} else {
+						destpr.Count[key] = 1
+					}
+				}
+				stats.DestAsToPrefixCounts[asstr] = destpr
+			}
+			/*		//process prefix
+						asNumberMap, exists := collectorMap[collectorIpAddress]
+						if !exists {
+							asNumberMap = make(map[uint32]map[string]map[int]uint32)
+							collectorMap[collectorIpAddress] = asNumberMap
+						}
+
+						ipAddressMap, exists := asNumberMap[asNumber]
+						if !exists {
+							ipAddressMap = make(map[string]map[int]uint32)
+							asNumberMap[asNumber] = ipAddressMap
+						}
+
+						maskMap, exists := ipAddressMap[ipAddress]
+						if !exists {
+							maskMap = make(map[int]uint32)
+							ipAddressMap[ipAddress] = maskMap
+						}
+
+						_, exists = maskMap[mask]
+						if !exists {
+							maskMap[mask] = 1
+						} else {
+							maskMap[mask] = maskMap[mask] + 1
+						}
+					}
+				}*/
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -344,70 +384,73 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 		}
 
 		mrtFile.Close()
-
-		//open stream
-		client, err := getRPCClient()
-		if err != nil {
-			panic(err)
+		for k, v := range colstats {
+			fmt.Printf("session %s collector:%s stats:%+v\n ------------------------ \n", *sessionId, k, v)
 		}
-
-		ctx := context.Background()
-		stream, err := client.Write(ctx)
-		if err != nil {
-			panic(err)
-		}
-		defer stream.CloseAndRecv()
-
-		//process map
-		for collector, asNumberMap := range collectorMap {
-			collectorIpAddress := net.ParseIP(collector)
-			if collectorIpAddress == nil {
-				fmt.Printf("Failed to parse collector ip address: %s\n", collector)
-				continue
+		/*
+			//open stream
+			client, err := getRPCClient()
+			if err != nil {
+				panic(err)
 			}
 
-			collectorIpWrapper := new(common.IPAddressWrapper)
-			collectorIpWrapper.Ipv4 = []byte(collectorIpAddress)
+			ctx := context.Background()
+			stream, err := client.Write(ctx)
+			if err != nil {
+				panic(err)
+			}
+			defer stream.CloseAndRecv()
 
-			for asNumber, ipAddressMap := range asNumberMap {
-				for ipAddress, maskMap := range ipAddressMap {
-					ip := net.ParseIP(ipAddress)
-					if ip == nil {
-						fmt.Printf("Failed to parse prefix ip address: %s\n", ipAddress)
-						continue
-					}
+			//process map
+			for collector, asNumberMap := range collectorMap {
+				collectorIpAddress := net.ParseIP(collector)
+				if collectorIpAddress == nil {
+					fmt.Printf("Failed to parse collector ip address: %s\n", collector)
+					continue
+				}
 
-					ipWrapper := new(common.IPAddressWrapper)
-					ipWrapper.Ipv4 = []byte(ip)
+				collectorIpWrapper := new(common.IPAddressWrapper)
+				collectorIpWrapper.Ipv4 = []byte(collectorIpAddress)
 
-					for mask, count := range maskMap {
-						prefixWrapper := new(common.PrefixWrapper)
-						prefixWrapper.Prefix = ipWrapper
-						prefixWrapper.Mask = uint32(mask)
+				for asNumber, ipAddressMap := range asNumberMap {
+					for ipAddress, maskMap := range ipAddressMap {
+						ip := net.ParseIP(ipAddress)
+						if ip == nil {
+							fmt.Printf("Failed to parse prefix ip address: %s\n", ipAddress)
+							continue
+						}
 
-						prefixAdvertisementCount := new(pb.PrefixAdvertisementCount)
-						prefixAdvertisementCount.Timestamp = timestamp
-						prefixAdvertisementCount.CollectorIp = collectorIpWrapper
-						prefixAdvertisementCount.AsNumber = asNumber
-						prefixAdvertisementCount.Prefix = prefixWrapper
-						prefixAdvertisementCount.Count = count
+						ipWrapper := new(common.IPAddressWrapper)
+						ipWrapper.Ipv4 = []byte(ip)
 
-						//create write request
-						writeRequest := new(pb.WriteRequest)
-						writeRequest.Type = pb.WriteRequest_PREFIX_ADVERTISEMENT_COUNT
-						writeRequest.PrefixAdvertisementCount = prefixAdvertisementCount
-						writeRequest.SessionId = *sessionId
+						for mask, count := range maskMap {
+							prefixWrapper := new(common.PrefixWrapper)
+							prefixWrapper.Prefix = ipWrapper
+							prefixWrapper.Mask = uint32(mask)
 
-						//fmt.Printf("SENDING REQUEST %v\n", writeRequest)
+							prefixAdvertisementCount := new(pb.PrefixAdvertisementCount)
+							prefixAdvertisementCount.Timestamp = timestamp
+							prefixAdvertisementCount.CollectorIp = collectorIpWrapper
+							prefixAdvertisementCount.AsNumber = asNumber
+							prefixAdvertisementCount.Prefix = prefixWrapper
+							prefixAdvertisementCount.Count = count
 
-						//send write request
-						if err := stream.Send(writeRequest); err != nil {
-							panic(err)
+							//create write request
+							writeRequest := new(pb.WriteRequest)
+							writeRequest.Type = pb.WriteRequest_PREFIX_ADVERTISEMENT_COUNT
+							writeRequest.PrefixAdvertisementCount = prefixAdvertisementCount
+							writeRequest.SessionId = *sessionId
+
+							//fmt.Printf("SENDING REQUEST %v\n", writeRequest)
+
+							//send write request
+							if err := stream.Send(writeRequest); err != nil {
+								panic(err)
+							}
 						}
 					}
 				}
-			}
-		}
+			}*/
 
 		fmt.Printf("processed %d total messages in %v\n", messageCount, time.Since(startTime))
 	}
