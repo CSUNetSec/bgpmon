@@ -14,6 +14,7 @@ import (
 	gobgp "github.com/osrg/gobgp/packet/bgp"
 	gomrt "github.com/osrg/gobgp/packet/mrt"
 	"golang.org/x/net/context"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -378,6 +379,9 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 			writeRequest.SessionId = *sessionId
 
 			if err := stream.Send(writeRequest); err != nil {
+				if err == io.EOF {
+					break
+				}
 				panic(err)
 			}
 		}
