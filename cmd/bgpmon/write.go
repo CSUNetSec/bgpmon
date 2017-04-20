@@ -11,8 +11,6 @@ import (
 	pputil "github.com/CSUNetSec/protoparse/util"
 	radix "github.com/armon/go-radix"
 	cli "github.com/jawher/mow.cli"
-	gobgp "github.com/osrg/gobgp/packet/bgp"
-	gomrt "github.com/osrg/gobgp/packet/mrt"
 	"golang.org/x/net/context"
 	"io"
 	"net"
@@ -54,7 +52,7 @@ func maskstr2uint8(m string) (uint8, error) {
 	return uint8(mask), nil
 }
 
-func WriteMRTFile2(cmd *cli.Cmd) {
+func WriteMRTFile(cmd *cli.Cmd) {
 	cmd.Spec = "FILENAME SESSION_ID PREFIX_FILE"
 	filename := cmd.StringArg("FILENAME", "", "filename of mrt file")
 	sessionID := cmd.StringArg("SESSION_ID", "", "session to write data")
@@ -386,176 +384,6 @@ func WriteBGPHistory(cmd *cli.Cmd) {
 			}
 		}
 		fmt.Printf("processed %d total messages in %v. sent %d messages to the server\n", messageCount, time.Since(startTime), len(colstats))
-	}
-}
-
-func WriteMRTFile(cmd *cli.Cmd) {
-	cmd.Spec = "FILENAME SESSION_ID"
-	filename := cmd.StringArg("FILENAME", "", "filename of mrt file")
-	sessionID := cmd.StringArg("SESSION_ID", "", "session to write data")
-
-	cmd.Action = func() {
-		//open mrt file
-		mrtFile, err := os.Open(*filename)
-		if err != nil {
-			panic(err)
-		}
-
-		//open scanner
-		scanner := bufio.NewScanner(mrtFile)
-		scanner.Split(gomrt.SplitMrt)
-
-		//open stream
-		client, err := getRPCClient()
-		if err != nil {
-			panic(err)
-		}
-
-		ctx := context.Background()
-		stream, err := client.Write(ctx)
-		if err != nil {
-			panic(err)
-		}
-		defer stream.CloseAndRecv()
-
-		//loop over mrt messsages
-		messageCount := 0
-		startTime := time.Now()
-		headerLengthZeroCount := 0
-		unableToParseBodyCount := 0
-		notBGPUpdateCount := 0
-		asPathLengthZeroCount := 0
-		for scanner.Scan() {
-			//parse mrt header
-			mrtHeader := &gomrt.MRTHeader{}
-			data := scanner.Bytes()
-			mrtHeader.DecodeFromBytes(data[:gomrt.MRT_COMMON_HEADER_LEN])
-			if mrtHeader.Len == 0 {
-				headerLengthZeroCount++
-				continue
-			}
-
-			//parse mrt body
-			mrt, err := gomrt.ParseMRTBody(mrtHeader, data[gomrt.MRT_COMMON_HEADER_LEN:])
-			if err != nil {
-				unableToParseBodyCount++
-				panic(err)
-			}
-
-			switch mrtHeader.Type {
-			case gomrt.BGP4MP:
-				//parse bgp4mp message
-				bgp4mp, ok := mrt.Body.(*gomrt.BGP4MPMessage)
-				if !ok {
-					notBGPUpdateCount++
-					continue
-				}
-
-				//parse bgp4mp header
-				bgp4mpHeader := bgp4mp.BGP4MPHeader
-				bgpHeader := bgp4mp.BGPMessage.Header
-				if bgpHeader.Type != gobgp.BGP_MSG_UPDATE {
-					notBGPUpdateCount++
-					continue
-				}
-
-				//populate bgp update message protobuf
-				bgpUpdateMessage := new(pb.BGPUpdateMessage)
-				bgpUpdateMessage.Timestamp = int64(mrtHeader.Timestamp)
-				bgpUpdateMessage.CollectorIpAddress = fmt.Sprintf("%s", bgp4mpHeader.LocalIpAddress)
-				//TODO collector mac
-				//TODO collector port
-				bgpUpdateMessage.PeerIpAddress = fmt.Sprintf("%s", bgp4mpHeader.PeerIpAddress)
-
-				bgpUpdate := bgp4mp.BGPMessage.Body.(*gobgp.BGPUpdate)
-				var asPath []uint32
-				for _, pathAttribute := range bgpUpdate.PathAttributes {
-					if pathAttribute.GetType() == gobgp.BGP_ATTR_TYPE_AS_PATH {
-						pathAttrASPath := pathAttribute.(*gobgp.PathAttributeAsPath)
-						for _, asPathAttr := range pathAttrASPath.Value {
-							switch asPathParam := asPathAttr.(type) {
-							case *gobgp.AsPathParam:
-								asPath = make([]uint32, asPathParam.Num)
-								for i, asNumber := range asPathParam.AS {
-									asPath[i] = uint32(asNumber)
-								}
-							case *gobgp.As4PathParam:
-								//because a fallthrough isn't allowed in a type switch
-								asPath = make([]uint32, asPathParam.Num)
-								for i, asNumber := range asPathParam.AS {
-									asPath[i] = uint32(asNumber)
-								}
-							}
-						}
-					}
-				}
-
-				if len(asPath) == 0 {
-					asPathLengthZeroCount++
-					continue
-				}
-				bgpUpdateMessage.AsPath = asPath
-
-				//TODO next hop
-
-				advertisedPrefixes := []*pb.IPPrefix{}
-				for _, ipAddrPrefix := range bgpUpdate.NLRI {
-					ipPrefix := new(pb.IPPrefix)
-					ipPrefix.PrefixIpAddress = fmt.Sprintf("%v", ipAddrPrefix.Prefix)
-					ipPrefix.PrefixMask = uint32(ipAddrPrefix.Length)
-					advertisedPrefixes = append(advertisedPrefixes, ipPrefix)
-				}
-				bgpUpdateMessage.AdvertisedPrefixes = advertisedPrefixes
-
-				withdrawnPrefixes := []*pb.IPPrefix{}
-				for _, ipAddrPrefix := range bgpUpdate.WithdrawnRoutes {
-					ipPrefix := new(pb.IPPrefix)
-					ipPrefix.PrefixIpAddress = fmt.Sprintf("%v", ipAddrPrefix.Prefix)
-					ipPrefix.PrefixMask = uint32(ipAddrPrefix.Length)
-					withdrawnPrefixes = append(withdrawnPrefixes, ipPrefix)
-				}
-				bgpUpdateMessage.WithdrawnPrefixes = withdrawnPrefixes
-
-				writeRequest := new(pb.WriteRequest)
-				writeRequest.Type = pb.WriteRequest_BGP_UPDATE
-				writeRequest.BgpUpdateMessage = bgpUpdateMessage
-				writeRequest.SessionId = *sessionID
-
-				if err := stream.Send(writeRequest); err != nil {
-					fmt.Println("FOUND ERROR")
-					panic(err)
-				}
-
-				/*m := new(pb.Empty)
-				  if err := stream.ClientStream.Recv(m); err != nil {
-				      panic(err)
-				  }*/
-
-				messageCount++
-				//fmt.Printf("sent msg num:%d\n", messageCount)
-			default:
-				fmt.Printf("unsupported mrt message type '%v'", mrtHeader.Type)
-				continue
-			}
-		}
-
-		if err := scanner.Err(); err != nil {
-			panic(err)
-		}
-
-		fmt.Printf("processed %d total messages in %v\n"+
-			"\theaderLengthZeroCount:%d\n"+
-			"\tunableToParseBodyCount:%d\n"+
-			"\tnotBGPUpdateCount:%d\n"+
-			"\tasPathLengthZeroCount:%d\n",
-			messageCount,
-			time.Since(startTime),
-			headerLengthZeroCount,
-			unableToParseBodyCount,
-			notBGPUpdateCount,
-			asPathLengthZeroCount)
-
-		mrtFile.Close()
 	}
 }
 

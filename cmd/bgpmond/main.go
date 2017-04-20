@@ -10,7 +10,6 @@ import (
 	"github.com/CSUNetSec/bgpmon/log"
 	"github.com/CSUNetSec/bgpmon/module"
 	"github.com/CSUNetSec/bgpmon/module/bgp"
-	"github.com/CSUNetSec/bgpmon/module/gobgp"
 	"github.com/CSUNetSec/bgpmon/session"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 
@@ -30,7 +29,6 @@ type BgpmondConfig struct {
 }
 
 type ModuleConfig struct {
-	GoBGPLink        gobgp.GoBGPLinkConfig
 	PrefixByAsNumber bgp.PrefixByAsNumberConfig
 	PrefixHijack     bgp.PrefixHijackConfig
 }
@@ -71,6 +69,14 @@ func main() {
 type Server struct {
 	sessions map[string]session.Sessioner //map from uuid to session interface
 	modules  map[string]*module.Module    //map from uuid to running module interface
+	colman	 CollectionManager
+}
+
+type CollectionManager struct {
+}
+
+func (c CollectionManager) Get(ta, tb string) {
+	log.Debl.Println("collection manager Get called with ta:%s tb:%s")
 }
 
 /*
@@ -164,6 +170,20 @@ func (s Server) StopModule(ctx context.Context, request *pb.StopModuleRequest) (
 
 	log.Debl.Printf("Module %s stopped\n", request.ModuleId)
 	return &pb.Empty{}, nil
+}
+
+/*
+ * Get Messages from bgpmon
+ */
+func (s Server) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
+	switch req.Type {
+	case pb.GetRequest_BGP_CAPTURE:
+		s.colman.Get(req.StartTimestamp, req.EndTimestamp)
+		return nil
+
+	default:
+		return errors.New("Unimplemented Get Request type")
+	}
 }
 
 /*
@@ -269,16 +289,7 @@ func (s Server) createModule(moduleId string, request interface{}) (*module.Modu
 
 	switch request.(type) {
 	case *pb.GoBGPLinkModule:
-		rpcConfig := request.(*pb.GoBGPLinkModule)
-		outSessions, err := s.getSessions(rpcConfig.OutSessionId)
-		if err != nil {
-			return nil, err
-		}
-
-		mod, err = gobgp.NewGoBGPLinkModule(moduleId, rpcConfig.Address, outSessions, bgpmondConfig.Modules.GoBGPLink)
-		if err != nil {
-			return nil, err
-		}
+		log.Debl.Printf("currently unsupported")
 	case *pb.PrefixByAsNumberModule:
 		rpcConfig := request.(*pb.PrefixByAsNumberModule)
 		inSessions, err := s.getSessions(rpcConfig.InSessionId)
