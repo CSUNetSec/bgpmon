@@ -3,14 +3,14 @@ package bgp
 import (
 	"errors"
 	"fmt"
-	"net"
-	"strconv"
-	"strings"
-	"time"
 	"github.com/CSUNetSec/bgpmon/log"
 	"github.com/CSUNetSec/bgpmon/module"
 	"github.com/CSUNetSec/bgpmon/session"
 	"github.com/CSUNetSec/bgpmon/util"
+	"net"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
@@ -219,7 +219,7 @@ func (p PrefixHijackModule) Run() error {
 					p.hijackIds[prefixId] = time.Now().Unix()
 
 					//write hijack to database
-					_, err = db.Query(hijackStmt, p.moduleId, updateId, prefixId, []byte(*prefixNode.ipAddress), prefixNode.mask)
+					_, err = db.Query(hijackStmt, p.moduleId, updateId, prefixId, []byte(prefixNode.ipAddress), prefixNode.mask)
 					if err != nil {
 						log.Errl.Printf("Failed to write hijack to db: %s", err)
 					}
