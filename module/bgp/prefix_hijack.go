@@ -86,7 +86,7 @@ func (p PrefixHijackModule) Run() error {
 		log.Errl.Printf("Failed to parse duration: %s", err)
 		return err
 	}
-	quantum, _ := time.ParseDuration(fmt.Sprintf("-1h"))
+	quantum, _ := time.ParseDuration(fmt.Sprintf("-6h"))
 	trg, err := util.NewTimeRangeGenerator(executionTime.Add(duration), executionTime, quantum)
 	if err != nil {
 		log.Errl.Printf("Failed to create a TimeRangeGenerator:%s", err)
