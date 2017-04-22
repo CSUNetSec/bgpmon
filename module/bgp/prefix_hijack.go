@@ -75,8 +75,9 @@ func (p PrefixHijackModule) Run() error {
 	}
 
 	var (
-		ipAddress      net.IP
-		mask, asNumber uint32
+		ipAddress          net.IP
+		mask, asNumber     uint32
+		monitoredAsNumbers []uint32
 
 		prefixId, updateId string
 	)
@@ -108,7 +109,6 @@ func (p PrefixHijackModule) Run() error {
 			continue
 		}
 
-		monitoredAsNumbers := make([]uint32, 0)
 		for asRows.Next() {
 			err := asRows.Scan(&asNumber)
 			if err != nil {
@@ -191,31 +191,30 @@ func (p PrefixHijackModule) Run() error {
 						continue
 					}
 
-					validAs := false
+					valasns := []uint32{}
 					for _, asNumberStr := range strings.Split(strings.Trim(asPathStr, " "), "  ") {
 						if asNumberStr == "" {
 							continue
 						}
 
-						asPathElement, err := strconv.ParseInt(asNumberStr, 10, 32)
+						asPathElement, err := strconv.ParseUint(asNumberStr, 10, 32)
 						if err != nil {
 							log.Errl.Printf("Unable to parse AS number '%s' into int: %s", asNumberStr, err)
 							continue
 						}
+						valasns = append(valasns, uint32(asPathElement))
 
-						if prefixNode.ValidAsNumber(uint32(asPathElement)) {
-							validAs = true
-							break
-						}
 					}
+					//append the monitored asns to this list cause they would be ok too .
+					valasns = append(valasns, monitoredAsNumbers...)
 
-					if validAs {
+					if prefixNode.ValidAsNumber(valasns) {
 						continue
 					}
 
 					//TODO check historical data
 
-					log.Debl.Printf("\tNOTIFICATION OF HIJACK - IP_ADDRESS:%s MASK:%d AS_NUMBER:%d\n", ipAddress, mask, asNumber)
+					log.Debl.Printf("\tNOTIFICATION OF HIJACK - IP_ADDRESS:%s MASK:%d AS_NUMBER:%d DETECTED IN PREFIXNODE:%s PREFIXMASK:%d\n", ipAddress, mask, asNumber, prefixNode.ipAddress, prefixNode.mask)
 					p.hijackIds[prefixId] = time.Now().Unix()
 
 					//write hijack to database

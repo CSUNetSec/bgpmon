@@ -229,16 +229,19 @@ func (p *PrefixNode) SuperPrefix(prefixNode *PrefixNode) bool {
 	return true
 }
 
-func (p *PrefixNode) ValidAsNumber(asNumber uint32) bool {
-	for _, asNum := range p.asNumbers {
-		if asNum == asNumber {
-			return true
+func (p *PrefixNode) ValidAsNumber(asNumbers []uint32) bool {
+	for _, asNum0 := range p.asNumbers {
+		for _, asNum1 := range asNumbers {
+			if asNum0 == asNum1 {
+				return true
+			}
 		}
 	}
 
 	if p.parent != nil {
-		return p.parent.ValidAsNumber(asNumber)
+		return p.parent.ValidAsNumber(asNumbers)
 	} else {
+		//fmt.Printf("i returned false with AS:%d and numbers:%v\n", asNumber, p.asNumbers)
 		return false
 	}
 }
