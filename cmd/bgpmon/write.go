@@ -73,17 +73,17 @@ func WriteMRTFile(cmd *cli.Cmd) {
 			ls := bufio.NewScanner(pfile)
 			rt = radix.New()
 			for ls.Scan() {
-				parts := strings.Split(ls.Text(), ",")
-				if len(parts) != 4 {
+				parts := strings.Split(ls.Text(), "/")
+				if len(parts) != 2 {
 					fmt.Printf("malformed line %s\n", ls.Text())
 					continue
 				}
-				mask, err := maskstr2uint8(parts[2])
+				mask, err := maskstr2uint8(parts[1])
 				if err != nil {
-					fmt.Printf("error parsing mask:%s err:%s", parts[2], err)
+					fmt.Printf("error parsing mask:%s err:%s", parts[1], err)
 					continue
 				}
-				rt.Insert(IpToRadixkey(net.ParseIP(parts[1]).To4(), mask), true)
+				rt.Insert(IpToRadixkey(net.ParseIP(parts[0]).To4(), mask), true)
 			}
 			if err := ls.Err(); err != nil {
 				fmt.Printf("prefix file scanner error:%s\n", err)
