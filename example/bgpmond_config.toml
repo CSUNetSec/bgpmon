@@ -42,4 +42,4 @@ ErrorOut = "stderr"
 # Configuration for CockroachDB
 [[Sessions.Cockroach.Writers.BGPCapture]]
     Table = "updates"
-    Database = "bgpmon"
+    Database = "bgpmontest"

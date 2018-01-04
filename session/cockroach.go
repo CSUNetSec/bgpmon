@@ -9,11 +9,13 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 	pbcom "github.com/CSUNetSec/netsec-protobufs/common"
 	pbbgp "github.com/CSUNetSec/netsec-protobufs/protocol/bgp"
+	//"github.com/cockroachdb/cockroach-go/crdb"
 	"github.com/golang/protobuf/proto"
 	_ "github.com/lib/pq"
 	"github.com/rogpeppe/fastuuid"
+	"math/rand"
 	"net"
-	//"sort"
+	"strings"
 	"time"
 )
 
@@ -33,6 +35,7 @@ type CockroachSession struct {
 	hosts    []string
 	port     uint32
 	certdir  string
+	dbs      []*sql.DB
 }
 
 type writeduration struct {
@@ -96,17 +99,15 @@ func getLastAs(a pbbgp.BGPUpdate) (ret uint32) {
 }
 
 type cockroachContext struct {
-	db        *sql.DB
-	stmupdate *sql.Stmt
-	stmprefix *sql.Stmt
-	uuidgen   *fastuuid.Generator
-	stmtupstr string
-	stmtprstr string
+	db      *sql.DB
+	uuidgen *fastuuid.Generator
+	dbstr   string
 }
 
 func NewCockroachSession(username string, hosts []string, port uint32, workerCount uint32, certdir string, config CockroachConfig) (Sessioner, error) {
-	var tablestr, dbstr string
+	var dbstr string
 	//var tablestr string
+	log.Debl.Printf("hosts:%v\n", hosts)
 	uug := fastuuid.MustNewGenerator()
 	writers := make(map[pb.WriteRequest_Type][]Writer)
 	for writerType, writerConfigs := range config.Writers {
@@ -115,7 +116,7 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 			switch writerType {
 			case "BGPCapture":
 				//XXX pass also the prefix table str from the client cause now we hardcode it
-				tablestr, dbstr = writerConfig.Table, writerConfig.Database
+				dbstr = writerConfig.Database
 				addWriter(writers, pb.WriteRequest_BGP_CAPTURE, BGPCapture{CockroachWriter{table: writerConfig.Table, database: writerConfig.Database}})
 			default:
 				return nil, errors.New(fmt.Sprintf("Unknown writer type %s for cockroach session", writerType))
@@ -128,21 +129,28 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 	workerChans[0] = workerChan
 
 	cccontexts := []*cockroachContext{}
+	dbs := []*sql.DB{}
 	for i := 0; i < len(hosts); i++ {
 		host := hosts[i]
-		db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key&statement_timeout=10000&connect_timeout=10",
-			username, host, port, certdir, certdir, certdir))
+		//db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key&statement_timeout=10000&connect_timeout=10",
+		//	username, host, port, certdir, certdir, certdir))
+		db, err := OpenDbConnection(host, port, certdir, username)
 		//db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s:papakia@%s:%d/bgpmon?sslmode=disable", username, host, port))
 		if err != nil {
-			log.Errl.Printf("Unable to open connection to %s error:%s", host, err)
+			log.Errl.Printf("Unable to open connection to hosts %s error:%s", hosts, err)
+			//return nil, err
 			continue
 		}
+		dbs = append(dbs, db)
 		//db.SetMaxIdleConns(10)
-		stmtupstr := fmt.Sprintf(bgpCaptureStmt1, dbstr, tablestr)
+		/*stmupdate, err := db.Prepare(stmtupstr)
+		if err != nil {
+			log.Errl.Printf("error %s preparing statement:%s", err, stmtupstr)
+			return nil, err
+		}*/
 		//stmtupstr := fmt.Sprintf(bgpCaptureStmt1, tablestr) //postgres
-		stmtprstr := fmt.Sprintf(bgpPrefixStmt1, dbstr, "prefixes") //XXX hardcoded prefixes
 		//stmtprstr := fmt.Sprintf(bgpPrefixStmt1, "prefixes") //posgres
-		cccontexts = append(cccontexts, &cockroachContext{db, nil, nil, uug, stmtupstr, stmtprstr})
+		cccontexts = append(cccontexts, &cockroachContext{db, uug, dbstr})
 	}
 	for j := 0; j < int(workerCount); j++ {
 		go Write(cccontexts[j%len(cccontexts)], workerChans[0])
@@ -150,7 +158,7 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 
 	session := Session{workerChans, 0}
 
-	return CockroachSession{&session, username, hosts, port, certdir}, nil
+	return CockroachSession{&session, username, hosts, port, certdir, dbs}, nil
 }
 
 func (c CockroachSession) Close() error {
@@ -160,9 +168,25 @@ func (c CockroachSession) Close() error {
 	return nil
 }
 
-func (c CockroachSession) GetDbConnection() (*sql.DB, error) {
-	return sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key&statement_timeout=10000",
-		c.username, c.hosts[0], c.port, c.certdir, c.certdir, c.certdir))
+func genOpenHostStr(hosts []string, port uint32) string {
+	ret := ""
+	for i, v := range hosts {
+		if i == len(hosts)-1 {
+			ret += fmt.Sprintf("%s:%d", v, port)
+		} else {
+			ret += fmt.Sprintf("%s:%d,", v, port)
+		}
+	}
+	return ret
+}
+
+func OpenDbConnection(host string, port uint32, certdir string, username string) (*sql.DB, error) {
+	return sql.Open("postgres", fmt.Sprintf("postgresql://%s:%d/?user=%s&sslmode=verify-full&sslcert=%s/client.%s.crt&sslrootcert=%s/ca.crt&sslkey=%s/client.%s.key&statement_timeout=10000",
+		host, port, username, certdir, username, certdir, certdir, username))
+}
+
+func (c CockroachSession) GetRandDbConnection() *sql.DB {
+	return c.dbs[rand.Intn(len(c.dbs))]
 }
 
 /*
@@ -174,7 +198,11 @@ const (
 	//updates (update_id SERIAL PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, collector_ip_str STRING, peer_ip BYTES, peer_ip_str STRING, as_path STRING, next_hop BYTES, next_hop_str STRING, protomsg BYTES);
 	//prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTES, ip_address_str STRING, mask INT, source_as INT, is_withdrawn BOOL);
 	//bgpCaptureStmt  = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
-	bgpCaptureStmt1 = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, protomsg) VALUES"
+	bgpCaptureStmt1          = "INSERT INTO %s.%s (update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, protomsg) VALUES"
+	selectDBbyColAndDateStmt = "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where collector = $1 and datefrom <= $2 and dateto > $2"
+	createCaptureTableStmt   = "CREATE TABLE IF NOT EXISTS bgpmontest.%s (update_id STRING PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, peer_ip BYTES, as_path STRING, next_hop BYTES, origin_as INT, protomsg BYTES);"
+	insertDBbyColAndDateStmt = "UPSERT INTO bgpmontest.dbs(dbname, collector, datefrom, dateto) VALUES ($1, $2, $3, $4)"
+	//bgpCaptureStmt1 = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, protomsg) VALUES ($1, $2, $3, $4, $5, $6, $7)"
 	//bgpCaptureStmt1 = "INSERT INTO %s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES"
 	//bgpPrefixStmt  = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6, $7);"
 	bgpPrefixStmt1 = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, mask, source_as, timestamp, is_withdrawn) VALUES"
@@ -193,6 +221,97 @@ type BGPCapture struct {
 
 func (b BGPCapture) Write(request *pb.WriteRequest) error {
 	return nil
+}
+
+type openBuf struct {
+	buf      *buffer
+	dateFrom time.Time
+	dateTo   time.Time
+	col      string
+}
+
+func NewOpenBuf(buf *buffer, df, dt time.Time, col string) openBuf {
+	return openBuf{
+		buf:      buf,
+		dateFrom: df,
+		dateTo:   dt,
+		col:      col,
+	}
+}
+
+type openBuffers struct {
+	bufs []openBuf
+	cc   *cockroachContext
+}
+
+func NewOpenBuffers(cc *cockroachContext) *openBuffers {
+	return &openBuffers{
+		bufs: make([]openBuf, 0),
+		cc:   cc,
+	}
+}
+
+//gives back the start and end of that day in UTC.
+func getDayBounds(t time.Time) (r1 time.Time, r2 time.Time) {
+	r1 = time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+	r2 = r1.AddDate(0, 0, 1).Add(time.Nanosecond * -1)
+	return
+}
+
+func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) {
+	var (
+		dbname           string
+		dateFrom, dateTo time.Time
+	)
+	//IMPORTANT all locations for time are set to UTC and all periods ( . ) and columns ( : ) in IPs become underscores ( _ )
+	//replace the dots and columns in the collector string
+	col = strings.Replace(col, ".", "_", -1)
+	col = strings.Replace(col, ":", "_", -1)
+	//set the location to utc
+	tstamp = tstamp.UTC()
+	//try to see if we have the buffer open already
+	for _, b := range o.bufs {
+		if b.col == col && (tstamp.After(b.dateFrom) || tstamp.Equal(b.dateFrom)) && tstamp.Before(b.dateTo) {
+			return b, true, nil
+		}
+	}
+	log.Debl.Printf("Querying Find Openbuf for collector:%s time:%s", col, tstamp)
+	row := o.cc.db.QueryRow(selectDBbyColAndDateStmt, col, tstamp)
+	err := row.Scan(&dbname, &dateFrom, &dateTo)
+	if err == sql.ErrNoRows { //we need to create an entry for this collector/month
+		//tx, _ := o.cc.db.Begin()
+		d1, d2 := getDayBounds(tstamp)
+		//the time in the dbname is formated as YYYYMMDD since we have one table per
+		//collector per day
+		newtablename := fmt.Sprintf("captures_%s_%s", col, tstamp.Format("20060102"))
+		//First create the receiving table otherwise the transaction will fail.
+		rid, errq := o.cc.db.Exec(fmt.Sprintf(createCaptureTableStmt, newtablename))
+		if errq != nil {
+			log.Errl.Printf("error creating new table for captures:%s", errq)
+			return openBuf{}, false, errq
+		} else {
+			log.Debl.Printf("created new table %s for captures", newtablename)
+		}
+		//no insert the name of the table to the db record table
+		rid, errq = o.cc.db.Exec(insertDBbyColAndDateStmt, newtablename, col, d1, d2)
+		raffect, _ := rid.RowsAffected()
+		if errq != nil {
+			log.Errl.Printf("error adding db row :%s", errq)
+			return openBuf{}, false, errq
+		} else {
+			log.Debl.Printf("added row with for col:%s from:%v to:%v id:%d to known dbs", col, d1, d2, raffect)
+		}
+	} else if err != nil { //error.
+		log.Errl.Printf("querying the dbs table error:%s", err)
+		return openBuf{}, false, err
+	}
+	log.Debl.Printf("found an existing database with name %s\n", dbname)
+	upstmt := fmt.Sprintf(bgpCaptureStmt1, "bgpmontest", dbname)
+	upbuf := newbuffer(upstmt, 1000, o.cc, false) // fits around 100 objects per write
+	obuf := NewOpenBuf(upbuf, dateFrom, dateTo, col)
+	//add it to the known bufs
+	o.bufs = append(o.bufs, obuf)
+	return obuf, true, nil
 }
 
 type buffer struct {
@@ -253,16 +372,19 @@ func (b *buffer) add(vals ...interface{}) {
 }
 
 func (b *buffer) flush(notfull bool) {
-	if len(b.buf) > 0 {
+	if b.buf != nil && len(b.buf) > 0 {
 		if notfull {
 			b.stmt = b.stmt[:len(b.stmt)-1] + ";"
 		}
 		//log.Debl.Printf("trying to run query on flush")
-		_, err := b.cc.db.Exec(b.stmt, b.buf...)
+		tx, _ := b.cc.db.Begin()
+		_, err := tx.Exec(b.stmt, b.buf...)
 		//log.Debl.Printf("done")
 		if err != nil {
 			log.Errl.Printf("executed query:%s with vals:%+v error:%s", b.stmt, b.buf, err)
+			tx.Rollback()
 		}
+		tx.Commit()
 		b.buf = nil
 		b.stmt = b.initstmt
 	}
@@ -274,21 +396,24 @@ func (b *buffer) flush(notfull bool) {
 //if the ticker detects that it didn't get any messages it fluses the queue.
 //when wchan closes it will detect it and close the ticket too so the goroutine can die
 func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
+	var (
+		upbuf *buffer
+	)
 	ticker := time.NewTicker(10 * time.Second)
 	idleticks := 0
-	upbuf := newbuffer(cc.stmtupstr, 1000, cc, false)  // fits around 100 objects do not include a default first arg in stmt
-	prefbuf := newbuffer(cc.stmtprstr, 3000, cc, true) // fits around 300 objects include a default first arg in stmt
+	obufs := NewOpenBuffers(cc)
+	//prefbuf := newbuffer(cc.stmtprstr, 3000, cc, true) // fits around 300 objects include a default first arg in stmt
 	for {
 		select {
 		case request, wchopen := <-wchan:
 			//check if someone closed our chan and signal the ticker
 			if !wchopen {
-				//XXX flush
 				fmt.Printf("chan closed. calling flush\n")
 				upbuf.flush(true)
-				prefbuf.flush(true)
+				//prefbuf.flush(true)
 				wchan = nil
 				ticker.Stop()
+				//cc.stmupdate.Close()
 				cc.db.Close()
 				break
 			}
@@ -310,6 +435,12 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 				log.Errl.Printf("Capture Local IP parsing error:%s", err)
 				continue
 			}
+			opbuf, found, err := obufs.Find(fmt.Sprintf("%s", colip), timestamp)
+			if !found {
+				log.Errl.Print("open buffer neither found nor created. Error:%s", err)
+				continue
+			}
+			upbuf = opbuf.buf
 			peerip, _, err := parseIpToIPString(*msg.PeerIp)
 			if err != nil {
 				log.Errl.Printf("Capture Peer IP parsing error:%s", err)
@@ -339,56 +470,46 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			var id string
 			uuid := cc.uuidgen.Next()
 			id = hex.EncodeToString(uuid[:])
-			upbuf.add(id, timestamp, []byte(colip), []byte(peerip), aspstr, []byte(nhip), capbytes)
+			upbuf.add(id, timestamp, []byte(colip), []byte(peerip), aspstr, []byte(nhip), lastas, capbytes)
 			/*row := cc.stmupdate.QueryRow(
 				timestamp, []byte(colip), colipstr, []byte(peerip), peeripstr, aspstr, []byte(nhip), nhipstr, capbytes)
 			if errid := row.Scan(&id); errid != nil {
 				log.Errl.Printf("error in fetching id from last insert:%s", errid)
 				continue
 			}*/
-			if msgUp.WithdrawnRoutes != nil && len(msgUp.WithdrawnRoutes.Prefixes) != 0 {
-				for _, wr := range msgUp.WithdrawnRoutes.Prefixes {
-					ip, _, err := parseIpToIPString(*wr.Prefix)
-					if err != nil {
-						log.Errl.Printf("error:%s parsing withdrawn prefix", err)
-						continue
+			/*
+				if msgUp.WithdrawnRoutes != nil && len(msgUp.WithdrawnRoutes.Prefixes) != 0 {
+					for _, wr := range msgUp.WithdrawnRoutes.Prefixes {
+						ip, _, err := parseIpToIPString(*wr.Prefix)
+						if err != nil {
+							log.Errl.Printf("error:%s parsing withdrawn prefix", err)
+							continue
+						}
+						mask := int(wr.Mask)
+						///XXX hardcoded table
+						//prefbuf.add(id, []byte(ip), mask, lastas, timestamp, true)
 					}
-					mask := int(wr.Mask)
-					///XXX hardcoded table
-					prefbuf.add(id, []byte(ip), mask, lastas, timestamp, true)
-					/*_, errpref := cc.stmprefix.Exec(
-						id, []byte(ip), ipstr, mask, lastas, timestamp, true)
-					if errpref != nil {
-						log.Errl.Printf("error:%s in inserting in prefix table", errpref)
-						continue
-					}*/
 				}
-			}
 
-			if msgUp.AdvertizedRoutes != nil && len(msgUp.AdvertizedRoutes.Prefixes) != 0 {
-				for _, ar := range msgUp.AdvertizedRoutes.Prefixes {
-					ip, _, err := parseIpToIPString(*ar.Prefix)
-					if err != nil {
-						log.Errl.Printf("error:%s parsing advertized prefix", err)
-						continue
+				if msgUp.AdvertizedRoutes != nil && len(msgUp.AdvertizedRoutes.Prefixes) != 0 {
+					for _, ar := range msgUp.AdvertizedRoutes.Prefixes {
+						ip, _, err := parseIpToIPString(*ar.Prefix)
+						if err != nil {
+							log.Errl.Printf("error:%s parsing advertized prefix", err)
+							continue
+						}
+						mask := int(ar.Mask)
+						///XXX hardcoded table
+						//prefbuf.add(id, []byte(ip), mask, lastas, timestamp, false)
 					}
-					mask := int(ar.Mask)
-					///XXX hardcoded table
-					prefbuf.add(id, []byte(ip), mask, lastas, timestamp, false)
-					/*_, errpref := cc.stmprefix.Exec(
-						id, []byte(ip), ipstr, mask, lastas, timestamp, false)
-					if errpref != nil {
-						log.Errl.Printf("error:%s in inserting in prefix table", errpref)
-						continue
-					}*/
 				}
-			}
+			*/
 		case <-ticker.C:
 			idleticks++
 			if idleticks > 1 { // 10 or more seconds passed since a msg arrived. flush
-				//log.Debl.Printf("flushing due to inacivity\n")
+				log.Debl.Printf("flushing due to inacivity\n")
 				upbuf.flush(true)
-				prefbuf.flush(true)
+				//prefbuf.flush(true)
 				idleticks = 0
 			}
 		}

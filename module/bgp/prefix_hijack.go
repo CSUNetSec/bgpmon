@@ -96,7 +96,7 @@ func (p PrefixHijackModule) Run() error {
 	//loop over sessions
 	for _, session := range p.inSessions {
 		//connect to database
-		db, err := session.GetDbConnection()
+		db := session.GetRandDbConnection()
 		if err != nil {
 			log.Errl.Printf("Unable to get db connection for prefix hijack: %s", err)
 			continue

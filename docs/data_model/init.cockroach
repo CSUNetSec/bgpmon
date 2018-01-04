@@ -3,6 +3,7 @@ GRANT ALL ON DATABASE bgpmon TO root;
 
 CREATE TABLE bgpmon.updates (update_id STRING PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, peer_ip BYTES, as_path STRING, next_hop BYTES, protomsg BYTES);
 CREATE TABLE bgpmon.prefixes (prefix_id SERIAL PRIMARY KEY, update_id STRING, ip_address BYTES, mask INT, source_as INT, timestamp TIMESTAMP, is_withdrawn BOOL);
+CREATE TABLE bgpmon.dbs (dbname STRING PRIMARY KEY, collector STRING, dateFrom TIMESTAMP, dateTo TIMESTAMP);
 CREATE INDEX ON bgpmon.prefixes (timestamp, source_as, is_withdrawn) STORING (prefix_id, update_id, ip_address, mask);
 CREATE INDEX ON bgpmon.prefixes (timestamp, ip_address, mask, is_withdrawn) STORING (prefix_id, update_id, source_as);
 
