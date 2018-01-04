@@ -19,6 +19,14 @@ import (
 	"time"
 )
 
+//db operation string templates.
+const (
+	insertCaptureTMPL        = "INSERT INTO %s.%s (update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, protomsg) VALUES"
+	selectDBbyColAndDateTMPL = "SELECT dbname, dateFrom, dateTo FROM %s.dbs where collector = $1 and datefrom <= $2 and dateto > $2"
+	createCaptureTableTMPL   = "CREATE TABLE IF NOT EXISTS %s.%s (update_id STRING PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, peer_ip BYTES, as_path STRING, next_hop BYTES, origin_as INT, protomsg BYTES);"
+	insertDBbyColAndDateTMPL = "UPSERT INTO %s.dbs(dbname, collector, datefrom, dateto) VALUES ($1, $2, $3, $4)"
+)
+
 type CockroachConfig struct {
 	Writers map[string][]CockroachWriterConfig
 	CertDir string
@@ -98,15 +106,25 @@ func getLastAs(a pbbgp.BGPUpdate) (ret uint32) {
 	return
 }
 
+//cockroach context holds some info for the writers
 type cockroachContext struct {
-	db      *sql.DB
-	uuidgen *fastuuid.Generator
-	dbstr   string
+	db           *sql.DB             //the underlying db connection that is shared accros all write goroutines
+	uuidgen      *fastuuid.Generator //a uuid generator reference that is shared accross all write goroutines
+	dbstr        string              //the dbname string provided by the configuration file of bgpmond
+	selectDbStmt string              //this statement selects the table to write captures to depending on collector and date
+	insertDbStmt string              //this statement inserts the table name and date ranges in to bookkeeping table named [databasename].dbs
+}
+
+func newCockcroachContext(db *sql.DB, uuidgen *fastuuid.Generator, dbstr string) *cockroachContext {
+	ret := &cockroachContext{}
+	ret.db, ret.uuidgen, ret.dbstr = db, uuidgen, dbstr
+	ret.selectDbStmt = fmt.Sprintf(selectDBbyColAndDateTMPL, dbstr)
+	ret.insertDbStmt = fmt.Sprintf(insertDBbyColAndDateTMPL, dbstr)
+	return ret
 }
 
 func NewCockroachSession(username string, hosts []string, port uint32, workerCount uint32, certdir string, config CockroachConfig) (Sessioner, error) {
 	var dbstr string
-	//var tablestr string
 	log.Debl.Printf("hosts:%v\n", hosts)
 	uug := fastuuid.MustNewGenerator()
 	writers := make(map[pb.WriteRequest_Type][]Writer)
@@ -115,7 +133,6 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 			fmt.Printf("registering writer %s\n", writerType)
 			switch writerType {
 			case "BGPCapture":
-				//XXX pass also the prefix table str from the client cause now we hardcode it
 				dbstr = writerConfig.Database
 				addWriter(writers, pb.WriteRequest_BGP_CAPTURE, BGPCapture{CockroachWriter{table: writerConfig.Table, database: writerConfig.Database}})
 			default:
@@ -132,25 +149,14 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 	dbs := []*sql.DB{}
 	for i := 0; i < len(hosts); i++ {
 		host := hosts[i]
-		//db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s@%s:%d/?sslmode=verify-full&sslcert=%s/root.cert&sslrootcert=%s/ca.cert&sslkey=%s/root.key&statement_timeout=10000&connect_timeout=10",
-		//	username, host, port, certdir, certdir, certdir))
 		db, err := OpenDbConnection(host, port, certdir, username)
-		//db, err := sql.Open("postgres", fmt.Sprintf("postgresql://%s:papakia@%s:%d/bgpmon?sslmode=disable", username, host, port))
 		if err != nil {
 			log.Errl.Printf("Unable to open connection to hosts %s error:%s", hosts, err)
-			//return nil, err
 			continue
 		}
 		dbs = append(dbs, db)
 		//db.SetMaxIdleConns(10)
-		/*stmupdate, err := db.Prepare(stmtupstr)
-		if err != nil {
-			log.Errl.Printf("error %s preparing statement:%s", err, stmtupstr)
-			return nil, err
-		}*/
-		//stmtupstr := fmt.Sprintf(bgpCaptureStmt1, tablestr) //postgres
-		//stmtprstr := fmt.Sprintf(bgpPrefixStmt1, "prefixes") //posgres
-		cccontexts = append(cccontexts, &cockroachContext{db, uug, dbstr})
+		cccontexts = append(cccontexts, newCockcroachContext(db, uug, dbstr))
 	}
 	for j := 0; j < int(workerCount); j++ {
 		go Write(cccontexts[j%len(cccontexts)], workerChans[0])
@@ -192,22 +198,6 @@ func (c CockroachSession) GetRandDbConnection() *sql.DB {
 /*
  * Writers
  */
-
-const (
-	//relevant tables in schema
-	//updates (update_id SERIAL PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, collector_ip_str STRING, peer_ip BYTES, peer_ip_str STRING, as_path STRING, next_hop BYTES, next_hop_str STRING, protomsg BYTES);
-	//prefixes (prefix_id SERIAL PRIMARY KEY, update_id INT, ip_address BYTES, ip_address_str STRING, mask INT, source_as INT, is_withdrawn BOOL);
-	//bgpCaptureStmt  = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
-	bgpCaptureStmt1          = "INSERT INTO %s.%s (update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, protomsg) VALUES"
-	selectDBbyColAndDateStmt = "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where collector = $1 and datefrom <= $2 and dateto > $2"
-	createCaptureTableStmt   = "CREATE TABLE IF NOT EXISTS bgpmontest.%s (update_id STRING PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, peer_ip BYTES, as_path STRING, next_hop BYTES, origin_as INT, protomsg BYTES);"
-	insertDBbyColAndDateStmt = "UPSERT INTO bgpmontest.dbs(dbname, collector, datefrom, dateto) VALUES ($1, $2, $3, $4)"
-	//bgpCaptureStmt1 = "INSERT INTO %s.%s(update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, protomsg) VALUES ($1, $2, $3, $4, $5, $6, $7)"
-	//bgpCaptureStmt1 = "INSERT INTO %s(update_id, timestamp, collector_ip, collector_ip_str, peer_ip, peer_ip_str, as_path, next_hop, next_hop_str, protomsg) VALUES"
-	//bgpPrefixStmt  = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6, $7);"
-	bgpPrefixStmt1 = "INSERT INTO %s.%s(prefix_id, update_id, ip_address, mask, source_as, timestamp, is_withdrawn) VALUES"
-	//bgpPrefixStmt1  = "INSERT INTO %s(prefix_id, update_id, ip_address, ip_address_str, mask, source_as, timestamp, is_withdrawn) VALUES"
-)
 
 type CockroachWriter struct {
 	cc       *cockroachContext
@@ -260,7 +250,7 @@ func getDayBounds(t time.Time) (r1 time.Time, r2 time.Time) {
 
 func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) {
 	var (
-		dbname           string
+		tablename        string
 		dateFrom, dateTo time.Time
 	)
 	//IMPORTANT all locations for time are set to UTC and all periods ( . ) and columns ( : ) in IPs become underscores ( _ )
@@ -269,23 +259,23 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 	col = strings.Replace(col, ":", "_", -1)
 	//set the location to utc
 	tstamp = tstamp.UTC()
-	//try to see if we have the buffer open already
+	//try to see if we have the buffer for this collector/timerange open already
 	for _, b := range o.bufs {
 		if b.col == col && (tstamp.After(b.dateFrom) || tstamp.Equal(b.dateFrom)) && tstamp.Before(b.dateTo) {
 			return b, true, nil
 		}
 	}
 	log.Debl.Printf("Querying Find Openbuf for collector:%s time:%s", col, tstamp)
-	row := o.cc.db.QueryRow(selectDBbyColAndDateStmt, col, tstamp)
-	err := row.Scan(&dbname, &dateFrom, &dateTo)
+	row := o.cc.db.QueryRow(o.cc.selectDbStmt, col, tstamp)
+	err := row.Scan(&tablename, &dateFrom, &dateTo)
 	if err == sql.ErrNoRows { //we need to create an entry for this collector/month
-		//tx, _ := o.cc.db.Begin()
 		d1, d2 := getDayBounds(tstamp)
-		//the time in the dbname is formated as YYYYMMDD since we have one table per
+		//the time in the tablename is formated as YYYYMMDD since we have one table per
 		//collector per day
 		newtablename := fmt.Sprintf("captures_%s_%s", col, tstamp.Format("20060102"))
 		//First create the receiving table otherwise the transaction will fail.
-		rid, errq := o.cc.db.Exec(fmt.Sprintf(createCaptureTableStmt, newtablename))
+		//this uses the template createCaptureTableTMPL and populates the tablename and new table name
+		rid, errq := o.cc.db.Exec(fmt.Sprintf(createCaptureTableTMPL, o.cc.dbstr, newtablename))
 		if errq != nil {
 			log.Errl.Printf("error creating new table for captures:%s", errq)
 			return openBuf{}, false, errq
@@ -293,7 +283,7 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 			log.Debl.Printf("created new table %s for captures", newtablename)
 		}
 		//no insert the name of the table to the db record table
-		rid, errq = o.cc.db.Exec(insertDBbyColAndDateStmt, newtablename, col, d1, d2)
+		rid, errq = o.cc.db.Exec(o.cc.insertDbStmt, newtablename, col, d1, d2)
 		raffect, _ := rid.RowsAffected()
 		if errq != nil {
 			log.Errl.Printf("error adding db row :%s", errq)
@@ -305,9 +295,9 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 		log.Errl.Printf("querying the dbs table error:%s", err)
 		return openBuf{}, false, err
 	}
-	log.Debl.Printf("found an existing database with name %s\n", dbname)
-	upstmt := fmt.Sprintf(bgpCaptureStmt1, "bgpmontest", dbname)
-	upbuf := newbuffer(upstmt, 1000, o.cc, false) // fits around 100 objects per write
+	log.Debl.Printf("found an existing database with name %s\n", tablename)
+	upstmt := fmt.Sprintf(insertCaptureTMPL, o.cc.dbstr, tablename)
+	upbuf := newbuffer(upstmt, 3000, o.cc, false) // fits around 100 objects per write
 	obuf := NewOpenBuf(upbuf, dateFrom, dateTo, col)
 	//add it to the known bufs
 	o.bufs = append(o.bufs, obuf)
@@ -410,10 +400,8 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			if !wchopen {
 				fmt.Printf("chan closed. calling flush\n")
 				upbuf.flush(true)
-				//prefbuf.flush(true)
 				wchan = nil
 				ticker.Stop()
-				//cc.stmupdate.Close()
 				cc.db.Close()
 				break
 			}
