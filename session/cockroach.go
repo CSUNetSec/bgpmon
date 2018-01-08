@@ -495,8 +495,10 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 		case <-ticker.C:
 			idleticks++
 			if idleticks > 1 { // 10 or more seconds passed since a msg arrived. flush
-				log.Debl.Printf("flushing due to inacivity\n")
-				upbuf.flush(true)
+				if upbuf != nil {
+					log.Debl.Printf("flushing due to inacivity\n")
+					upbuf.flush(true)
+				}
 				//prefbuf.flush(true)
 				idleticks = 0
 			}
