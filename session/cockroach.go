@@ -9,13 +9,13 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 	pbcom "github.com/CSUNetSec/netsec-protobufs/common"
 	pbbgp "github.com/CSUNetSec/netsec-protobufs/protocol/bgp"
-	//"github.com/cockroachdb/cockroach-go/crdb"
 	"github.com/golang/protobuf/proto"
 	_ "github.com/lib/pq"
 	"github.com/rogpeppe/fastuuid"
 	"math/rand"
 	"net"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -113,13 +113,15 @@ type cockroachContext struct {
 	dbstr        string              //the dbname string provided by the configuration file of bgpmond
 	selectDbStmt string              //this statement selects the table to write captures to depending on collector and date
 	insertDbStmt string              //this statement inserts the table name and date ranges in to bookkeeping table named [databasename].dbs
+	contid       int
 }
 
-func newCockcroachContext(db *sql.DB, uuidgen *fastuuid.Generator, dbstr string) *cockroachContext {
+func newCockcroachContext(db *sql.DB, uuidgen *fastuuid.Generator, dbstr string, contid int) *cockroachContext {
 	ret := &cockroachContext{}
 	ret.db, ret.uuidgen, ret.dbstr = db, uuidgen, dbstr
 	ret.selectDbStmt = fmt.Sprintf(selectDBbyColAndDateTMPL, dbstr)
 	ret.insertDbStmt = fmt.Sprintf(insertDBbyColAndDateTMPL, dbstr)
+	ret.contid = contid
 	return ret
 }
 
@@ -147,6 +149,7 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 
 	cccontexts := []*cockroachContext{}
 	dbs := []*sql.DB{}
+	ccids := 0
 	for i := 0; i < len(hosts); i++ {
 		host := hosts[i]
 		db, err := OpenDbConnection(host, port, certdir, username)
@@ -156,7 +159,8 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 		}
 		dbs = append(dbs, db)
 		//db.SetMaxIdleConns(10)
-		cccontexts = append(cccontexts, newCockcroachContext(db, uug, dbstr))
+		ccids++
+		cccontexts = append(cccontexts, newCockcroachContext(db, uug, dbstr, ccids))
 	}
 	for j := 0; j < int(workerCount); j++ {
 		go Write(cccontexts[j%len(cccontexts)], workerChans[0])
@@ -243,7 +247,7 @@ func NewOpenBuffers(cc *cockroachContext) *openBuffers {
 
 //gives back the start and end of that day in UTC.
 func getDayBounds(t time.Time) (r1 time.Time, r2 time.Time) {
-	r1 = time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+	r1 = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 	r2 = r1.AddDate(0, 0, 1).Add(time.Nanosecond * -1)
 	return
 }
@@ -262,12 +266,19 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 	//try to see if we have the buffer for this collector/timerange open already
 	for _, b := range o.bufs {
 		if b.col == col && (tstamp.After(b.dateFrom) || tstamp.Equal(b.dateFrom)) && tstamp.Before(b.dateTo) {
+			//log.Debl.Printf("matched created buffer")
 			return b, true, nil
 		}
 	}
-	log.Debl.Printf("Querying Find Openbuf for collector:%s time:%s", col, tstamp)
-	row := o.cc.db.QueryRow(o.cc.selectDbStmt, col, tstamp)
-	err := row.Scan(&tablename, &dateFrom, &dateTo)
+	log.Debl.Printf("CID:%d Querying Find Openbuf for collector:%s time:%s", o.cc.contid, col, tstamp)
+	tx, err := o.cc.db.Begin()
+	if err != nil {
+		log.Errl.Printf("err starting transaction :%s", err)
+		return openBuf{}, false, err
+	}
+	defer tx.Commit()
+	row := tx.QueryRow(o.cc.selectDbStmt, col, tstamp)
+	err = row.Scan(&tablename, &dateFrom, &dateTo)
 	if err == sql.ErrNoRows { //we need to create an entry for this collector/month
 		d1, d2 := getDayBounds(tstamp)
 		//the time in the tablename is formated as YYYYMMDD since we have one table per
@@ -275,27 +286,28 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 		newtablename := fmt.Sprintf("captures_%s_%s", col, tstamp.Format("20060102"))
 		//First create the receiving table otherwise the transaction will fail.
 		//this uses the template createCaptureTableTMPL and populates the tablename and new table name
-		rid, errq := o.cc.db.Exec(fmt.Sprintf(createCaptureTableTMPL, o.cc.dbstr, newtablename))
+		rid, errq := tx.Exec(fmt.Sprintf(createCaptureTableTMPL, o.cc.dbstr, newtablename))
 		if errq != nil {
-			log.Errl.Printf("error creating new table for captures:%s", errq)
+			log.Errl.Printf("CID:%d error creating new table for captures:%s", o.cc.contid, errq)
 			return openBuf{}, false, errq
 		} else {
-			log.Debl.Printf("created new table %s for captures", newtablename)
+			log.Debl.Printf("CID:%d created new table %s for captures", o.cc.contid, newtablename)
 		}
 		//no insert the name of the table to the db record table
-		rid, errq = o.cc.db.Exec(o.cc.insertDbStmt, newtablename, col, d1, d2)
-		raffect, _ := rid.RowsAffected()
+		rid, errq = tx.Exec(o.cc.insertDbStmt, newtablename, col, d1, d2)
 		if errq != nil {
 			log.Errl.Printf("error adding db row :%s", errq)
 			return openBuf{}, false, errq
-		} else {
-			log.Debl.Printf("added row with for col:%s from:%v to:%v id:%d to known dbs", col, d1, d2, raffect)
 		}
+		raffect, _ := rid.RowsAffected()
+		log.Debl.Printf("CID:%d added row with for col:%s from:%v to:%v id:%d to known dbs", o.cc.contid, col, d1, d2, raffect)
+		tablename = newtablename
 	} else if err != nil { //error.
-		log.Errl.Printf("querying the dbs table error:%s", err)
+		log.Errl.Printf("CID:%d querying the dbs table error:%s", o.cc.contid, err)
 		return openBuf{}, false, err
+	} else {
+		log.Debl.Printf("CID:%d found an existing database with name %s\n", o.cc.contid, tablename)
 	}
-	log.Debl.Printf("found an existing database with name %s\n", tablename)
 	upstmt := fmt.Sprintf(insertCaptureTMPL, o.cc.dbstr, tablename)
 	upbuf := newbuffer(upstmt, 3000, o.cc, false) // fits around 100 objects per write
 	obuf := NewOpenBuf(upbuf, dateFrom, dateTo, col)
@@ -367,6 +379,7 @@ func (b *buffer) flush(notfull bool) {
 			b.stmt = b.stmt[:len(b.stmt)-1] + ";"
 		}
 		//log.Debl.Printf("trying to run query on flush")
+		t1 := time.Now()
 		tx, _ := b.cc.db.Begin()
 		_, err := tx.Exec(b.stmt, b.buf...)
 		//log.Debl.Printf("done")
@@ -375,10 +388,27 @@ func (b *buffer) flush(notfull bool) {
 			tx.Rollback()
 		}
 		tx.Commit()
+		log.Debl.Printf("DB TX TIME:%s", time.Since(t1))
 		b.buf = nil
 		b.stmt = b.initstmt
 	}
 	//log.Debl.Printf("buffer flush:%+v\n", b)
+}
+
+//this uses the global curworkernum and atomically increases it and returns it
+//to the worker. This is a workaround to having workers have only shared cockroachcontext
+//and channel.
+var (
+	curworknum  int
+	worknumLock sync.Mutex
+)
+
+func getWorkerNum() int {
+	worknumLock.Lock()
+	defer worknumLock.Unlock()
+	curworknum++
+	ret := curworknum
+	return ret
 }
 
 //write buffers messages that arrive on wchan and writes them if they hit a number.
@@ -389,6 +419,8 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 	var (
 		upbuf *buffer
 	)
+	wnum := getWorkerNum()
+	log.Debl.Printf("[worker %d] starting", wnum)
 	ticker := time.NewTicker(10 * time.Second)
 	idleticks := 0
 	obufs := NewOpenBuffers(cc)
@@ -496,7 +528,7 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			idleticks++
 			if idleticks > 1 { // 10 or more seconds passed since a msg arrived. flush
 				if upbuf != nil {
-					log.Debl.Printf("flushing due to inacivity\n")
+					log.Debl.Printf("[worker %d] flushing due to inacivity\n", wnum)
 					upbuf.flush(true)
 				}
 				//prefbuf.flush(true)
@@ -504,7 +536,7 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 			}
 		}
 	}
-	log.Debl.Printf("writer exiting")
+	log.Debl.Printf("[worker %d] exiting", wnum)
 
 	return
 }
