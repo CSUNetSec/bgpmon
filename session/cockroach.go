@@ -279,7 +279,11 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 		newtablename := fmt.Sprintf("captures_%s_%s", col, tstamp.Format("20060102"))
 		//First create the receiving table otherwise the transaction will fail.
 		//this uses the template createCaptureTableTMPL and populates the tablename and new table name
-		rid, errq := tx.Exec(fmt.Sprintf(createCaptureTableTMPL, o.cc.dbstr, newtablename))
+		//we create a context that will autocancel in 30s if exec takes forever.
+		ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
+		defer cancel()
+
+		rid, errq := tx.ExecContext(ctx, fmt.Sprintf(createCaptureTableTMPL, o.cc.dbstr, newtablename))
 		if errq != nil {
 			log.Errl.Printf("CID:%d error creating new table for captures:%s", o.cc.contid, errq)
 			return openBuf{}, false, errq
@@ -287,7 +291,7 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 			log.Debl.Printf("CID:%d created new table %s for captures", o.cc.contid, newtablename)
 		}
 		//no insert the name of the table to the db record table
-		rid, errq = tx.Exec(o.cc.insertDbStmt, newtablename, col, d1, d2)
+		rid, errq = tx.ExecContext(ctx, o.cc.insertDbStmt, newtablename, col, d1, d2)
 		if errq != nil {
 			log.Errl.Printf("error adding db row :%s", errq)
 			return openBuf{}, false, errq
