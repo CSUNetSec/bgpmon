@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -170,14 +171,6 @@ func NewCockroachSession(username string, hosts []string, port uint32, workerCou
 
 	return CockroachSession{&session, username, hosts, port, certdir, dbs}, nil
 }
-
-func (c CockroachSession) Close() error {
-	for _, ch := range c.workerChans {
-		close(ch)
-	}
-	return nil
-}
-
 func genOpenHostStr(hosts []string, port uint32) string {
 	ret := ""
 	for i, v := range hosts {
@@ -380,8 +373,11 @@ func (b *buffer) flush(notfull bool) {
 		}
 		//log.Debl.Printf("trying to run query on flush")
 		t1 := time.Now()
+		//we create a context that will autocancel in 30s if exec takes forever.
+		ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
+		defer cancel()
 		tx, _ := b.cc.db.Begin()
-		_, err := tx.Exec(b.stmt, b.buf...)
+		_, err := tx.ExecContext(ctx, b.stmt, b.buf...)
 		//log.Debl.Printf("done")
 		if err != nil {
 			log.Errl.Printf("executed query:%s with vals:%+v error:%s", b.stmt, b.buf, err)

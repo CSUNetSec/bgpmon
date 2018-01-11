@@ -55,6 +55,16 @@ type Sessioner interface {
 	Write(*pb.WriteRequest) error
 }
 
+//Close should be implemented here, on the "sender". the implementations
+//like cockrach and cassandra only receive messages. channel closing belongs to the
+//sender.
+func (s *Session) Close() error {
+	for _, ch := range s.workerChans {
+		close(ch)
+	}
+	return nil
+}
+
 type Writer interface {
 	Write(*pb.WriteRequest) error
 }
