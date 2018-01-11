@@ -280,6 +280,7 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 		//First create the receiving table otherwise the transaction will fail.
 		//this uses the template createCaptureTableTMPL and populates the tablename and new table name
 		//we create a context that will autocancel in 30s if exec takes forever.
+		t1 := time.Now()
 		ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
 		defer cancel()
 
