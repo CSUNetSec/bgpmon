@@ -12,6 +12,7 @@ import (
 	pbbgp "github.com/CSUNetSec/netsec-protobufs/protocol/bgp"
 	"github.com/golang/protobuf/proto"
 	_ "github.com/lib/pq"
+	cockg "github.com/cockroachdb/cockroach-go/crdb"
 	"github.com/rogpeppe/fastuuid"
 	"math/rand"
 	"net"
@@ -269,7 +270,11 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 		log.Errl.Printf("err starting transaction :%s", err)
 		return openBuf{}, false, err
 	}
+	t1 := time.Now()
+	ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
 	defer tx.Commit()
+	errtx := cockg.ExecuteInTx(ctx, tx,
+	func() error {
 	row := tx.QueryRow(o.cc.selectDbStmt, col, tstamp)
 	err = row.Scan(&tablename, &dateFrom, &dateTo)
 	if err == sql.ErrNoRows { //we need to create an entry for this collector/month
@@ -280,14 +285,12 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 		//First create the receiving table otherwise the transaction will fail.
 		//this uses the template createCaptureTableTMPL and populates the tablename and new table name
 		//we create a context that will autocancel in 30s if exec takes forever.
-		t1 := time.Now()
-		ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
-		defer cancel()
 
 		rid, errq := tx.ExecContext(ctx, fmt.Sprintf(createCaptureTableTMPL, o.cc.dbstr, newtablename))
 		if errq != nil {
 			log.Errl.Printf("CID:%d error creating new table for captures:%s", o.cc.contid, errq)
-			return openBuf{}, false, errq
+			cancel()
+			return errq
 		} else {
 			log.Debl.Printf("CID:%d created new table %s for captures", o.cc.contid, newtablename)
 		}
@@ -295,16 +298,22 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 		rid, errq = tx.ExecContext(ctx, o.cc.insertDbStmt, newtablename, col, d1, d2)
 		if errq != nil {
 			log.Errl.Printf("error adding db row :%s", errq)
-			return openBuf{}, false, errq
+			cancel()
+			return errq
 		}
 		raffect, _ := rid.RowsAffected()
 		log.Debl.Printf("CID:%d added row with for col:%s from:%v to:%v id:%d to known dbs", o.cc.contid, col, d1, d2, raffect)
 		tablename = newtablename
 	} else if err != nil { //error.
 		log.Errl.Printf("CID:%d querying the dbs table error:%s", o.cc.contid, err)
-		return openBuf{}, false, err
+		return err
 	} else {
 		log.Debl.Printf("CID:%d found an existing database with name %s\n", o.cc.contid, tablename)
+	}
+	return nil
+})
+	if errtx != nil {
+		return openBuf{}, false, errtx
 	}
 	upstmt := fmt.Sprintf(insertCaptureTMPL, o.cc.dbstr, tablename)
 	upbuf := newbuffer(upstmt, 3000, o.cc, false) // fits around 100 objects per write
@@ -381,15 +390,27 @@ func (b *buffer) flush(notfull bool) {
 		//we create a context that will autocancel in 30s if exec takes forever.
 		ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
 		defer cancel()
-		tx, _ := b.cc.db.Begin()
-		_, err := tx.ExecContext(ctx, b.stmt, b.buf...)
-		//log.Debl.Printf("done")
-		if err != nil {
-			log.Errl.Printf("executed query:%s with vals:%+v error:%s", b.stmt, b.buf, err)
-			tx.Rollback()
+		tx, errstart := b.cc.db.Begin()
+		if errstart != nil {
+				log.Errl.Printf("error in transaction begin:%s", errstart)
+				return
 		}
-		tx.Commit()
-		log.Debl.Printf("DB TX TIME:%s", time.Since(t1))
+		errtx:= cockg.ExecuteInTx(ctx, tx, func() error {
+			_, err := tx.ExecContext(ctx, b.stmt, b.buf...)
+			//log.Debl.Printf("done")
+			if err != nil {
+				log.Errl.Printf("executed query:%s with vals:%+v error:%s", b.stmt, b.buf, err)
+				tx.Rollback()
+				return err
+			}
+			tx.Commit()
+			return nil
+		})
+		if errtx != nil {
+			log.Debl.Printf("DB TX TIME:%s", time.Since(t1))
+		}else {
+			log.Errl.Printf("error running tx in context:%s", errtx)
+		}
 		b.buf = nil
 		b.stmt = b.initstmt
 	}
