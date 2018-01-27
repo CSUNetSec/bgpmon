@@ -9,6 +9,7 @@ import (
 
 	cli "github.com/jawher/mow.cli"
 	"golang.org/x/net/context"
+	"strconv"
 )
 
 func RunPrefixByAsNumberModule(cmd *cli.Cmd) {
@@ -74,10 +75,10 @@ func RunPrefixHijackModule(cmd *cli.Cmd) {
 
 		//create request
 		prefixHijack := pbbgpmon.PrefixHijackModule{
-			PeriodicSeconds: 0,
-			TimeoutSeconds:  int32(*timeoutSeconds),
-			InSessionId:     strings.Split(*inSessions, ","),
-			LookbackDurationSeconds: int64(*loobackdays*24*3600),
+			PeriodicSeconds:           0,
+			TimeoutSeconds:            int32(*timeoutSeconds),
+			InSessionId:               strings.Split(*inSessions, ","),
+			LookbackDurationSeconds:   int64(*loobackdays * 24 * 3600),
 			StartTimeSecondsFromEpoch: secsfromepoch,
 		}
 
@@ -93,5 +94,60 @@ func RunPrefixHijackModule(cmd *cli.Cmd) {
 		}
 
 		fmt.Println(reply)
+	}
+}
+
+func RunLookingGlassModule(cmd *cli.Cmd) {
+	const shortForm = "2006-Jan-02"
+	cmd.Spec = "SESSION_IDS START_DATE END_DATE"
+	sessions := cmd.StringArg("SESSION_IDS START_DATE END_DATE", "", "comman separated list of session ids to be used")
+	startDateStr := cmd.StringArg("START_DATE", "2018-01-01 00:00:00+0000", "start date")
+	endDateStr := cmd.StringArg("END_DATE", "2018-01-02 00:00:00+0000", "end date")
+	asns := cmd.StringOpt("asns", "", "list of AS numbers to get prefixes for")
+	prefixes := cmd.StringOpt("prefs", "", "list of prefixes to get ASNs for")
+	peers := cmd.StringOpt("peers", "", "list of peers to narrow down the results")
+	t1, err1 := time.Parse(shortForm, *startDateStr)
+	t2, err2 := time.Parse(shortForm, *endDateStr)
+	if err1 != nil || err2 != nil {
+		panic(fmt.Sprintf("err start time:%s err end time:%s", err1, err2))
+	}
+	t1s, t2s := t1.Unix(), t2.Unix()
+	asnslice := strings.Split(*asns, ",")
+	asnsliceInts := make([]uint32, len(asnslice))
+	for i, v := range asnslice {
+		if num, err := strconv.ParseUint(v, 10, 32); err != nil {
+			asnsliceInts[i] = uint32(num)
+		} else {
+			panic(err)
+		}
+	}
+	prefslice := strings.Split(*prefixes, ",")
+	peerslice := strings.Split(*peers, ",")
+	sessionslice := strings.Split(*sessions, ",")
+	cmd.Action = func() {
+		cli, err := getRPCClient()
+		if err != nil {
+			panic(err)
+		}
+		lookingGlass := pbbgpmon.LookingGlassModule{
+			StartTime: t1s,
+			EndTime:   t2s,
+			Prefixes:  prefslice,
+			Asns:      asnsliceInts,
+			Peers:     peerslice,
+			SessionId: sessionslice,
+		}
+		request := new(pbbgpmon.RunModuleRequest)
+		request.Type = pbbgpmon.ModuleType_LOOKING_GLASS
+		request.LookingGlassModule = &lookingGlass
+
+		//send request
+		ctx := context.Background()
+		reply, err := cli.RunModule(ctx, request)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(reply)
+
 	}
 }
