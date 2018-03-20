@@ -10,9 +10,9 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon"
 	pbcom "github.com/CSUNetSec/netsec-protobufs/common"
 	pbbgp "github.com/CSUNetSec/netsec-protobufs/protocol/bgp"
+	cockg "github.com/cockroachdb/cockroach-go/crdb"
 	"github.com/golang/protobuf/proto"
 	_ "github.com/lib/pq"
-	cockg "github.com/cockroachdb/cockroach-go/crdb"
 	"github.com/rogpeppe/fastuuid"
 	"math/rand"
 	"net"
@@ -246,6 +246,64 @@ func getDayBounds(t time.Time) (r1 time.Time, r2 time.Time) {
 	return
 }
 
+func GetRelevantTableNames(db *sql.DB, colstr string, t1 time.Time, t2 time.Time) (ret []string, reterr error) {
+	var (
+		tablename        string
+		dateFrom, dateTo time.Time
+	)
+	//XXX hardcoded db name, should come from cockroachcontext.
+	tableNamestmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where collector = $1 and (dateto >= $2 and datefrom < $3)"
+	tableNameNoColstmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where (dateto >= $1 and datefrom < $2)"
+	tx, err := db.Begin()
+	if err != nil {
+		log.Errl.Printf("err starting transaction :%s", err)
+		reterr = fmt.Errorf("error starting transaction:%", err)
+		return
+	}
+	defer tx.Commit()
+	ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
+	errtx := cockg.ExecuteInTx(ctx, tx,
+		func() error {
+			var (
+				rows *sql.Rows
+				err  error
+			)
+			if colstr == "" {
+				rows, err = tx.Query(tableNameNoColstmt, t1, t2)
+			} else {
+				rows, err = tx.Query(tableNamestmt, colstr, t1, t2)
+			}
+			if err != nil {
+				reterr = fmt.Errorf("Error starting query:%s", err)
+				cancel()
+				return reterr
+			}
+			defer rows.Close()
+			for rows.Next() {
+				err = rows.Scan(&tablename, &dateFrom, &dateTo)
+				if err != nil {
+					reterr = fmt.Errorf("error querying from row:%s")
+					cancel()
+					return reterr
+				}
+				log.Debl.Printf("Found matching table name for query:%s", tablename)
+				ret = append(ret, tablename)
+			}
+			if err := rows.Err(); err != nil {
+				if err == sql.ErrNoRows {
+					reterr = fmt.Errorf("no matching tables in db for %s, t1:%s, t2:%s", colstr, t1, t2)
+					cancel()
+					return reterr
+				}
+			}
+			return nil
+		})
+	if errtx != nil {
+		reterr = errtx
+	}
+	return
+}
+
 func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) {
 	var (
 		tablename        string
@@ -274,44 +332,44 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 	ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
 	defer tx.Commit()
 	errtx := cockg.ExecuteInTx(ctx, tx,
-	func() error {
-	row := tx.QueryRow(o.cc.selectDbStmt, col, tstamp)
-	err = row.Scan(&tablename, &dateFrom, &dateTo)
-	if err == sql.ErrNoRows { //we need to create an entry for this collector/month
-		d1, d2 := getDayBounds(tstamp)
-		//the time in the tablename is formated as YYYYMMDD since we have one table per
-		//collector per day
-		newtablename := fmt.Sprintf("captures_%s_%s", col, tstamp.Format("20060102"))
-		//First create the receiving table otherwise the transaction will fail.
-		//this uses the template createCaptureTableTMPL and populates the tablename and new table name
-		//we create a context that will autocancel in 30s if exec takes forever.
+		func() error {
+			row := tx.QueryRow(o.cc.selectDbStmt, col, tstamp)
+			err = row.Scan(&tablename, &dateFrom, &dateTo)
+			if err == sql.ErrNoRows { //we need to create an entry for this collector/month
+				d1, d2 := getDayBounds(tstamp)
+				//the time in the tablename is formated as YYYYMMDD since we have one table per
+				//collector per day
+				newtablename := fmt.Sprintf("captures_%s_%s", col, tstamp.Format("20060102"))
+				//First create the receiving table otherwise the transaction will fail.
+				//this uses the template createCaptureTableTMPL and populates the tablename and new table name
+				//we create a context that will autocancel in 30s if exec takes forever.
 
-		rid, errq := tx.ExecContext(ctx, fmt.Sprintf(createCaptureTableTMPL, o.cc.dbstr, newtablename))
-		if errq != nil {
-			log.Errl.Printf("CID:%d error creating new table for captures:%s", o.cc.contid, errq)
-			cancel()
-			return errq
-		} else {
-			log.Debl.Printf("CID:%d created new table %s for captures", o.cc.contid, newtablename)
-		}
-		//no insert the name of the table to the db record table
-		rid, errq = tx.ExecContext(ctx, o.cc.insertDbStmt, newtablename, col, d1, d2)
-		if errq != nil {
-			log.Errl.Printf("error adding db row :%s", errq)
-			cancel()
-			return errq
-		}
-		raffect, _ := rid.RowsAffected()
-		log.Debl.Printf("CID:%d added row with for col:%s from:%v to:%v id:%d to known dbs", o.cc.contid, col, d1, d2, raffect)
-		tablename = newtablename
-	} else if err != nil { //error.
-		log.Errl.Printf("CID:%d querying the dbs table error:%s", o.cc.contid, err)
-		return err
-	} else {
-		log.Debl.Printf("CID:%d found an existing database with name %s\n", o.cc.contid, tablename)
-	}
-	return nil
-})
+				rid, errq := tx.ExecContext(ctx, fmt.Sprintf(createCaptureTableTMPL, o.cc.dbstr, newtablename))
+				if errq != nil {
+					log.Errl.Printf("CID:%d error creating new table for captures:%s", o.cc.contid, errq)
+					cancel()
+					return errq
+				} else {
+					log.Debl.Printf("CID:%d created new table %s for captures", o.cc.contid, newtablename)
+				}
+				//no insert the name of the table to the db record table
+				rid, errq = tx.ExecContext(ctx, o.cc.insertDbStmt, newtablename, col, d1, d2)
+				if errq != nil {
+					log.Errl.Printf("error adding db row :%s", errq)
+					cancel()
+					return errq
+				}
+				raffect, _ := rid.RowsAffected()
+				log.Debl.Printf("CID:%d added row with for col:%s from:%v to:%v id:%d to known dbs", o.cc.contid, col, d1, d2, raffect)
+				tablename = newtablename
+			} else if err != nil { //error.
+				log.Errl.Printf("CID:%d querying the dbs table error:%s", o.cc.contid, err)
+				return err
+			} else {
+				log.Debl.Printf("CID:%d found an existing database with name %s\n", o.cc.contid, tablename)
+			}
+			return nil
+		})
 	if errtx != nil {
 		return openBuf{}, false, errtx
 	}
@@ -392,10 +450,10 @@ func (b *buffer) flush(notfull bool) {
 		defer cancel()
 		tx, errstart := b.cc.db.Begin()
 		if errstart != nil {
-				log.Errl.Printf("error in transaction begin:%s", errstart)
-				return
+			log.Errl.Printf("error in transaction begin:%s", errstart)
+			return
 		}
-		errtx:= cockg.ExecuteInTx(ctx, tx, func() error {
+		errtx := cockg.ExecuteInTx(ctx, tx, func() error {
 			_, err := tx.ExecContext(ctx, b.stmt, b.buf...)
 			//log.Debl.Printf("done")
 			if err != nil {
@@ -408,7 +466,7 @@ func (b *buffer) flush(notfull bool) {
 		})
 		if errtx != nil {
 			log.Debl.Printf("DB TX TIME:%s", time.Since(t1))
-		}else {
+		} else {
 			log.Errl.Printf("error running tx in context:%s", errtx)
 		}
 		b.buf = nil

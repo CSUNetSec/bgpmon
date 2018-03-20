@@ -69,7 +69,7 @@ func main() {
 type Server struct {
 	sessions map[string]session.Sessioner //map from uuid to session interface
 	modules  map[string]*module.Module    //map from uuid to running module interface
-	colman	 CollectionManager
+	colman   CollectionManager
 }
 
 type CollectionManager struct {
@@ -94,6 +94,11 @@ func (s Server) RunModule(ctx context.Context, request *pb.RunModuleRequest) (*p
 		}
 	case pb.ModuleType_PREFIX_BY_AS_NUMBER:
 		mod, err = s.createModule("", request.GetPrefixByAsNumberModule())
+		if err != nil {
+			break
+		}
+	case pb.ModuleType_LOOKING_GLASS:
+		mod, err = s.createModule("", request.GetLookingGlassModule())
 		if err != nil {
 			break
 		}
@@ -309,7 +314,17 @@ func (s Server) createModule(moduleId string, request interface{}) (*module.Modu
 		}
 
 		mod, err = bgp.NewPrefixHijackModule(moduleId, rpcConfig.PeriodicSeconds, rpcConfig.TimeoutSeconds, inSessions, bgpmondConfig.Modules.PrefixHijack,
-			 rpcConfig.StartTimeSecondsFromEpoch, rpcConfig.LookbackDurationSeconds)
+			rpcConfig.StartTimeSecondsFromEpoch, rpcConfig.LookbackDurationSeconds)
+		if err != nil {
+			return nil, err
+		}
+	case *pb.LookingGlassModule:
+		rpcConfig := request.(*pb.LookingGlassModule)
+		inSessions, err := s.getSessions(rpcConfig.SessionId)
+		if err != nil {
+			return nil, err
+		}
+		mod, err = bgp.NewLookingGlassModule(inSessions, *rpcConfig)
 		if err != nil {
 			return nil, err
 		}
