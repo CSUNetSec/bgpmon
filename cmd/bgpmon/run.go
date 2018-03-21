@@ -98,33 +98,37 @@ func RunPrefixHijackModule(cmd *cli.Cmd) {
 }
 
 func RunLookingGlassModule(cmd *cli.Cmd) {
-	const shortForm = "2006-Jan-02"
-	cmd.Spec = "SESSION_IDS START_DATE END_DATE"
-	sessions := cmd.StringArg("SESSION_IDS START_DATE END_DATE", "", "comman separated list of session ids to be used")
-	startDateStr := cmd.StringArg("START_DATE", "2018-01-01 00:00:00+0000", "start date")
-	endDateStr := cmd.StringArg("END_DATE", "2018-01-02 00:00:00+0000", "end date")
+	const shortForm = "2006-01-02 15:04:05"
+	cmd.Spec = "[OPTIONS] SESSION_IDS START_DATE END_DATE"
+	sessions := cmd.StringArg("SESSION_IDS", "", "comma separated list of session ids to be used")
+	startDateStr := cmd.StringArg("START_DATE", "2018-01-01 00:00:00", "start date in UTC")
+	endDateStr := cmd.StringArg("END_DATE", "2018-01-02 00:00:00", "end date in UTC")
 	asns := cmd.StringOpt("asns", "", "list of AS numbers to get prefixes for")
 	prefixes := cmd.StringOpt("prefs", "", "list of prefixes to get ASNs for")
 	peers := cmd.StringOpt("peers", "", "list of peers to narrow down the results")
-	t1, err1 := time.Parse(shortForm, *startDateStr)
-	t2, err2 := time.Parse(shortForm, *endDateStr)
-	if err1 != nil || err2 != nil {
-		panic(fmt.Sprintf("err start time:%s err end time:%s", err1, err2))
-	}
-	t1s, t2s := t1.Unix(), t2.Unix()
-	asnslice := strings.Split(*asns, ",")
-	asnsliceInts := make([]uint32, len(asnslice))
-	for i, v := range asnslice {
-		if num, err := strconv.ParseUint(v, 10, 32); err != nil {
-			asnsliceInts[i] = uint32(num)
-		} else {
-			panic(err)
-		}
-	}
-	prefslice := strings.Split(*prefixes, ",")
-	peerslice := strings.Split(*peers, ",")
-	sessionslice := strings.Split(*sessions, ",")
 	cmd.Action = func() {
+		t1, err1 := time.Parse(shortForm, *startDateStr)
+		t2, err2 := time.Parse(shortForm, *endDateStr)
+		if err1 != nil || err2 != nil {
+			panic(fmt.Sprintf("err start time:%s err end time:%s", err1, err2))
+		}
+		t1s, t2s := t1.Unix(), t2.Unix()
+		asnslice := strings.Split(*asns, ",")
+		asnsliceInts := make([]uint32, len(asnslice))
+		for i, v := range asnslice {
+			if v == "" {
+				continue
+			}
+			if num, err := strconv.ParseUint(v, 10, 32); err == nil {
+				asnsliceInts[i] = uint32(num)
+			} else {
+				panic(err)
+			}
+		}
+		prefslice := strings.Split(*prefixes, ",")
+		peerslice := strings.Split(*peers, ",")
+		sessionslice := strings.Split(*sessions, ",")
+
 		cli, err := getRPCClient()
 		if err != nil {
 			panic(err)
@@ -137,6 +141,7 @@ func RunLookingGlassModule(cmd *cli.Cmd) {
 			Peers:     peerslice,
 			SessionId: sessionslice,
 		}
+		fmt.Printf("module:%+v\n", lookingGlass)
 		request := new(pbbgpmon.RunModuleRequest)
 		request.Type = pbbgpmon.ModuleType_LOOKING_GLASS
 		request.LookingGlassModule = &lookingGlass

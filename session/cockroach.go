@@ -261,7 +261,7 @@ func GetRelevantTableNames(db *sql.DB, colstr string, t1 time.Time, t2 time.Time
 		return
 	}
 	defer tx.Commit()
-	ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
 	errtx := cockg.ExecuteInTx(ctx, tx,
 		func() error {
 			var (

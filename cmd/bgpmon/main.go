@@ -66,7 +66,9 @@ func main() {
 
 	bgpmon.Command("run", "run a single execution module on bgpmond host", func(cmd *cli.Cmd) {
 		cmd.Command("prefix-by-as-number", "run a single execution prefix by as number module", RunPrefixByAsNumberModule)
+		cmd.Command("looking-glass", "run a single execution looking glass module", RunLookingGlassModule)
 		cmd.Command("prefix-hijack", "run a single execution prefix hijack module", RunPrefixHijackModule)
+
 	})
 
 	bgpmon.Command("start", "start a module on bgpmond host", func(cmd *cli.Cmd) {
