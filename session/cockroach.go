@@ -252,8 +252,8 @@ func GetRelevantTableNames(db *sql.DB, colstr string, t1 time.Time, t2 time.Time
 		dateFrom, dateTo time.Time
 	)
 	//XXX hardcoded db name, should come from cockroachcontext.
-	tableNamestmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where collector = $1 and (dateto >= $2 and datefrom < $3)"
-	tableNameNoColstmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where (dateto >= $1 and datefrom < $2)"
+	tableNamestmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where collector = $1 AND dateFrom <= $2 AND dateTo <= $3"
+	tableNameNoColstmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where dateFrom <= $1 AND dateTo <= $2"
 	tx, err := db.Begin()
 	if err != nil {
 		log.Errl.Printf("err starting transaction :%s", err)
@@ -286,7 +286,7 @@ func GetRelevantTableNames(db *sql.DB, colstr string, t1 time.Time, t2 time.Time
 					cancel()
 					return reterr
 				}
-				log.Debl.Printf("Found matching table name for query:%s", tablename)
+				log.Debl.Printf("matching table name for query [t1:%s t2:%s]:%s dateFrom:%s dateTo:%s", t1, t2, tablename, dateFrom, dateTo)
 				ret = append(ret, tablename)
 			}
 			if err := rows.Err(); err != nil {
