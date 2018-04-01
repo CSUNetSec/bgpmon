@@ -25,7 +25,9 @@ import (
 const (
 	insertCaptureTMPL        = "INSERT INTO %s.%s (update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, protomsg) VALUES"
 	selectDBbyColAndDateTMPL = "SELECT dbname, dateFrom, dateTo FROM %s.dbs where collector = $1 and datefrom <= $2 and dateto > $2"
-	createCaptureTableTMPL   = "CREATE TABLE IF NOT EXISTS %s.%s (update_id STRING PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, peer_ip BYTES, as_path STRING, next_hop BYTES, origin_as INT, protomsg BYTES);"
+	createCaptureTableTMPL   = "CREATE TABLE IF NOT EXISTS %s.%s (update_id STRING PRIMARY KEY, timestamp TIMESTAMP, collector_ip BYTES, peer_ip BYTES, as_path STRING, next_hop BYTES, origin_as INT, update_withdraw BOOL, protomsg BYTES, INDEX timestamp_originas_idx (timestamp, origin_as));"
+	createPrefTableTMPL      = "CREATE TABLE IF NOT EXISTS %s.%s (prefix INET, update_id STRING, iswdr BOOL, origin_as INT, PRIMARY KEY (prefix, update_id));"
+	insertPrefTableTMPL      = "INSERT INTO %s.%s (prefix, update_id, iswdr, origin_as) VALUES"
 	insertDBbyColAndDateTMPL = "UPSERT INTO %s.dbs(dbname, collector, datefrom, dateto) VALUES ($1, $2, $3, $4)"
 )
 
@@ -216,14 +218,16 @@ type openBuf struct {
 	dateFrom time.Time
 	dateTo   time.Time
 	col      string
+	btype    string
 }
 
-func NewOpenBuf(buf *buffer, df, dt time.Time, col string) openBuf {
+func NewOpenBuf(buf *buffer, df, dt time.Time, col string, btype string) openBuf {
 	return openBuf{
 		buf:      buf,
 		dateFrom: df,
 		dateTo:   dt,
 		col:      col,
+		btype:    btype,
 	}
 }
 
@@ -252,11 +256,11 @@ func GetRelevantTableNames(db *sql.DB, colstr string, t1 time.Time, t2 time.Time
 		dateFrom, dateTo time.Time
 	)
 	//XXX hardcoded db name, should come from cockroachcontext.
-	tableNamestmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where collector = $1 AND dateFrom <= $2 AND dateTo <= $3"
-	tableNameNoColstmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where dateFrom <= $1 AND dateTo <= $2"
+	tableNamestmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where collector = $1 AND dateFrom <= $2 AND dateFrom >= $3"
+	tableNameNoColstmt := "SELECT dbname, dateFrom, dateTo FROM bgpmontest.dbs where dateFrom <= $2 AND dateFrom >= $1"
 	tx, err := db.Begin()
 	if err != nil {
-		log.Errl.Printf("err starting transaction :%s", err)
+		log.Errl.Printf("err starting transaction:%s", err)
 		reterr = fmt.Errorf("error starting transaction:%", err)
 		return
 	}
@@ -293,7 +297,6 @@ func GetRelevantTableNames(db *sql.DB, colstr string, t1 time.Time, t2 time.Time
 				if err == sql.ErrNoRows {
 					reterr = fmt.Errorf("no matching tables in db for %s, t1:%s, t2:%s", colstr, t1, t2)
 					cancel()
-					return reterr
 				}
 			}
 			return nil
@@ -304,10 +307,67 @@ func GetRelevantTableNames(db *sql.DB, colstr string, t1 time.Time, t2 time.Time
 	return
 }
 
-func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) {
+func GetPrefixesForASns(db *sql.DB, t1, t2 time.Time, tables []string, asns []uint32) (reterr error) {
+	//getPrefixFromAsTMPL := "SELECT protomsg FROM bgpmontest.%s WHERE timestamp >= $1 AND timestamp <= $2 AND origin_as = $3"
+	getPrefixFromAsTMPL := "SELECT protomsg FROM bgpmontest.%s WHERE timestamp >= $1 AND timestamp <= $2"
+	for _, tab := range tables {
+		log.Debl.Printf("iterating on table :%s", tab)
+		getPrefixFromAsStmt := fmt.Sprintf(getPrefixFromAsTMPL, tab)
+		for _, asn := range asns {
+			/*
+				tx, err := db.Begin()
+				if err != nil {
+					log.Errl.Printf("err starting transaction: %s", err)
+					reterr = fmt.Errorf("error starting transaction: %s", err)
+					return
+				}
+				defer tx.Commit()
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
+				errtx := cockg.ExecuteInTx(ctx, tx,
+					func() error {
+			*/
+			var (
+				rows *sql.Rows
+				err  error
+				msg  []byte
+			)
+			//rows, err = tx.Query(getPrefixFromAsStmt, t1, t2, asn)
+			rows, err = db.Query(getPrefixFromAsStmt, t1, t2)
+			if err != nil {
+				reterr = fmt.Errorf("error in running prefix from asn stmt")
+			}
+			defer rows.Close()
+			tstart := time.Now()
+			nmsgs := 0
+			for rows.Next() {
+				nmsgs++
+				err = rows.Scan(&msg)
+				log.Debl.Printf("got msg of %d len", len(msg))
+			}
+			log.Debl.Printf("did %d msgs in %s for asn:%d", time.Since(tstart), nmsgs, asn)
+			if err = rows.Err(); err != nil {
+				if err == sql.ErrNoRows {
+					reterr = fmt.Errorf("no rows for ASN in table")
+				}
+			}
+			/*
+					})
+				if errtx != nil {
+					reterr = errtx
+					cancel()
+				}
+			*/
+		}
+	}
+	return
+}
+
+func (o *openBuffers) Find(col string, tstamp time.Time) ([]openBuf, bool, error) {
 	var (
 		tablename        string
+		prefixtablename  string
 		dateFrom, dateTo time.Time
+		onlyOpen         bool
 	)
 	//IMPORTANT all locations for time are set to UTC and all periods ( . ) and columns ( : ) in IPs become underscores ( _ )
 	//replace the dots and columns in the collector string
@@ -316,30 +376,52 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 	//set the location to utc
 	tstamp = tstamp.UTC()
 	//try to see if we have the buffer for this collector/timerange open already
+	retbufs := []openBuf{}
 	for _, b := range o.bufs {
-		if b.col == col && (tstamp.After(b.dateFrom) || tstamp.Equal(b.dateFrom)) && tstamp.Before(b.dateTo) {
+		if b.col == col && (tstamp.After(b.dateFrom) || tstamp.Equal(b.dateFrom)) && tstamp.Before(b.dateTo) && b.btype == "captures" {
 			//log.Debl.Printf("matched created buffer")
-			return b, true, nil
+			retbufs = append(retbufs, b)
+			//return b, true, nil
+		}
+		if b.col == col && (tstamp.After(b.dateFrom) || tstamp.Equal(b.dateFrom)) && tstamp.Before(b.dateTo) && b.btype == "prefixes" {
+			//log.Debl.Printf("matched created buffer")
+			retbufs = append(retbufs, b)
+			//this terrible hack here assumes that i add always prefixes after captures in tx.
+			return retbufs, true, nil
 		}
 	}
 	log.Debl.Printf("CID:%d Querying Find Openbuf for collector:%s time:%s", o.cc.contid, col, tstamp)
-	tx, err := o.cc.db.Begin()
-	if err != nil {
-		log.Errl.Printf("err starting transaction :%s", err)
-		return openBuf{}, false, err
+
+	row := o.cc.db.QueryRow(o.cc.selectDbStmt, col, tstamp)
+	err := row.Scan(&tablename, &dateFrom, &dateTo)
+	if err == sql.ErrNoRows { //we need to create an entry for this collector/month
+		onlyOpen = false
+	} else if err != nil { //error.
+		log.Errl.Printf("CID:%d querying the dbs table error:%s", o.cc.contid, err)
+		return nil, false, err
+	} else {
+		log.Debl.Printf("CID:%d found an existing database with name %s\n", o.cc.contid, tablename)
+		prefixtablename = strings.Replace(tablename, "captures", "prefixes", -1)
+		onlyOpen = true
 	}
-	t1 := time.Now()
-	ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
-	defer tx.Commit()
-	errtx := cockg.ExecuteInTx(ctx, tx,
-		func() error {
-			row := tx.QueryRow(o.cc.selectDbStmt, col, tstamp)
-			err = row.Scan(&tablename, &dateFrom, &dateTo)
-			if err == sql.ErrNoRows { //we need to create an entry for this collector/month
+
+	if !onlyOpen {
+		t1 := time.Now()
+		ctx, cancel := context.WithDeadline(context.Background(), t1.Add(30*time.Second))
+		tx, err := o.cc.db.BeginTx(ctx, nil)
+		if err != nil {
+			log.Errl.Printf("err starting transaction :%s", err)
+			return nil, false, err
+		}
+
+		//defer tx.Commit()
+		errtx := cockg.ExecuteInTx(ctx, tx,
+			func() error {
 				d1, d2 := getDayBounds(tstamp)
 				//the time in the tablename is formated as YYYYMMDD since we have one table per
 				//collector per day
 				newtablename := fmt.Sprintf("captures_%s_%s", col, tstamp.Format("20060102"))
+				newprefixtablename := fmt.Sprintf("prefixes_%s_%s", col, tstamp.Format("20060102"))
 				//First create the receiving table otherwise the transaction will fail.
 				//this uses the template createCaptureTableTMPL and populates the tablename and new table name
 				//we create a context that will autocancel in 30s if exec takes forever.
@@ -352,7 +434,16 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 				} else {
 					log.Debl.Printf("CID:%d created new table %s for captures", o.cc.contid, newtablename)
 				}
-				//no insert the name of the table to the db record table
+				//create the new prefix table
+				rid, errq = tx.ExecContext(ctx, fmt.Sprintf(createPrefTableTMPL, o.cc.dbstr, newprefixtablename))
+				if errq != nil {
+					log.Errl.Printf("CID:%d error creating new table for prefixes:%s", o.cc.contid, errq)
+					cancel()
+					return errq
+				} else {
+					log.Debl.Printf("CID:%d created new table %s for prefixes", o.cc.contid, newprefixtablename)
+				}
+				//now insert the name of the table to the db record table
 				rid, errq = tx.ExecContext(ctx, o.cc.insertDbStmt, newtablename, col, d1, d2)
 				if errq != nil {
 					log.Errl.Printf("error adding db row :%s", errq)
@@ -362,23 +453,25 @@ func (o *openBuffers) Find(col string, tstamp time.Time) (openBuf, bool, error) 
 				raffect, _ := rid.RowsAffected()
 				log.Debl.Printf("CID:%d added row with for col:%s from:%v to:%v id:%d to known dbs", o.cc.contid, col, d1, d2, raffect)
 				tablename = newtablename
-			} else if err != nil { //error.
-				log.Errl.Printf("CID:%d querying the dbs table error:%s", o.cc.contid, err)
-				return err
-			} else {
-				log.Debl.Printf("CID:%d found an existing database with name %s\n", o.cc.contid, tablename)
-			}
-			return nil
-		})
-	if errtx != nil {
-		return openBuf{}, false, errtx
+				prefixtablename = newprefixtablename
+				return nil
+			})
+		if errtx != nil {
+			return nil, false, errtx
+		}
 	}
 	upstmt := fmt.Sprintf(insertCaptureTMPL, o.cc.dbstr, tablename)
 	upbuf := newbuffer(upstmt, 3000, o.cc, false) // fits around 100 objects per write
-	obuf := NewOpenBuf(upbuf, dateFrom, dateTo, col)
+	obuf := NewOpenBuf(upbuf, dateFrom, dateTo, col, "captures")
+
+	prefstmt := fmt.Sprintf(insertPrefTableTMPL, o.cc.dbstr, prefixtablename)
+	prefbuf := newbuffer(prefstmt, 6000, o.cc, false)
+	obuf1 := NewOpenBuf(prefbuf, dateFrom, dateTo, col, "prefixes")
+
 	//add it to the known bufs
-	o.bufs = append(o.bufs, obuf)
-	return obuf, true, nil
+	//since they go together, i only add one here (only captures, instead of captures+prefixes)
+	o.bufs = append(o.bufs, obuf, obuf1)
+	return []openBuf{obuf, obuf1}, true, nil
 }
 
 type buffer struct {
@@ -497,7 +590,8 @@ func getWorkerNum() int {
 //when wchan closes it will detect it and close the ticket too so the goroutine can die
 func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 	var (
-		upbuf *buffer
+		upbuf   *buffer
+		prefbuf *buffer
 	)
 	wnum := getWorkerNum()
 	log.Debl.Printf("[worker %d] starting", wnum)
@@ -535,12 +629,18 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 				log.Errl.Printf("Capture Local IP parsing error:%s", err)
 				continue
 			}
-			opbuf, found, err := obufs.Find(fmt.Sprintf("%s", colip), timestamp)
+			opbufs, found, err := obufs.Find(fmt.Sprintf("%s", colip), timestamp)
 			if !found {
 				log.Errl.Print("open buffer neither found nor created. Error:%s", err)
 				continue
 			}
-			upbuf = opbuf.buf
+			if len(opbufs) == 2 {
+				upbuf = opbufs[0].buf
+				prefbuf = opbufs[1].buf
+			} else {
+				log.Errl.Println("Find should return 2 open buffers")
+				continue
+			}
 			peerip, _, err := parseIpToIPString(*msg.PeerIp)
 			if err != nil {
 				log.Errl.Printf("Capture Peer IP parsing error:%s", err)
@@ -577,39 +677,36 @@ func Write(cc *cockroachContext, wchan <-chan *pb.WriteRequest) {
 				log.Errl.Printf("error in fetching id from last insert:%s", errid)
 				continue
 			}*/
-			/*
-				if msgUp.WithdrawnRoutes != nil && len(msgUp.WithdrawnRoutes.Prefixes) != 0 {
-					for _, wr := range msgUp.WithdrawnRoutes.Prefixes {
-						ip, _, err := parseIpToIPString(*wr.Prefix)
-						if err != nil {
-							log.Errl.Printf("error:%s parsing withdrawn prefix", err)
-							continue
-						}
-						mask := int(wr.Mask)
-						///XXX hardcoded table
-						//prefbuf.add(id, []byte(ip), mask, lastas, timestamp, true)
+			if msgUp.WithdrawnRoutes != nil && len(msgUp.WithdrawnRoutes.Prefixes) != 0 {
+				for _, wr := range msgUp.WithdrawnRoutes.Prefixes {
+					ip, _, err := parseIpToIPString(*wr.Prefix)
+					if err != nil {
+						log.Errl.Printf("error:%s parsing withdrawn prefix", err)
+						continue
 					}
+					mask := int(wr.Mask)
+					prefbuf.add(fmt.Sprintf("%s/%d", ip, mask), id, true, lastas)
 				}
+			}
 
-				if msgUp.AdvertizedRoutes != nil && len(msgUp.AdvertizedRoutes.Prefixes) != 0 {
-					for _, ar := range msgUp.AdvertizedRoutes.Prefixes {
-						ip, _, err := parseIpToIPString(*ar.Prefix)
-						if err != nil {
-							log.Errl.Printf("error:%s parsing advertized prefix", err)
-							continue
-						}
-						mask := int(ar.Mask)
-						///XXX hardcoded table
-						//prefbuf.add(id, []byte(ip), mask, lastas, timestamp, false)
+			if msgUp.AdvertizedRoutes != nil && len(msgUp.AdvertizedRoutes.Prefixes) != 0 {
+				for _, ar := range msgUp.AdvertizedRoutes.Prefixes {
+					ip, _, err := parseIpToIPString(*ar.Prefix)
+					if err != nil {
+						log.Errl.Printf("error:%s parsing advertized prefix", err)
+						continue
 					}
+					mask := int(ar.Mask)
+					prefbuf.add(fmt.Sprintf("%s/%d", ip, mask), id, false, lastas)
 				}
-			*/
+			}
 		case <-ticker.C:
 			idleticks++
 			if idleticks > 1 { // 10 or more seconds passed since a msg arrived. flush
 				if upbuf != nil {
 					log.Debl.Printf("[worker %d] flushing due to inacivity\n", wnum)
 					upbuf.flush(true)
+					prefbuf.flush(true)
 				}
 				//prefbuf.flush(true)
 				idleticks = 0
