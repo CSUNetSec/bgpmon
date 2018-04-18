@@ -9,7 +9,6 @@ import (
 	pp "github.com/CSUNetSec/protoparse"
 	ppmrt "github.com/CSUNetSec/protoparse/protocol/mrt"
 	pputil "github.com/CSUNetSec/protoparse/util"
-	radix "github.com/armon/go-radix"
 	cli "github.com/jawher/mow.cli"
 	"golang.org/x/net/context"
 	"io"
@@ -61,7 +60,13 @@ func WriteMRTFile(cmd *cli.Cmd) {
 	sessionID := cmd.StringArg("SESSION_ID", "", "session to write data")
 	prefixfile := cmd.StringArg("PREFIX_FILE", "", "Filename that contains prefixes of interest to be written")
 
-	var rt *radix.Tree
+	var (
+		pt           pputil.PrefixTree
+		prefip       net.IP
+		numPrefixMon int
+	)
+	numPrefixMon = 0
+	pt = pputil.NewPrefixTree()
 	cmd.Action = func() {
 		//open mrt file
 		if *prefixfile != "" {
@@ -71,24 +76,31 @@ func WriteMRTFile(cmd *cli.Cmd) {
 			}
 			defer pfile.Close()
 			ls := bufio.NewScanner(pfile)
-			rt = radix.New()
 			for ls.Scan() {
 				parts := strings.Split(ls.Text(), "/")
 				if len(parts) != 2 {
 					fmt.Printf("malformed line %s\n", ls.Text())
 					continue
 				}
-				mask, err := maskstr2uint8(parts[1])
+				mask, err := pputil.MaskStrToUint8(parts[1])
 				if err != nil {
-					fmt.Printf("error parsing mask:%s err:%s", parts[1], err)
+					fmt.Printf("error parsing mask:%s err:%s\n", parts[1], err)
 					continue
 				}
-				rt.Insert(IpToRadixkey(net.ParseIP(parts[0]).To4(), mask), true)
+				parsedip := net.ParseIP(parts[0])
+				if parsedip == nil {
+					fmt.Printf("error parsing IP :%s in prefix list\n", parts[0])
+					continue
+				}
+				pt.Add(parsedip, mask)
+				numPrefixMon++
 			}
 			if err := ls.Err(); err != nil {
 				fmt.Printf("prefix file scanner error:%s\n", err)
 			}
-			fmt.Printf("Set up a prefix tree with %d entries\n", rt.Len())
+			if numPrefixMon != 0 {
+				fmt.Printf("Set up a prefix tree with %d entries\n", numPrefixMon)
+			}
 		}
 
 		mrtFile, err := os.Open(*filename)
@@ -169,15 +181,26 @@ func WriteMRTFile(cmd *cli.Cmd) {
 			}
 			//look only for prefixes of interest
 			monitoring_update := false
-			if rt == nil { // noone started the radix tree. monitoring all prefixes
+			if numPrefixMon == 0 { // noone started a prefix tree filter. monitoring all prefixes
 				monitoring_update = true
 			}
 
-			if adr != nil && len(adr.GetPrefixes()) != 0 && rt != nil {
+			if adr != nil && len(adr.GetPrefixes()) != 0 && numPrefixMon != 0 {
 				prefixes := adr.GetPrefixes()
 				for i := range prefixes {
-					if _, _, found := rt.LongestPrefix(IpToRadixkey(prefixes[i].GetPrefix().GetIpv4(), uint8(prefixes[i].GetMask()))); found {
-						monitoring_update = true
+					if prefip = prefixes[i].GetPrefix().GetIpv4(); prefip != nil {
+						if pt.ContainsIpMask(prefip, uint8(prefixes[i].GetMask())) {
+							monitoring_update = true
+							break
+						}
+					} else if prefip = prefixes[i].GetPrefix().GetIpv6(); prefip != nil {
+						if pt.ContainsIpMask(prefip, uint8(prefixes[i].GetMask())) {
+							monitoring_update = true
+							break
+						}
+					} else {
+						fmt.Printf("Prefix nil in both ipv4 and v6 calls to GetPrefix\n")
+						continue
 					}
 				}
 			}
@@ -188,17 +211,13 @@ func WriteMRTFile(cmd *cli.Cmd) {
 				writeRequest.BgpCapture = capture
 				writeRequest.SessionId = *sessionID
 				if err := stream.Send(writeRequest); err != nil {
-					fmt.Println("FOUND ERROR")
+					fmt.Println("error in write request: %s", err)
 					panic(err)
 				}
 			}
-			if !monitoring_update && rt != nil {
+			if !monitoring_update && numPrefixMon != 0 {
 				notMonitoredCount++
 			}
-			/*if messageCount%1000 == 0 {
-				fmt.Printf("message:%d time elapsed:%v\n", messageCount, time.Since(startTime))
-			}*/
-
 		}
 
 		if err := scanner.Err(); err != nil {
