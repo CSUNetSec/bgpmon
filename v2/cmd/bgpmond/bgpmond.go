@@ -141,9 +141,12 @@ func (s *server) getSessions(sessionIDs []string) ([]db.Sessioner, error) {
 
 func main() {
 	mainlogger.Infof("reading config file:%s", os.Args[1])
-	if bc, cerr := config.NewConfig(os.Args[1]); cerr != nil {
+	if cfile, ferr := os.Open(os.Args[1]); ferr != nil {
+		mainlogger.Fatalf("error opening configuration file:%s", ferr)
+	} else if bc, cerr := config.NewConfig(cfile); cerr != nil {
 		mainlogger.Fatalf("configuration error:%s", cerr)
 	} else {
+		cfile.Close()
 		mainlogger.Infof("starting grpc server at address:%s", bc.GetListenAddress())
 		if listen, lerr := net.Listen("tcp", bc.GetListenAddress()); lerr != nil {
 			mainlogger.Fatalf("setting up grpc server error:%s", lerr)

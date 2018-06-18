@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/pkg/errors"
+	"io"
 )
 
 type sessionType int
@@ -119,9 +120,9 @@ func checkConfig(c bgpmondConfig) error {
 //NewConfig reads a TOML file with the bgpmon configuration, sanity checks it
 //and returns a bgpmondConfig struct which should satisfy the Configer interface,
 //or an error
-func NewConfig(cfile string) (*bgpmondConfig, error) {
+func NewConfig(creader io.Reader) (*bgpmondConfig, error) {
 	bc := bgpmondConfig{}
-	if _, err := toml.DecodeFile(cfile, &bc); err != nil {
+	if _, err := toml.DecodeReader(creader, &bc); err != nil {
 		return nil, err
 	}
 	//the reason that we record the session name in the actual session too,
