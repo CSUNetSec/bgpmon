@@ -140,6 +140,9 @@ func (s *server) getSessions(sessionIDs []string) ([]db.Sessioner, error) {
 }
 
 func main() {
+	if len(os.Args) != 2 {
+		mainlogger.Fatal("no configuration file provided")
+	}
 	mainlogger.Infof("reading config file:%s", os.Args[1])
 	if cfile, ferr := os.Open(os.Args[1]); ferr != nil {
 		mainlogger.Fatalf("error opening configuration file:%s", ferr)
