@@ -46,7 +46,7 @@ func (s *server) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
 
 //Session RPC Calls
 func (s *server) CloseSession(ctx context.Context, request *pb.CloseSessionRequest) (*pb.Empty, error) {
-	mainlogger.Infof("Closing session %s\n", request.SessionId)
+	mainlogger.Infof("Closing session %s", request.SessionId)
 	sess, exists := s.sessions[request.SessionId]
 	if !exists {
 		return nil, errors.New(fmt.Sprintf("session ID %s not found", request.SessionId))
@@ -55,7 +55,7 @@ func (s *server) CloseSession(ctx context.Context, request *pb.CloseSessionReque
 		delete(s.sessions, request.SessionId)
 	}
 
-	mainlogger.Infof("Session %s closed\n", request.SessionId)
+	mainlogger.Infof("Session %s closed", request.SessionId)
 	return &pb.Empty{}, nil
 }
 
@@ -84,7 +84,7 @@ func (s *server) ListAvailableSessions(ctx context.Context, request *pb.Empty) (
 }
 
 func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest) (*pb.OpenSessionReply, error) {
-	mainlogger.Infof("Opening session named %s of config name:%s with %d workers\n", request.SessionId, request.SessionName, request.Workers)
+	mainlogger.Infof("Opening session named %s of config name:%s with %d workers", request.SessionId, request.SessionName, request.Workers)
 	if _, exists := s.sessions[request.SessionId]; exists {
 		return nil, errors.New(fmt.Sprintf("Session ID %s already exists", request.SessionId))
 	}
@@ -95,7 +95,7 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 			return nil, errors.Wrap(nserr, "can't create session")
 		} else {
 			s.sessions[request.SessionId] = sess
-			mainlogger.Infof("Session %s opened\n", request.SessionId)
+			mainlogger.Infof("Session %s opened", request.SessionId)
 		}
 	}
 	return &pb.OpenSessionReply{request.SessionId}, nil
@@ -114,7 +114,7 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 			return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
 		} else {
 			if err := sess.Write(writeRequest); err != nil {
-				mainlogger.Errorf("error:%s writing on session:%s\n", err, writeRequest.SessionId)
+				mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
 				return errors.Wrap(err, "session write")
 			}
 		}
