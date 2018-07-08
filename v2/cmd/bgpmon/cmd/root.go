@@ -45,6 +45,10 @@ func getCtxWithCancel() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), time.Duration(rpcTimeoutSecs)*time.Second)
 }
 
+func getBackgroundCtxWithCancel() (context.Context, context.CancelFunc) {
+	return context.WithCancel(context.Background())
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "bgpmon",
 	Short: "A command line client to interface with bgpmon",
