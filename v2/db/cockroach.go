@@ -1,11 +1,24 @@
 package db
 
-// values for this are provided by the bgpmond config file.
-// then the client can open sessions to it.
-type CockroachConfig struct {
-	Name     string   // a unique name for this cockroach connection
-	CertDir  string   // directory on the bgpmond host containing the certs
-	User     string   // user in the DB to run bgpmond as
-	Hosts    []string // list of hosts for that cluster
-	Database string   // the database under which the bgpmond relations live
+import (
+	"github.com/CSUNetSec/bgpmon/v2/config"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
+)
+
+type cockroachSession struct {
+}
+
+func (cs *cockroachSession) Write(wr *pb.WriteRequest) error {
+	dblogger.Infof("cockroach write called with request:%s", wr)
+	return nil
+}
+
+func (cs *cockroachSession) Close() error {
+	dblogger.Infof("cockroach close called")
+	return nil
+}
+
+func newCockroachSession(conf config.SessionConfiger, id string) (Sessioner, error) {
+	dblogger.Infof("cockroach db session starting")
+	return &cockroachSession{}, nil
 }

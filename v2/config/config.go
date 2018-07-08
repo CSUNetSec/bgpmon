@@ -13,11 +13,13 @@ var (
 	//this needs to be in sync with the sessionType enum
 	sessionTypeNames = [...]string{
 		"cockroachdb",
+		"postgres",
 	}
 )
 
 const (
-	CochroachSession = iota
+	CochroachSession = sessionType(iota)
+	PostgresSession
 )
 
 func (s sessionType) String() string {
@@ -57,8 +59,11 @@ func (b *bgpmondConfig) GetSessionConfigs() []SessionConfiger {
 }
 
 func (b *bgpmondConfig) GetSessionConfigWithName(a string) (SessionConfiger, error) {
-	var ret sessionConfig
-	if ret, exists := b.Sessions[a]; !exists {
+	var (
+		ret    sessionConfig
+		exists bool
+	)
+	if ret, exists = b.Sessions[a]; !exists {
 		return ret, errors.New(fmt.Sprintf("Session config with name %s does not exist", a))
 	}
 	return ret, nil

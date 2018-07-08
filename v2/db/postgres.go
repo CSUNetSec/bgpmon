@@ -1,5 +1,10 @@
 package db
 
+import (
+	"github.com/CSUNetSec/bgpmon/v2/config"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
+)
+
 type postgresSession struct {
 }
 
@@ -15,5 +20,5 @@ func (ps *postgresSession) Close() error {
 
 func newPostgresSession(conf config.SessionConfiger, id string) (Sessioner, error) {
 	dblogger.Infof("postgres db session starting")
-	return &cockroachSession{}, nil
+	return &postgresSession{}, nil
 }
