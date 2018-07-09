@@ -9,6 +9,7 @@ require (
 	github.com/golang/protobuf v1.1.0
 	github.com/google/uuid v0.0.0-20171129191014-dec09d789f3d
 	github.com/hashicorp/hcl v0.0.0-20180404174102-ef8a98b0bbce
+	github.com/lib/pq v0.0.0-20180523175426-90697d60dd84
 	github.com/magiconair/properties v1.8.0
 	github.com/mitchellh/go-homedir v0.0.0-20180523094522-3864e76763d9
 	github.com/mitchellh/mapstructure v0.0.0-20180511142126-bb74f1db0675

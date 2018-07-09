@@ -38,6 +38,7 @@ type SessionConfiger interface {
 	GetDatabaseName() string
 	GetTypeName() string
 	GetUser() string
+	GetPassword() string
 	GetCertDir() string
 }
 
@@ -78,6 +79,7 @@ type sessionConfig struct {
 	Type     string   // cockroachdb, postgres, etc
 	CertDir  string   // directory on the bgpmond host containing the certs
 	User     string   // user in the DB to run bgpmond as
+	Password string   // user's password
 	Hosts    []string // list of hosts for that cluster
 	Database string   // the database under which the bgpmond relations live
 }
@@ -100,6 +102,10 @@ func (s sessionConfig) GetDatabaseName() string {
 
 func (s sessionConfig) GetUser() string {
 	return s.User
+}
+
+func (s sessionConfig) GetPassword() string {
+	return s.Password
 }
 
 func (s sessionConfig) GetCertDir() string {
