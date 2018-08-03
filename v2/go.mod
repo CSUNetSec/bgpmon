@@ -2,7 +2,7 @@ module github.com/CSUNetSec/bgpmon/v2
 
 require (
 	github.com/BurntSushi/toml v0.3.0
-	github.com/CSUNetSec/netsec-protobufs v0.1.1
+	github.com/CSUNetSec/netsec-protobufs v0.0.0-20180719195442-32ae91dd2e2d
 	github.com/CSUNetSec/protoparse v0.1.1
 	github.com/armon/go-radix v0.0.0-20170727155443-1fca145dffbc
 	github.com/fsnotify/fsnotify v1.4.7

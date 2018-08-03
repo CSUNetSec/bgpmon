@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"net/http"
+	_ "net/http/pprof"
 )
 
 var (
@@ -150,8 +152,15 @@ func main() {
 		mainlogger.Fatalf("configuration error:%s", cerr)
 	} else {
 		cfile.Close()
-		mainlogger.Infof("starting grpc server at address:%s", bc.GetListenAddress())
-		if listen, lerr := net.Listen("tcp", bc.GetListenAddress()); lerr != nil {
+		daemonConf := bc.GetDaemonConfig()
+		if daemonConf.ProfilerOn {
+			mainlogger.Infof("Starting pprof at address:%s", daemonConf.ProfilerHostPort)
+			go func(addr string, log *logrus.Entry) {
+				log.Fatal(http.ListenAndServe(addr, nil))
+			}(daemonConf.ProfilerHostPort, mainlogger.WithField("system", "pprof"))
+		}
+		mainlogger.Infof("starting grpc server at address:%s", daemonConf.Address)
+		if listen, lerr := net.Listen("tcp", daemonConf.Address); lerr != nil {
 			mainlogger.Fatalf("setting up grpc server error:%s", lerr)
 		} else {
 			bgpmondServer := newServer(bc)

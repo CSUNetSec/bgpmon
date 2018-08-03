@@ -41,7 +41,7 @@ func writeFunc(cmd *cobra.Command, args []string) {
 		if err != nil {
 			panic(err)
 		}
-		defer stream.CloseAndRecv()
+		defer cancel() //free up context after we're done.
 
 		if filterFile != "" {
 			if filts, err = fileutil.NewFiltersFromFile(filterFile); err != nil {
@@ -75,6 +75,12 @@ func writeFunc(cmd *cobra.Command, args []string) {
 							fmt.Println("terminating.")
 						}
 					}
+				}
+
+				if reply, err := stream.CloseAndRecv(); err != nil {
+					fmt.Printf("Write stream server error:%s", err)
+				} else {
+					fmt.Printf("Write stream reply:%+v", reply)
 				}
 				if err := mf.Err(); err != nil {
 					fmt.Printf("MRT file reader error:%s\n", mf.Err())

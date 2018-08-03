@@ -10,6 +10,7 @@ package db
 import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"sync"
 )
 
 var (
@@ -31,16 +32,21 @@ const (
 
 type workerCmd struct {
 	cmdType int
+	sin     sqlIn
+	fun     workFunc
 }
 
 type workerReply struct {
 	replyType int
 	err       error
+	sout      sqlOut
 }
 
 type workerMgr struct {
-	inCmd  chan workerCmd
-	outCmd chan workerReply
+	inCmd      chan workerCmd
+	outCmd     chan workerReply
+	numworkers int
+	workerwg   *sync.WaitGroup
 }
 
 // Run fires up a new goroutine to handle the database workers.
@@ -68,10 +74,12 @@ func (w workerMgr) Run() {
 }
 
 // NewWorkerMgr returns a new worker manager struct.
-func NewWorkerMgr() workerMgr {
+func NewWorkerMgr(num int) workerMgr {
 	return workerMgr{
-		inCmd:  make(chan workerCmd),
-		outCmd: make(chan workerReply),
+		inCmd:      make(chan workerCmd),
+		outCmd:     make(chan workerReply),
+		numworkers: num,
+		workerwg:   &sync.WaitGroup{},
 	}
 }
 

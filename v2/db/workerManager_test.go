@@ -11,7 +11,7 @@ var (
 )
 
 func TestWorkMgrCommands(t *testing.T) {
-	wm := NewWorkerMgr()
+	wm := NewWorkerMgr(10)
 	wm.Run()
 	wm.sendCmdReadReply(normcmd)
 	wm.sendCmdReadReply(invcmd)

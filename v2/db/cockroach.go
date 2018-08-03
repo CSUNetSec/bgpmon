@@ -18,6 +18,11 @@ func (cs *cockroachSession) Close() error {
 	return nil
 }
 
+func (cs *cockroachSession) Schema(SchemaCmd) SchemaReply {
+	dblogger.Infof("cockroach SchemaCommand called")
+	return SchemaReply{}
+}
+
 func newCockroachSession(conf config.SessionConfiger, id string) (Sessioner, error) {
 	dblogger.Infof("cockroach db session starting")
 	return &cockroachSession{}, nil

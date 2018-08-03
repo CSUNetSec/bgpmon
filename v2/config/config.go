@@ -29,7 +29,13 @@ func (s sessionType) String() string {
 type Configer interface {
 	GetSessionConfigs() []SessionConfiger
 	GetSessionConfigWithName(string) (SessionConfiger, error)
-	GetListenAddress() string
+	GetDaemonConfig() BgpmonDaemonConfig
+}
+
+type BgpmonDaemonConfig struct {
+	Address          string
+	ProfilerOn       bool
+	ProfilerHostPort string
 }
 
 type SessionConfiger interface {
@@ -43,10 +49,12 @@ type SessionConfiger interface {
 }
 
 type bgpmondConfig struct {
-	Address  string
-	DebugOut string
-	ErrorOut string
-	Sessions map[string]sessionConfig
+	Address          string
+	DebugOut         string
+	ErrorOut         string
+	ProfilerOn       bool
+	ProfilerHostPort string
+	Sessions         map[string]sessionConfig
 }
 
 func (b *bgpmondConfig) GetSessionConfigs() []SessionConfiger {
@@ -70,8 +78,12 @@ func (b *bgpmondConfig) GetSessionConfigWithName(a string) (SessionConfiger, err
 	return ret, nil
 }
 
-func (b *bgpmondConfig) GetListenAddress() string {
-	return b.Address
+func (b *bgpmondConfig) GetDaemonConfig() BgpmonDaemonConfig {
+	return BgpmonDaemonConfig{
+		Address:          b.Address,
+		ProfilerOn:       b.ProfilerOn,
+		ProfilerHostPort: b.ProfilerHostPort,
+	}
 }
 
 type sessionConfig struct {
