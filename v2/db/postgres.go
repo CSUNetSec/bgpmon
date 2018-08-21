@@ -8,87 +8,44 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
-	"time"
 )
 
-// sqlCtxExecutor is an interface needed for basic queries.
-// It is implemented by both sql.DB and sql.Txn.
-type sqlCtxExecutor interface {
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
-}
-
 type postgresSession struct {
-	db     *sql.DB
-	dbname string
+	db        *sql.DB
+	dbname    string
+	parentctx context.Context
+	colstrs   collectorsByNameDate
 }
 
-//a wrapper of a sql.Tx that is able to accept multiple
-//db ops and run them in the same tx.
-type ctxTx struct {
-	tx  *sql.Tx
-	db  *sql.DB
-	cf  context.CancelFunc
-	ctx context.Context
+func (ps *postgresSession) GetDb() *sql.DB {
+	return ps.db
 }
 
-func (ps *postgresSession) newCtxTx() (*ctxTx, error) {
-	var (
-		tx  *sql.Tx
-		err error
-	)
-	//XXX configurable timeout?
-	ctx, cf := context.WithTimeout(context.Background(), 10*time.Second)
-	if tx, err = ps.db.Begin(); err != nil {
-		return nil, err
-	}
-	return &ctxTx{
-		tx:  tx,
-		cf:  cf,
-		ctx: ctx,
-		db:  ps.db,
-	}, nil
+func (ps *postgresSession) GetParentContext() context.Context {
+	return ps.parentctx
 }
 
 //a wrapper struct that can contain all the possible arguments to our calls
 type sqlIn struct {
-	dbname    string //the name of the database we're operating on
-	maintable string //the table which references all collector-day tables.
-	coltable  string //the table with collectors and their configurations
-	peertable string //the table that keeps the peers that are discovered for each collector
+	dbname     string //the name of the database we're operating on
+	maintable  string //the table which references all collector-day tables.
+	nodetable  string //the table with nodes and their configurations
+	knownNodes map[string]config.NodeConfig
 }
 
 type sqlOut struct {
-	ok  bool
-	err error
+	ok         bool
+	err        error
+	knownNodes map[string]config.NodeConfig
 }
 
-type workFunc func(context.Context, sqlCtxExecutor, sqlIn) sqlOut
-
-//runs something on the transaction if newCtxTx has been invoked with a TX otherwise it runs it
-//on the db
-func (ptx *ctxTx) Do(a func(context.Context, sqlCtxExecutor, sqlIn) sqlOut, args sqlIn) sqlOut {
-	if ptx.tx != nil {
-		return a(ptx.ctx, ptx.tx, args)
-	}
-	return a(ptx.ctx, ptx.db, args)
-}
-
-//either commits the TX or just releases the context through it's cancelfunc.
-func (ptx *ctxTx) Done() error {
-	defer ptx.cf() //release resources if it's done.
-	if ptx.tx != nil {
-		return ptx.tx.Commit()
-	}
-	return nil
-}
+type workFunc func(sqlCtxExecutor, sqlIn) sqlOut
 
 func retCheckSchema(o sqlOut) (bool, error) {
 	return o.ok, o.err
 }
 
-func checkSchema(ctx context.Context, ex sqlCtxExecutor, args sqlIn) (ret sqlOut) {
+func checkSchema(ex sqlCtxExecutor, args sqlIn) (ret sqlOut) {
 	const q = `
 SELECT EXISTS (
    SELECT *
@@ -100,10 +57,10 @@ SELECT EXISTS (
 		res bool
 		err error
 	)
-	tocheck := []string{args.maintable, args.coltable, args.peertable}
+	tocheck := []string{args.maintable, args.nodetable}
 	allgood := true
 	for _, tname := range tocheck {
-		if err = ex.QueryRowContext(ctx, q, tname).Scan(&res); err != nil {
+		if err = ex.QueryRow(q, tname).Scan(&res); err != nil {
 			ret.ok, ret.err = false, errors.Wrap(err, "checkSchema")
 			return
 		}
@@ -118,7 +75,85 @@ func retMakeSchema(o sqlOut) error {
 	return o.err
 }
 
-func makeSchema(ctx context.Context, ex sqlCtxExecutor, args sqlIn) (ret sqlOut) {
+func syncNodes(ex sqlCtxExecutor, args sqlIn) (ret sqlOut) {
+	const selectNodeTmpl = `
+SELECT name, ip, isCollector, tableDumpDurationMinutes, description, coords, address FROM %s;;
+`
+	const insertNodeTmpl = `
+INSERT INTO %s (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) VALUES ($1, $2, $3, $4, $5, $6, $7);
+`
+
+	var (
+		nodeName      string
+		nodeIP        string
+		nodeCollector bool
+		nodeDuration  int
+		nodeDescr     string
+		nodeCoords    string
+		nodeAddress   string
+	)
+	rows, err := ex.Query(fmt.Sprintf(selectNodeTmpl, args.nodetable))
+	if err != nil {
+		dblogger.Errorf("syncNode query:", err)
+		ret.err = err
+		return
+	}
+	dbNodes := make(map[string]config.NodeConfig)
+	defer rows.Close()
+	for rows.Next() {
+		err := rows.Scan(&nodeName, &nodeIP, &nodeCollector, &nodeDuration, &nodeDescr, &nodeCoords, &nodeAddress)
+		if err != nil {
+			dblogger.Errorf("syncnode fetch node row:%s", err)
+			ret.err = err
+			return
+		}
+		hereNewNode := config.NodeConfig{
+			Name:                nodeName,
+			IP:                  nodeIP,
+			IsCollector:         nodeCollector,
+			DumpDurationMinutes: nodeDuration,
+			Description:         nodeDescr,
+			Coords:              nodeCoords,
+			Location:            nodeAddress,
+		}
+		dbNodes[hereNewNode.IP] = hereNewNode
+	}
+	allNodes := sumNodeConfs(args.knownNodes, dbNodes)
+	for _, v := range allNodes {
+		_, err := ex.Exec(fmt.Sprintf(insertNodeTmpl, args.nodetable),
+			v.Name,
+			v.IP,
+			v.IsCollector,
+			v.DumpDurationMinutes,
+			v.Description,
+			v.Coords,
+			v.Location)
+		if err != nil {
+			dblogger.Errorf("failed to insert config node. %s", err)
+		} else {
+			dblogger.Infof("inserted config node. %v", v)
+		}
+	}
+	ret.knownNodes = allNodes
+	return
+}
+
+func sumNodeConfs(confnodes, dbnodes map[string]config.NodeConfig) map[string]config.NodeConfig {
+	ret := make(map[string]config.NodeConfig)
+	for k1, v1 := range confnodes {
+		ret[k1] = v1 //if it exists in config, prefer config
+	}
+	for k2, v2 := range dbnodes {
+		if _, ok := confnodes[k2]; ok { // exists in config, so ignore it
+			continue
+		}
+		//does not exist in config, so add it in ret as it is in the db
+		ret[k2] = v2
+	}
+	return ret
+}
+
+func makeSchema(ex sqlCtxExecutor, args sqlIn) (ret sqlOut) {
 	const maintableTmpl = `
 CREATE TABLE IF NOT EXISTS %s (
 	dbname varchar PRIMARY KEY,
@@ -127,46 +162,31 @@ CREATE TABLE IF NOT EXISTS %s (
 	dateTo timestamp
 ); 
 `
-	const coltableTmpl = `
+	const nodetableTmpl = `
 CREATE TABLE IF NOT EXISTS %s (
-	colname varchar PRIMARY KEY,
-	colip inet,
-	duration interval,
+	ip varchar PRIMARY KEY,
+	name varchar, 
+	isCollector boolean,
+	tableDumpDurationMinutes integer,
 	description varchar,
-	coords point,
+	coords varchar,
 	address varchar
 ); 
-`
-	const peertableTmpl = `
-CREATE TABLE IF NOT EXISTS %s (
-	peername varchar PRIMARY KEY,
-	collector varchar references %s(colname),
-	peerip inet,
-	description varchar,
- 	coords point,
-	address varchar
-);
 `
 	var (
 		err error
 	)
-	if _, err = ex.ExecContext(ctx, fmt.Sprintf(maintableTmpl, args.maintable)); err != nil {
+	if _, err = ex.Exec(fmt.Sprintf(maintableTmpl, args.maintable)); err != nil {
 		ret.err = errors.Wrap(err, "makeSchema maintable")
 		return
 	}
 	dblogger.Infof("created table:%s", args.maintable)
 
-	if _, err = ex.ExecContext(ctx, fmt.Sprintf(coltableTmpl, args.coltable)); err != nil {
-		ret.err = errors.Wrap(err, "makeSchema coltable")
+	if _, err = ex.Exec(fmt.Sprintf(nodetableTmpl, args.nodetable)); err != nil {
+		ret.err = errors.Wrap(err, "makeSchema nodetable")
 		return
 	}
-	dblogger.Infof("created table:%s", args.coltable)
-
-	if _, err = ex.ExecContext(ctx, fmt.Sprintf(peertableTmpl, args.peertable, args.coltable)); err != nil {
-		ret.err = errors.Wrap(err, "makeSchema peertable")
-		return
-	}
-	dblogger.Infof("created table:%s", args.peertable)
+	dblogger.Infof("created table:%s", args.nodetable)
 	return
 }
 
@@ -177,6 +197,7 @@ func (ps *postgresSession) Write(wr *pb.WriteRequest) error {
 
 func (ps *postgresSession) Close() error {
 	dblogger.Info("postgres close called")
+	//ps.wm.Stop()
 	if err := ps.db.Close(); err != nil {
 		return errors.Wrap(err, "db close")
 	}
@@ -185,17 +206,19 @@ func (ps *postgresSession) Close() error {
 
 func (ps *postgresSession) Schema(sc SchemaCmd) (ret SchemaReply) {
 	dblogger.Infof("postgres SchemaCommand called")
-	switch sc.cmd {
+	switch sc.Cmd {
 	case CheckAndInit:
-		ret.err = ps.SchemaCheckInit()
+		ret.Err = ps.schemaCheckInit()
+	case SyncNodes:
+		ret.Nodes, ret.Err = ps.schemaSyncNodes(sc.Nodes)
 	default:
 		dblogger.Errorf("Unknown schema command %v", sc)
-		ret.err = errors.New("unknown schema command")
+		ret.Err = errors.New("unknown schema command")
 	}
 	return
 }
 
-func newPostgresSession(conf config.SessionConfiger, id string) (Sessioner, error) {
+func newPostgresSession(ctx context.Context, conf config.SessionConfiger, id string, nw int) (Sessioner, error) {
 	var (
 		db  *sql.DB
 		err error
@@ -216,26 +239,46 @@ func newPostgresSession(conf config.SessionConfiger, id string) (Sessioner, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "sql open")
 	}
-	return &postgresSession{db: db, dbname: d}, nil
+	//create the worker manager and give the session to it so it can access the db,
+	//wm := NewWorkerMgr(nw, db, ctx)
+	//create the session object.
+	//ps := &postgresSession{dbname: d, parentctx: ctx, wm: wm}
+	ps := &postgresSession{dbname: d, parentctx: ctx, db: db}
+	return ps, nil
+}
+
+func (ps *postgresSession) schemaSyncNodes(known map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
+	//ping to see we can connect to the db
+	if err := ps.db.Ping(); err != nil {
+		return nil, errors.Wrap(err, "sql ping")
+	}
+	if pctx, err := GetNewExecutor(ps.parentctx, ps, false, CTXTIMEOUT); err != nil {
+		return nil, errors.Wrap(err, "newCtxTx")
+	} else {
+		snargs := sqlIn{dbname: "bgpmon", nodetable: "nodes", knownNodes: known}
+		syncNodes(pctx, snargs)
+	}
+	return nil, nil
 }
 
 //Checks the state and initializes the appropriate schemas
-func (ps *postgresSession) SchemaCheckInit() error {
+func (ps *postgresSession) schemaCheckInit() error {
 	//ping to see we can connect to the db
+
 	if err := ps.db.Ping(); err != nil {
 		return errors.Wrap(err, "sql ping")
 	}
 	//check for required main tables on the schema.
-	if pctx, err := ps.newCtxTx(); err != nil {
+	if pctx, err := GetNewExecutor(ps.parentctx, ps, true, CTXTIMEOUT); err != nil {
 		return errors.Wrap(err, "newCtxTx")
 	} else {
-		csargs := sqlIn{dbname: "bgpmon", maintable: "dbs", coltable: "collectors", peertable: "peers"}
-		if ok, err := retCheckSchema(pctx.Do(checkSchema, csargs)); err != nil {
+		csargs := sqlIn{dbname: "bgpmon", maintable: "dbs", nodetable: "nodes"}
+		if ok, err := retCheckSchema(checkSchema(pctx, csargs)); err != nil {
 			return errors.Wrap(err, "retCheckschema")
 		} else {
 			if !ok { // table does not exist
 				dblogger.Infof("creating schema tables")
-				if err = retMakeSchema(pctx.Do(makeSchema, csargs)); err != nil {
+				if err = retMakeSchema(makeSchema(pctx, csargs)); err != nil {
 					return errors.Wrap(err, "retMakeSchema")
 				}
 				dblogger.Infof("all good. commiting the changes")

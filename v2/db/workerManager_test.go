@@ -1,6 +1,8 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 )
 
@@ -11,7 +13,8 @@ var (
 )
 
 func TestWorkMgrCommands(t *testing.T) {
-	wm := NewWorkerMgr(10)
+	var tdb *sql.DB
+	wm := NewWorkerMgr(10, tdb, context.Background())
 	wm.Run()
 	wm.sendCmdReadReply(normcmd)
 	wm.sendCmdReadReply(invcmd)

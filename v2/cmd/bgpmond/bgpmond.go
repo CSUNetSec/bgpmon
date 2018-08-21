@@ -11,8 +11,8 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/pkg/errors"
 
+	"context"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"net/http"
 	_ "net/http/pprof"
@@ -23,14 +23,18 @@ var (
 )
 
 type server struct {
-	sessions map[string]db.Sessioner // map from uuid to session interface
-	conf     config.Configer         // the config populated from the file
+	sessions   map[string]db.Sessioner // map from uuid to session interface
+	conf       config.Configer         // the config populated from the file
+	knownNodes map[string]config.NodeConfig
+	ctx        context.Context
 }
 
 func newServer(c config.Configer) *server {
 	return &server{
-		sessions: make(map[string]db.Sessioner),
-		conf:     c,
+		knownNodes: c.GetConfiguredNodes(),
+		sessions:   make(map[string]db.Sessioner),
+		conf:       c,
+		ctx:        context.Background(),
 	}
 }
 
@@ -93,17 +97,27 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 	if sc, scerr := s.conf.GetSessionConfigWithName(request.SessionName); scerr != nil {
 		return nil, scerr
 	} else {
-		if sess, nserr := db.NewSession(sc, request.SessionId); nserr != nil {
+		//XXX here we are passing the background context of the server not the one in the argument.
+		//therefore cancellation will be controlled by the server. consider using joincontext here.
+		if sess, nserr := db.NewSession(s.ctx, sc, request.SessionId, int(request.Workers)); nserr != nil {
 			return nil, errors.Wrap(nserr, "can't create session")
 		} else {
 			s.sessions[request.SessionId] = sess
 			mainlogger.Infof("Session %s opened", request.SessionId)
+			//check for configured nodes.
+			sess.Schema(db.SchemaCmd{Cmd: db.SyncNodes})
 		}
 	}
 	return &pb.OpenSessionReply{request.SessionId}, nil
 }
 
 func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
+	var (
+		sess   db.Sessioner
+		first  bool
+		exists bool
+	)
+	first = true
 	for {
 		writeRequest, err := stream.Recv()
 		if err == io.EOF {
@@ -111,14 +125,16 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 		} else if err != nil {
 			return err
 		}
-		if sess, exists := s.sessions[writeRequest.SessionId]; !exists {
-			mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
-			return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
-		} else {
-			if err := sess.Write(writeRequest); err != nil {
-				mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
-				return errors.Wrap(err, "session write")
+		if first {
+			if sess, exists = s.sessions[writeRequest.SessionId]; !exists {
+				mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
+				return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
 			}
+			first = false
+		}
+		if err := sess.Write(writeRequest); err != nil {
+			mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
+			return errors.Wrap(err, "session write")
 		}
 	}
 	mainlogger.Infof("write stream success")

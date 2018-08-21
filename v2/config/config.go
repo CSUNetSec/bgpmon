@@ -5,6 +5,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/pkg/errors"
 	"io"
+	"net"
 )
 
 type sessionType int
@@ -30,6 +31,8 @@ type Configer interface {
 	GetSessionConfigs() []SessionConfiger
 	GetSessionConfigWithName(string) (SessionConfiger, error)
 	GetDaemonConfig() BgpmonDaemonConfig
+	GetConfiguredNodes() map[string]NodeConfig
+	PutConfiguredNodes(map[string]NodeConfig)
 }
 
 type BgpmonDaemonConfig struct {
@@ -54,7 +57,8 @@ type bgpmondConfig struct {
 	ErrorOut         string
 	ProfilerOn       bool
 	ProfilerHostPort string
-	Sessions         map[string]sessionConfig
+	Sessions         map[string]sessionConfig //configured sessions
+	Nodes            map[string]NodeConfig    //known nodes. all collectors must be present here
 }
 
 func (b *bgpmondConfig) GetSessionConfigs() []SessionConfiger {
@@ -86,6 +90,14 @@ func (b *bgpmondConfig) GetDaemonConfig() BgpmonDaemonConfig {
 	}
 }
 
+func (b *bgpmondConfig) GetConfiguredNodes() map[string]NodeConfig {
+	return b.Nodes
+}
+
+func (b *bgpmondConfig) PutConfiguredNodes(a map[string]NodeConfig) {
+	return
+}
+
 type sessionConfig struct {
 	name     string   // will be the key of the dictionary, populated after the toml parsing.
 	Type     string   // cockroachdb, postgres, etc
@@ -94,6 +106,17 @@ type sessionConfig struct {
 	Password string   // user's password
 	Hosts    []string // list of hosts for that cluster
 	Database string   // the database under which the bgpmond relations live
+}
+
+//describes another BGP node, either a collector or a peer.
+type NodeConfig struct {
+	IP                  string
+	Name                string
+	IsCollector         bool
+	DumpDurationMinutes int
+	Description         string
+	Coords              string
+	Location            string
 }
 
 func (s sessionConfig) GetName() string {
@@ -127,6 +150,7 @@ func (s sessionConfig) GetCertDir() string {
 // helper function to sanity check the config file.
 func checkConfig(c bgpmondConfig) error {
 	inSlice := false
+	var nip net.IP
 	for _, s := range c.Sessions {
 		for _, stn := range sessionTypeNames {
 			if s.Type == stn {
@@ -137,6 +161,14 @@ func checkConfig(c bgpmondConfig) error {
 	if !inSlice {
 		return errors.New(fmt.Sprintf("unknown session type name. Known session types are:%v\n", sessionTypeNames))
 	}
+	for k, v := range c.Nodes {
+		if nip = net.ParseIP(k); nip == nil {
+			return errors.New(fmt.Sprintf("malformed ip in config:%s", k))
+		}
+		v.IP = k
+		c.Nodes[k] = v
+	}
+
 	return nil
 }
 

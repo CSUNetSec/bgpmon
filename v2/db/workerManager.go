@@ -8,6 +8,8 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"sync"
@@ -21,8 +23,7 @@ const (
 	cmdNormal = iota //normal means that if there are free workers in the pool it will be scheduled
 	cmdAtomic        //atomic means that when it received no more ops will run until it is done
 	cmdTerm          //term terminates the worker manager
-	cmdDrain         //finish all remaining tasks and don't accept anything other thatn cmdTerm and cmdStart
-	cmdStart         //start accepting tasks
+	cmdDrain         //finish all remaining tasks
 )
 
 const (
@@ -47,12 +48,14 @@ type workerMgr struct {
 	outCmd     chan workerReply
 	numworkers int
 	workerwg   *sync.WaitGroup
+	db         *sql.DB
+	daemonCtx  context.Context
 }
 
 // Run fires up a new goroutine to handle the database workers.
 func (w workerMgr) Run() {
 	go func() {
-		worklogger.Info("starting worker manager for db")
+		worklogger.Info("starting worker manager gor db")
 		for {
 			select {
 			case icmd := <-w.inCmd:
@@ -63,10 +66,21 @@ func (w workerMgr) Run() {
 					workcmdlogger.Info("terminating")
 					w.outCmd <- workerReply{replyType: replyOk}
 					return
+				case cmdDrain:
+					workcmdlogger.Info("draining")
+					w.workerwg.Wait()
+					workcmdlogger.Info("draining finished")
+				case cmdNormal:
+					workcmdlogger.Info("normal cmd")
+					w.outCmd <- workerReply{replyType: replyOk}
+					break
+
 				default:
 					workcmdlogger.Error("unhandled command")
 					w.outCmd <- workerReply{replyType: replyErr, err: errors.New("unhandled command")}
 				}
+			case <-w.daemonCtx.Done():
+				worklogger.Info("server context is done. worker manager quiting")
 			}
 		}
 		worklogger.Info("stopping worker manager for db")
@@ -74,12 +88,14 @@ func (w workerMgr) Run() {
 }
 
 // NewWorkerMgr returns a new worker manager struct.
-func NewWorkerMgr(num int) workerMgr {
+func NewWorkerMgr(num int, d *sql.DB, ctx context.Context) workerMgr {
 	return workerMgr{
 		inCmd:      make(chan workerCmd),
 		outCmd:     make(chan workerReply),
 		numworkers: num,
 		workerwg:   &sync.WaitGroup{},
+		db:         d,
+		daemonCtx:  ctx,
 	}
 }
 
@@ -89,4 +105,8 @@ func (wm workerMgr) sendCmdReadReply(cmd workerCmd) {
 	if ret.replyType == replyErr {
 		worklogger.Errorf("worker manager replied with error: %s\n", ret.err)
 	}
+}
+
+func (wm workerMgr) Stop() {
+	wm.sendCmdReadReply(workerCmd{cmdType: cmdTerm})
 }
