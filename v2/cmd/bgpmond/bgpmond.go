@@ -71,7 +71,7 @@ func (s *server) ListOpenSessions(ctx context.Context, request *pb.Empty) (*pb.L
 		sessionIDs = append(sessionIDs, sessionID)
 	}
 
-	return &pb.ListOpenSessionsReply{sessionIDs}, nil
+	return &pb.ListOpenSessionsReply{SessionId: sessionIDs}, nil
 }
 
 func (s *server) ListAvailableSessions(ctx context.Context, request *pb.Empty) (*pb.ListAvailableSessionsReply, error) {
@@ -86,7 +86,7 @@ func (s *server) ListAvailableSessions(ctx context.Context, request *pb.Empty) (
 		availSessions = append(availSessions, availsess)
 	}
 
-	return &pb.ListAvailableSessionsReply{availSessions}, nil
+	return &pb.ListAvailableSessionsReply{AvailableSessions: availSessions}, nil
 }
 
 func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest) (*pb.OpenSessionReply, error) {
@@ -108,7 +108,7 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 			sess.Schema(db.SchemaCmd{Cmd: db.SyncNodes})
 		}
 	}
-	return &pb.OpenSessionReply{request.SessionId}, nil
+	return &pb.OpenSessionReply{SessionId: request.SessionId}, nil
 }
 
 func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
