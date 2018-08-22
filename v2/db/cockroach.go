@@ -26,8 +26,9 @@ func (cs *cockroachSession) Schema(SchemaCmd) SchemaReply {
 	return SchemaReply{}
 }
 
-func (cs *cockroachSession) GetDb() *sql.DB {
-	dblogger.Infof("cockroach GetDb called")
+//implement Dber
+func (cs *cockroachSession) Db() *sql.DB {
+	dblogger.Infof("cockroach Db called")
 	return nil
 }
 
