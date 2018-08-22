@@ -28,16 +28,17 @@ type sqlCtxExecutor interface {
 //sqlExecutor interface. The argument passed instructs it to either
 //do it on a transaction if true, or on the normal DB connection if false.
 //caller must call Done() that releases resources.
-func GetNewExecutor(pc context.Context, s Sessioner, doTx bool, ctxTimeout time.Duration) (*ctxTx, error) {
+func GetNewExecutor(pc context.Context, s Dber, doTx bool, ctxTimeout time.Duration) (*ctxTx, error) {
 	var (
 		tx  *sql.Tx
 		err error
 		db  *sql.DB
 	)
-	db = s.GetDb()
+	db = s.Db()
 	ctx, cf := context.WithTimeout(pc, ctxTimeout)
 	if doTx {
 		if tx, err = db.Begin(); err != nil {
+			cf()
 			return nil, err
 		}
 	} else {
@@ -101,7 +102,10 @@ type Sessioner interface {
 	Close() error
 	Write(*pb.WriteRequest) error
 	Schema(SchemaCmd) SchemaReply
-	GetDb() *sql.DB
+}
+
+type Dber interface {
+	Db() *sql.DB
 }
 
 func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nworkers int) (Sessioner, error) {
@@ -211,8 +215,9 @@ func (ps *genericSession) Schema(SchemaCmd) SchemaReply {
 	return SchemaReply{}
 }
 
-func (ps *genericSession) GetDb() *sql.DB {
-	dblogger.Infof("generic GetDb called")
+//implements dber
+func (ps *genericSession) Db() *sql.DB {
+	dblogger.Infof("generic Db called")
 	return nil
 }
 

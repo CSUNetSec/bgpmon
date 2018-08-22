@@ -17,7 +17,8 @@ type postgresSession struct {
 	colstrs   collectorsByNameDate
 }
 
-func (ps *postgresSession) GetDb() *sql.DB {
+//implement Dber
+func (ps *postgresSession) Db() *sql.DB {
 	return ps.db
 }
 
