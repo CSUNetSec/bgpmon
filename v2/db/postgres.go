@@ -205,21 +205,7 @@ func (ps *postgresSession) Close() error {
 	return nil
 }
 
-func (ps *postgresSession) Schema(sc SchemaCmd) (ret SchemaReply) {
-	dblogger.Infof("postgres SchemaCommand called")
-	switch sc.Cmd {
-	case CheckAndInit:
-		ret.Err = ps.schemaCheckInit()
-	case SyncNodes:
-		ret.Nodes, ret.Err = ps.schemaSyncNodes(sc.Nodes)
-	default:
-		dblogger.Errorf("Unknown schema command %v", sc)
-		ret.Err = errors.New("unknown schema command")
-	}
-	return
-}
-
-func newPostgresSession(ctx context.Context, conf config.SessionConfiger, id string, nw int) (Sessioner, error) {
+func newPostgresSession(ctx context.Context, conf config.SessionConfiger, id string, nw int) (*postgresSession, error) {
 	var (
 		db  *sql.DB
 		err error

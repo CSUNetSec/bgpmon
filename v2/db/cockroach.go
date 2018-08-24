@@ -21,11 +21,6 @@ func (cs *cockroachSession) Close() error {
 	return nil
 }
 
-func (cs *cockroachSession) Schema(SchemaCmd) SchemaReply {
-	dblogger.Infof("cockroach SchemaCommand called")
-	return SchemaReply{}
-}
-
 //implement Dber
 func (cs *cockroachSession) Db() *sql.DB {
 	dblogger.Infof("cockroach Db called")
@@ -37,7 +32,7 @@ func (cs *cockroachSession) GetParentContext() context.Context {
 	return cs.parentCtx
 }
 
-func newCockroachSession(ctx context.Context, conf config.SessionConfiger, id string) (Sessioner, error) {
+func newCockroachSession(ctx context.Context, conf config.SessionConfiger, id string) (*cockroachSession, error) {
 	dblogger.Infof("cockroach db session starting")
 	return &cockroachSession{parentCtx: ctx}, nil
 }

@@ -130,7 +130,7 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 			}
 			first = false
 		}
-		if _, err := sess.Do(SESSION_WRITE_MRT, writeRequest); err != nil {
+		if _, err := sess.Do(db.SESSION_WRITE_MRT, writeRequest); err != nil {
 			mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
 			return errors.Wrap(err, "session write")
 		}

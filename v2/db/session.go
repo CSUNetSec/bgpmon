@@ -7,6 +7,7 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/pkg/errors"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -132,6 +133,7 @@ type Dber interface {
 
 func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nworkers int) (Sessioner, error) {
 
+	var err error
 	s := &Session{uuid: id, workerCt: nworkers, activeWk: 0, lock: &sync.Mutex{}}
 
 	// The DB will need to be a field within session
@@ -226,11 +228,6 @@ func (gs *genericSession) Write(wr *pb.WriteRequest) error {
 func (gs *genericSession) Close() error {
 	dblogger.Infof("generic close called")
 	return nil
-}
-
-func (ps *genericSession) Schema(SchemaCmd) SchemaReply {
-	dblogger.Infof("generic SchemaCommand called")
-	return SchemaReply{}
 }
 
 //implements dber
