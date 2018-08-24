@@ -37,7 +37,7 @@ func GetNewExecutor(pc context.Context, s Dber, doTx bool, ctxTimeout time.Durat
 	db = s.Db()
 	ctx, cf := context.WithTimeout(pc, ctxTimeout)
 	if doTx {
-		if tx, err = db.Begin(); err != nil {
+		if tx, err = db.BeginTx(pc, nil); err != nil {
 			cf()
 			return nil, err
 		}
@@ -98,10 +98,32 @@ func (ptx *ctxTx) Done() error {
 	return nil
 }
 
+type sessionCmd int
+
+const (
+	SESSION_WRITE_MRT sessionCmd = iota
+)
+
 type Sessioner interface {
+	Do(cmd sessionCmd, arg interface{}) (interface{}, error)
 	Close() error
-	Write(*pb.WriteRequest) error
-	Schema(SchemaCmd) SchemaReply
+}
+
+type Session struct {
+	uuid     string
+	workerCt int
+	activeWk int
+	lock     *sync.Mutex
+}
+
+// Maybe this should return a channel that the calling function
+// could read from to get the reply
+func (s *Session) Do(cmd sessionCmd, arg interface{}) (interface{}, error) {
+	return nil, nil
+}
+
+func (s *Session) Close() error {
+	return nil
 }
 
 type Dber interface {
@@ -109,28 +131,24 @@ type Dber interface {
 }
 
 func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nworkers int) (Sessioner, error) {
-	var (
-		sess Sessioner
-		err  error
-	)
+
+	s := &Session{uuid: id, workerCt: nworkers, activeWk: 0, lock: &sync.Mutex{}}
+
+	// The DB will need to be a field within session
 	switch st := conf.GetTypeName(); st {
 	case "postgres":
-		sess, err = newPostgresSession(ctx, conf, id, nworkers)
+		//sess, err = newPostgresSession(ctx, conf, id, nworkers)
 	case "cockroachdb":
-		sess, err = newCockroachSession(ctx, conf, id)
+		//sess, err = newCockroachSession(ctx, conf, id)
 	default:
 		return nil, errors.New("Unknown session type")
 	}
+
 	if err != nil {
 		dblogger.Errorf("Failed openning session:%s", err)
-	} else {
-		dblogger.Info("issuing schema check and init on the session")
-		schemrep := sess.Schema(SchemaCmd{Cmd: CheckAndInit})
-		if schemrep.Err != nil {
-			return nil, errors.Wrap(schemrep.Err, "NewSession schema checkAndInit")
-		}
 	}
-	return sess, err
+
+	return s, err
 }
 
 //this struct is the element of an ordered array
@@ -224,24 +242,4 @@ func (ps *genericSession) Db() *sql.DB {
 func (ps *genericSession) GetParentContext() context.Context {
 	dblogger.Infof("generic GetContext called")
 	return ps.parentCtx
-}
-
-const (
-	CheckAndInit = iota
-	SyncNodes
-)
-
-//schema commands have to be implemented by the databases
-//and should be "atomic" in nature. the approach that seems
-//correct is to have one goroutine doing all the schema work
-//listening on channels for these commands to coordinate the
-//others
-type SchemaCmd struct {
-	Cmd   int
-	Nodes map[string]config.NodeConfig
-}
-
-type SchemaReply struct {
-	Err   error
-	Nodes map[string]config.NodeConfig
 }

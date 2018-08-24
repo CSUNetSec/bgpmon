@@ -104,8 +104,6 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 		} else {
 			s.sessions[request.SessionId] = sess
 			mainlogger.Infof("Session %s opened", request.SessionId)
-			//check for configured nodes.
-			sess.Schema(db.SchemaCmd{Cmd: db.SyncNodes})
 		}
 	}
 	return &pb.OpenSessionReply{SessionId: request.SessionId}, nil
@@ -132,7 +130,7 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 			}
 			first = false
 		}
-		if err := sess.Write(writeRequest); err != nil {
+		if _, err := sess.Do(SESSION_WRITE_MRT, writeRequest); err != nil {
 			mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
 			return errors.Wrap(err, "session write")
 		}
