@@ -31,18 +31,20 @@ type Session struct {
 	maxWk    int
 	activeWk int
 	lock     *sync.Mutex
+	cond     *sync.Cond
 	ctx      context.Context
 }
 
 // Maybe this should return a channel that the calling function
 // could read from to get the reply
 func (s *Session) Do(cmd sessionCmd, arg interface{}) (interface{}, error) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
 
 	if s.activeWk >= s.maxWk {
-		// Receive from a 'done' channel
+		s.cond.Wait()
 	}
+
+	s.addWorker(1)
+	go s.worker(cmd, arg)
 
 	return nil, nil
 }
@@ -54,7 +56,10 @@ func (s *Session) Close() error {
 func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nworkers int) (Sessioner, error) {
 
 	var err error
-	s := &Session{uuid: id, maxWk: nworkers, activeWk: 0, lock: &sync.Mutex{}, ctx: ctx}
+	lock := &sync.Mutex{}
+	cond := sync.NewCond(lock)
+
+	s := &Session{uuid: id, maxWk: nworkers, activeWk: 0, lock: lock, cond: cond, ctx: ctx}
 
 	// The DB will need to be a field within session
 	switch st := conf.GetTypeName(); st {
@@ -71,6 +76,17 @@ func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nwo
 	}
 
 	return s, err
+}
+
+func (s *Session) worker(cmd sessionCmd, arg interface{}) {
+	defer s.cond.Signal()
+	defer s.addWorker(-1)
+}
+
+func (s *Session) addWorker(delta int) {
+	s.lock.Lock()
+	s.activeWk += delta
+	s.lock.Unlock()
 }
 
 //this struct is the element of an ordered array
