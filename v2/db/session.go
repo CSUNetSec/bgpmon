@@ -38,7 +38,7 @@ func GetNewExecutor(pc context.Context, s Dber, doTx bool, ctxTimeout time.Durat
 	db = s.Db()
 	ctx, cf := context.WithTimeout(pc, ctxTimeout)
 	if doTx {
-		if tx, err = db.BeginTx(pc, nil); err != nil {
+		if tx, err = db.BeginTx(ctx, nil); err != nil {
 			cf()
 			return nil, err
 		}
