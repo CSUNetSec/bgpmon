@@ -78,12 +78,13 @@ func retMakeSchema(o sqlOut) error {
 
 func syncNodes(ex sqlCtxExecutor, args sqlIn) (ret sqlOut) {
 	const selectNodeTmpl = `
-SELECT name, ip, isCollector, tableDumpDurationMinutes, description, coords, address FROM %s;;
-`
+		SELECT name, ip, isCollector, tableDumpDurationMinutes, description, coords, address FROM %s;
+		`
 	const insertNodeTmpl = `
-INSERT INTO %s (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) VALUES ($1, $2, $3, $4, $5, $6, $7);
-`
-
+		   INSERT INTO %s (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		   ON CONFLICT (ip) DO UPDATE SET name=EXCLUDED.name, isCollector=EXCLUDED.isCollector,tableDumpDurationMinutes=EXCLUDED.tableDumpDurationMinutes,
+		   description=EXCLUDED.description, coords=EXCLUDED.coords, address=EXCLUDED.address;
+		   `
 	var (
 		nodeName      string
 		nodeIP        string

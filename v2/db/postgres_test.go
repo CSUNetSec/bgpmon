@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"github.com/CSUNetSec/bgpmon/v2/config"
+	"os"
 	"testing"
 )
 
@@ -12,16 +13,22 @@ const (
 
 var (
 	cn1 = config.NodeConfig{
-		IP:          "1.2.3.4",
+		IP:          "1.1.1.1",
 		Name:        "name1",
 		IsCollector: true,
-		Description: "lalalacollector",
+		Description: "coming from config",
 	}
 	cn2 = config.NodeConfig{
-		IP:          "3.4.4.4",
+		IP:          "2.2.2.2",
 		Name:        "name2",
 		IsCollector: false,
-		Description: "lalalapeer",
+		Description: "also from config and updated",
+	}
+	cn3 = config.NodeConfig{
+		IP:          "3.3.3.3",
+		Name:        "name3",
+		IsCollector: false,
+		Description: "in the db and updated",
 	}
 )
 
@@ -61,15 +68,21 @@ func TestMakeSchema(t *testing.T) {
 }
 
 func TestSyncNodes(t *testing.T) {
+	insCmd := "INSERT INTO nodes (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) VALUES ($1, $2, $3, $4, $5, $6, $7);"
 	db, err := sql.Open("postgres", pgconstr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 	innodes := make(map[string]config.NodeConfig)
+	//insert node 3 in the db so that syncnodes finds it there.
+	//that will test merging of incoming and already there nodes
+	if _, err := db.Exec(insCmd, cn3.Name, cn3.IP, cn3.IsCollector, cn3.DumpDurationMinutes, cn3.Description, "", ""); err != nil {
+		t.Logf("failed inserting test node in the db")
+	}
 	innodes[cn1.IP] = cn1
 	innodes[cn2.IP] = cn2
 	sin := sqlIn{dbname: "bgpmon", nodetable: "nodes", knownNodes: innodes}
-	syncNodes(db, sin)
-
+	sout := syncNodes(db, sin)
+	config.PutConfiguredNodes(sout.knownNodes, os.Stdout)
 }
