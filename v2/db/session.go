@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/CSUNetSec/bgpmon/v2/config"
+	"github.com/CSUNetSec/bgpmon/v2/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/pkg/errors"
 	"sort"
@@ -18,7 +19,7 @@ const (
 type sessionCmd int
 
 const (
-	SESSION_WRITE_MRT sessionCmd = iota
+	SESSION_OPEN_STREAM sessionCmd = iota
 )
 
 type Sessioner interface {
@@ -27,26 +28,18 @@ type Sessioner interface {
 }
 
 type Session struct {
-	uuid     string
-	maxWk    int
-	activeWk int
-	lock     *sync.Mutex
-	cond     *sync.Cond
-	ctx      context.Context
+	uuid string
+	ctx  context.Context
+	wp   *util.WorkerPool
 }
 
 // Maybe this should return a channel that the calling function
 // could read from to get the reply
 func (s *Session) Do(cmd sessionCmd, arg interface{}) (interface{}, error) {
+	switch cmd {
+	case SESSION_OPEN_STREAM:
 
-	if s.activeWk >= s.maxWk {
-		s.cond.Wait()
 	}
-
-	s.addWorker(1)
-	go s.worker(cmd, arg)
-
-	return nil, nil
 }
 
 func (s *Session) Close() error {
@@ -56,10 +49,9 @@ func (s *Session) Close() error {
 func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nworkers int) (Sessioner, error) {
 
 	var err error
-	lock := &sync.Mutex{}
-	cond := sync.NewCond(lock)
+	wp := util.NewWorkerPool(nworkers)
 
-	s := &Session{uuid: id, maxWk: nworkers, activeWk: 0, lock: lock, cond: cond, ctx: ctx}
+	s := &Session{uuid: id, ctx: ctx, wp: wp}
 
 	// The DB will need to be a field within session
 	switch st := conf.GetTypeName(); st {
@@ -76,17 +68,6 @@ func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nwo
 	}
 
 	return s, err
-}
-
-func (s *Session) worker(cmd sessionCmd, arg interface{}) {
-	defer s.cond.Signal()
-	defer s.addWorker(-1)
-}
-
-func (s *Session) addWorker(delta int) {
-	s.lock.Lock()
-	s.activeWk += delta
-	s.lock.Unlock()
 }
 
 //this struct is the element of an ordered array
