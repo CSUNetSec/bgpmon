@@ -7,6 +7,59 @@ import (
 	"time"
 )
 
+const (
+	POSTGRES = iota
+)
+
+var dbops = map[string][]string{
+	"connectNoSSL": []string{
+		//postgress
+		`user=%s password=%s dbname=%s host=%s sslmode=disable`,
+	},
+	"checkschema": []string{
+		//postgress
+		`SELECT EXISTS (
+		   SELECT *
+		   FROM   information_schema.tables
+		   WHERE  table_name = $1
+		 );`,
+	},
+	"selectNodeTmpl": []string{
+		//postgress
+		`SELECT name, ip, isCollector, tableDumpDurationMinutes,
+		   description, coords, address FROM %s;`,
+	},
+	"insertNodeTmpl": []string{
+		//postgress
+		`INSERT INTO %s (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) 
+		   VALUES ($1, $2, $3, $4, $5, $6, $7)
+		   ON CONFLICT (ip) DO UPDATE SET name=EXCLUDED.name, isCollector=EXCLUDED.isCollector, 
+		     tableDumpDurationMinutes=EXCLUDED.tableDumpDurationMinutes,
+		     description=EXCLUDED.description, coords=EXCLUDED.coords, address=EXCLUDED.address;`,
+	},
+	"makeMainTableTmpl": []string{
+		//postgress
+		`CREATE TABLE IF NOT EXISTS %s (
+		   dbname varchar PRIMARY KEY,
+	           collector varchar,
+	           dateFrom timestamp,
+	           dateTo timestamp
+                 );`,
+	},
+	"makeNodeTableTmpl": []string{
+		//postgress
+		`CREATE TABLE IF NOT EXISTS %s (
+		   ip varchar PRIMARY KEY,
+		   name varchar, 
+		   isCollector boolean,
+		   tableDumpDurationMinutes integer,
+		   description varchar,
+		   coords varchar,
+		   address varchar
+	         );`,
+	},
+}
+
 var (
 	dblogger = logrus.WithField("system", "db")
 )

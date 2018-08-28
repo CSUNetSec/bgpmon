@@ -17,6 +17,11 @@ type postgresSession struct {
 	colstrs   collectorsByNameDate
 }
 
+//null Do impl until we kill this file
+func (ps *postgresSession) Do(sessionCmd, interface{}) (interface{}, error) {
+	return nil, nil
+}
+
 //implement Dber
 func (ps *postgresSession) Db() *sql.DB {
 	return ps.db
@@ -206,7 +211,23 @@ func (ps *postgresSession) Close() error {
 	return nil
 }
 
-func newPostgresSession(ctx context.Context, conf config.SessionConfiger, id string, nw int) (*postgresSession, error) {
+/*
+func (ps *postgresSession) Schema(sc SchemaCmd) (ret SchemaReply) {
+	dblogger.Infof("postgres SchemaCommand called")
+	switch sc.Cmd {
+	case CheckAndInit:
+		ret.Err = ps.schemaCheckInit()
+	case SyncNodes:
+		ret.Nodes, ret.Err = ps.schemaSyncNodes(sc.Nodes)
+	default:
+		dblogger.Errorf("Unknown schema command %v", sc)
+		ret.Err = errors.New("unknown schema command")
+	}
+	return
+}
+*/
+
+func newPostgresSession(ctx context.Context, conf config.SessionConfiger, id string, nw int) (Sessioner, error) {
 	var (
 		db  *sql.DB
 		err error

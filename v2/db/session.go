@@ -3,12 +3,13 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/pkg/errors"
 	"sort"
-	"sync"
+	//"sync"
 	"time"
 )
 
@@ -28,9 +29,24 @@ type Sessioner interface {
 }
 
 type Session struct {
-	uuid string
-	ctx  context.Context
-	wp   *util.WorkerPool
+	uuid   string
+	ctx    context.Context
+	wp     *util.WorkerPool
+	dbType int //this is also the index for the returned string arraysi in dbops
+}
+
+// Gets the specific db op string from the static table declared in db.go
+// for the appropriate dbType that was populated when the correct newSession was called.
+// Panics on error.
+func (s *Session) getdbop(a string) (ret string) {
+	if sslice, exists := dbops[a]; !exists {
+		panic(fmt.Sprintf("nx db op name:%s requested.", a))
+	} else if len(sslice)-1 < s.dbType {
+		panic(fmt.Sprintf("dbop:%s for this db type not populated", a))
+	} else {
+		ret = sslice[s.dbType]
+	}
+	return
 }
 
 // Maybe this should return a channel that the calling function
@@ -40,6 +56,7 @@ func (s *Session) Do(cmd sessionCmd, arg interface{}) (interface{}, error) {
 	case SESSION_OPEN_STREAM:
 
 	}
+	return nil, nil
 }
 
 func (s *Session) Close() error {
