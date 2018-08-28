@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"github.com/CSUNetSec/bgpmon/v2/config"
+	"os"
 	"testing"
 )
 
@@ -82,5 +83,6 @@ func TestSyncNodes(t *testing.T) {
 	innodes[cn1.IP] = cn1
 	innodes[cn2.IP] = cn2
 	sin := sqlIn{dbname: "bgpmon", nodetable: "nodes", knownNodes: innodes}
-	syncNodes(db, sin)
+	sout := syncNodes(db, sin)
+	config.PutConfiguredNodes(sout.knownNodes, os.Stdout)
 }
