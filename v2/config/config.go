@@ -32,7 +32,6 @@ type Configer interface {
 	GetSessionConfigWithName(string) (SessionConfiger, error)
 	GetDaemonConfig() BgpmonDaemonConfig
 	GetConfiguredNodes() map[string]NodeConfig
-	PutConfiguredNodes(map[string]NodeConfig)
 }
 
 type BgpmonDaemonConfig struct {
@@ -94,8 +93,8 @@ func (b *bgpmondConfig) GetConfiguredNodes() map[string]NodeConfig {
 	return b.Nodes
 }
 
-func (b *bgpmondConfig) PutConfiguredNodes(a map[string]NodeConfig) {
-	return
+func PutConfiguredNodes(a map[string]NodeConfig, w io.Writer) error {
+	return toml.NewEncoder(w).Encode(a)
 }
 
 type sessionConfig struct {
