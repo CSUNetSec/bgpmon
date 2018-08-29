@@ -22,6 +22,29 @@ const (
 	SESSION_OPEN_STREAM sessionCmd = iota
 )
 
+type SessionStream struct {
+	req  chan sqlIn
+	resp chan sqlOut
+	wp   *WorkerPool
+}
+
+func NewSessionStream() *SessionStream {
+	ss := &SessionStream{}
+	ss.req = make(chan sqlIn)
+	ss.resp = make(chan sqlOut)
+
+	go ss.listen()
+	return ss
+}
+
+// This is the SessionStream goroutine
+func (ss *SessionStream) listen() {
+}
+
+func (ss *SessionStream) Close() error {
+	ss.wp.Done()
+}
+
 type Sessioner interface {
 	Do(cmd sessionCmd, arg interface{}) (interface{}, error)
 	Close() error
@@ -35,14 +58,17 @@ type Session struct {
 
 // Maybe this should return a channel that the calling function
 // could read from to get the reply
-func (s *Session) Do(cmd sessionCmd, arg interface{}) (interface{}, error) {
+func (s *Session) Do(cmd sessionCmd, arg interface{}) (SessionStream, error) {
 	switch cmd {
 	case SESSION_OPEN_STREAM:
-
+		s.wp.Add()
+		ss := NewSessionStream(s.wp)
+		return ss, nil
 	}
 }
 
 func (s *Session) Close() error {
+	wp.Close()
 	return nil
 }
 
