@@ -11,10 +11,11 @@ type WorkerPool struct {
 	done   chan bool
 	close  chan bool
 	wg     *sync.WaitGroup
+	closed bool
 }
 
 func NewWorkerPool(ct int) *WorkerPool {
-	wp := &WorkerPool{max: ct, active: 0, wg: &sync.WaitGroup{}}
+	wp := &WorkerPool{max: ct, active: 0, wg: &sync.WaitGroup{}, closed: false}
 	wp.req = make(chan bool)
 	wp.done = make(chan bool, ct)
 	wp.close = make(chan bool)
@@ -38,10 +39,15 @@ func (wp *WorkerPool) Close() {
 	wp.close <- true
 }
 
+func (wp *WorkerPool) Closed() bool {
+	return wp.closed
+}
+
 func (wp *WorkerPool) daemon() {
 	for {
 		select {
 		case <-wp.close:
+			wp.closed = true
 			return
 		default:
 		}

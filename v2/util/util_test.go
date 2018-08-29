@@ -50,4 +50,8 @@ func TestWorkerPool(t *testing.T) {
 	if finished < WP_MAX_LAUNCHED {
 		t.Errorf("Only %d/%d goroutines allowed to finish\n", finished, WP_MAX_LAUNCHED)
 	}
+
+	if !wp.Closed() {
+		t.Errorf("Failed to close worker pool daemon\n")
+	}
 }
