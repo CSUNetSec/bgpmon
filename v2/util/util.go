@@ -9,6 +9,7 @@ type WorkerPool struct {
 	active int
 	req    chan bool
 	done   chan bool
+	close  chan bool
 	wg     *sync.WaitGroup
 }
 
@@ -16,6 +17,7 @@ func NewWorkerPool(ct int) *WorkerPool {
 	wp := &WorkerPool{max: ct, active: 0, wg: &sync.WaitGroup{}}
 	wp.req = make(chan bool)
 	wp.done = make(chan bool, ct)
+	wp.close = make(chan bool)
 
 	go wp.daemon()
 	return wp
@@ -33,10 +35,17 @@ func (wp *WorkerPool) Done() {
 
 func (wp *WorkerPool) Close() {
 	wp.wg.Wait()
+	wp.close <- true
 }
 
 func (wp *WorkerPool) daemon() {
 	for {
+		select {
+		case <-wp.close:
+			return
+		default:
+		}
+
 		if wp.active == wp.max {
 			select {
 			case <-wp.done:
