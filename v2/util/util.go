@@ -47,16 +47,12 @@ func (wp *WorkerPool) daemon() {
 	defer wp.daemonWg.Done()
 
 	for {
-		select {
-		case <-wp.close:
-			return
-		default:
-		}
-
 		if wp.active == wp.max {
 			select {
 			case <-wp.done:
 				wp.active--
+			case <-wp.close:
+				return
 			}
 		} else {
 			select {
@@ -64,6 +60,8 @@ func (wp *WorkerPool) daemon() {
 				wp.active--
 			case wp.req <- true:
 				wp.active++
+			case <-wp.close:
+				return
 			}
 		}
 	}
