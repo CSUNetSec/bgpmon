@@ -29,11 +29,10 @@ func TestWorkerPool(t *testing.T) {
 		go func() {
 			mx.Lock()
 			active++
-			mx.Unlock()
-
 			if active > WP_MAX_RUNNING {
 				t.Errorf("Max running of %d exceeded\n", WP_MAX_RUNNING)
 			}
+			mx.Unlock()
 
 			time.Sleep(WP_SLEEP)
 
@@ -46,12 +45,12 @@ func TestWorkerPool(t *testing.T) {
 		}()
 	}
 
-	wp.Close()
+	closed := wp.Close()
 	if finished < WP_MAX_LAUNCHED {
 		t.Errorf("Only %d/%d goroutines allowed to finish\n", finished, WP_MAX_LAUNCHED)
 	}
 
-	if !wp.Closed() {
-		t.Errorf("Failed to close worker pool daemon\n")
+	if !closed {
+		t.Errorf("Failed to close daemon\n")
 	}
 }
