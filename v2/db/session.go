@@ -3,12 +3,12 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
-	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
+	_ "github.com/lib/pq"
+	//pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/pkg/errors"
-	"sort"
-	"sync"
 	"time"
 )
 
@@ -54,6 +54,12 @@ type Session struct {
 	uuid string
 	ctx  context.Context
 	wp   *util.WorkerPool
+	dbo  *dbOper //this struct is responsible for providing the strings for the sql ops.
+	db   *sql.DB
+}
+
+func (s *Session) Db() *sql.DB {
+	return s.db
 }
 
 // Maybe this should return a channel that the calling function
@@ -65,6 +71,7 @@ func (s *Session) Do(cmd sessionCmd, arg interface{}) (SessionStream, error) {
 		ss := NewSessionStream(s.wp)
 		return ss, nil
 	}
+	return nil, nil
 }
 
 func (s *Session) Close() error {
@@ -74,15 +81,36 @@ func (s *Session) Close() error {
 
 func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nworkers int) (Sessioner, error) {
 
-	var err error
+	var (
+		err    error
+		constr string
+		db     *sql.DB
+	)
 	wp := util.NewWorkerPool(nworkers)
 
 	s := &Session{uuid: id, ctx: ctx, wp: wp}
+	u := conf.GetUser()
+	p := conf.GetPassword()
+	d := conf.GetDatabaseName()
+	h := conf.GetHostNames()
+	cd := conf.GetCertDir()
 
 	// The DB will need to be a field within session
 	switch st := conf.GetTypeName(); st {
 	case "postgres":
-		//sess, err = newPostgresSession(ctx, conf, id, nworkers)
+		s.dbo = newPostgressDboper()
+		if len(h) == 1 && p != "" && cd == "" && u != "" { //no ssl standard pw
+			constr = s.dbo.getdbop("connectNoSSL")
+		} else if cd != "" && u != "" { //ssl
+			constr = s.dbo.getdbop("connectSSL")
+		} else {
+			return nil, errors.New("Postgres sessions require a password and exactly one hostname")
+		}
+		db, err = sql.Open("postgres", fmt.Sprintf(constr, u, p, d, h[0]))
+		if err != nil {
+			return nil, errors.Wrap(err, "sql open")
+		}
+
 	case "cockroachdb":
 		//sess, err = newCockroachSession(ctx, conf, id)
 	default:
@@ -92,94 +120,70 @@ func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nwo
 	if err != nil {
 		dblogger.Errorf("Failed openning session:%s", err)
 	}
+	s.db = db
 
 	return s, err
 }
 
-//this struct is the element of an ordered array
-//that will be used to name tables in the db and also
-//refer to them when they are open.
-type collectorDateString struct {
-	colName   string
-	startDate time.Time
-	duration  time.Duration
+//a wrapper struct that can contain all the possible arguments to our calls
+type sqlIn struct {
+	dbname     string                       //the name of the database we're operating on
+	maintable  string                       //the table which references all collector-day tables.
+	nodetable  string                       //the table with nodes and their configurations
+	knownNodes map[string]config.NodeConfig //an incoming map of the known nodes
 }
 
-func newCollectorDateString(name string, sd time.Time, dur time.Duration) *collectorDateString {
-	return &collectorDateString{
-		colName:   name,
-		startDate: sd,
-		duration:  dur,
+type sqlOut struct {
+	ok         bool
+	err        error
+	knownNodes map[string]config.NodeConfig //a composition of the incoming and already known nodes
+}
+
+type workFunc func(sqlCtxExecutor, sqlIn) sqlOut
+
+func (s *Session) doSyncNodes(known map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
+	//ping to see we can connect to the db
+	if err := s.db.Ping(); err != nil {
+		return nil, errors.Wrap(err, "sql ping")
 	}
-}
-
-//collector-date strings ordered by their starting date.
-type collectorsByNameDate []collectorDateString
-
-//Len implementation for sort interface
-func (c collectorsByNameDate) Len() int {
-	return len(c)
-}
-
-//Swap implementation for sort interface
-func (c collectorsByNameDate) Swap(i, j int) {
-	c[i], c[j] = c[j], c[i]
-}
-
-//Less implementation for sort interface. uses the stable
-//sort attribute to do two keys. first by name then by date.
-func (c collectorsByNameDate) Less(i, j int) bool {
-	if c[i].colName < c[j].colName {
-		return true
-	} else if c[i].colName > c[j].colName {
-		return false
+	if pctx, err := GetNewExecutor(s.ctx, s, false, CTXTIMEOUT); err != nil {
+		return nil, errors.Wrap(err, "newCtxTx")
+	} else {
+		snargs := sqlIn{dbname: "bgpmon", nodetable: "nodes", knownNodes: known}
+		sex := newCtxTxSessionExecutor(pctx, s.dbo)
+		syncNodes(sex, snargs)
 	}
-	return c[i].startDate.Before(c[j].startDate)
+	return nil, nil
 }
 
-//this will return the index and if the name and date are in the slice. caller has to check existence.
-func (c collectorsByNameDate) colNameDateInSlice(colname string, date time.Time) (int, bool) {
-	//find a possible index
-	ind := sort.Search(c.Len(), func(i int) bool {
-		return c[i].colName == colname && (c[i].startDate.After(date) || c[i].startDate.Equal(date))
-	})
-	//validate that the name is the same
-	if c[ind].colName != colname {
-		return 0, false
+//Checks the state and initializes the appropriate schemas
+func (s *Session) doCheckInit() error {
+	//ping to see we can connect to the db
+	if err := s.db.Ping(); err != nil {
+		return errors.Wrap(err, "sql ping")
 	}
-	//catch exact same date
-	if c[ind].startDate.Equal(date) {
-		return ind, true
+	//check for required main tables on the schema.
+	if pctx, err := GetNewExecutor(s.ctx, s, true, CTXTIMEOUT); err != nil {
+		return errors.Wrap(err, "newCtxTx")
+	} else {
+		csargs := sqlIn{dbname: "bgpmon", maintable: "dbs", nodetable: "nodes"}
+		sex := newCtxTxSessionExecutor(pctx, s.dbo)
+		if ok, err := retCheckSchema(checkSchema(sex, csargs)); err != nil {
+			return errors.Wrap(err, "retCheckschema")
+		} else {
+			if !ok { // table does not exist
+				dblogger.Infof("creating schema tables")
+				if err = retMakeSchema(makeSchema(sex, csargs)); err != nil {
+					return errors.Wrap(err, "retMakeSchema")
+				}
+				dblogger.Infof("all good. commiting the changes")
+				if err = pctx.Done(); err != nil {
+					return errors.Wrap(err, "makeschema commit")
+				}
+			} else {
+				dblogger.Infof("all main bgpmon tables exist.")
+			}
+		}
 	}
-	//catch the normal case where it is after the startdate, and before the startdate+duration
-	if c[ind].startDate.Before(date) && date.Before(c[ind].startDate.Add(c[ind].duration)) {
-		return ind, true
-	}
-	return 0, false
-}
-
-type genericSession struct {
-	knownCollectors collectorsByNameDate
-	parentCtx       context.Context
-}
-
-func (gs *genericSession) Write(wr *pb.WriteRequest) error {
-	dblogger.Infof("generic write called with request:%s", wr)
 	return nil
-}
-
-func (gs *genericSession) Close() error {
-	dblogger.Infof("generic close called")
-	return nil
-}
-
-//implements dber
-func (ps *genericSession) Db() *sql.DB {
-	dblogger.Infof("generic Db called")
-	return nil
-}
-
-func (ps *genericSession) GetParentContext() context.Context {
-	dblogger.Infof("generic GetContext called")
-	return ps.parentCtx
 }

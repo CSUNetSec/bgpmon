@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
+	//"io"
 	"net"
 	"os"
 
@@ -110,31 +110,33 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 }
 
 func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
-	var (
-		sess   db.Sessioner
-		first  bool
-		exists bool
-	)
-	first = true
-	for {
-		writeRequest, err := stream.Recv()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-		if first {
-			if sess, exists = s.sessions[writeRequest.SessionId]; !exists {
-				mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
-				return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
+	/*
+		var (
+			sess   db.Sessioner
+			first bool
+			exists bool
+		)
+		first = true
+		for {
+			writeRequest, err := stream.Recv()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return err
 			}
-			first = false
+			if first {
+				if sess, exists = s.sessions[writeRequest.SessionId]; !exists {
+					mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
+					return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
+				}
+				first = false
+			}
+				if _, err := sess.Do(db.SESSION_WRITE_MRT, writeRequest); err != nil {
+					mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
+					return errors.Wrap(err, "session write")
+				}
 		}
-		if _, err := sess.Do(db.SESSION_WRITE_MRT, writeRequest); err != nil {
-			mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
-			return errors.Wrap(err, "session write")
-		}
-	}
+	*/
 	mainlogger.Infof("write stream success")
 
 	return nil
