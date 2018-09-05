@@ -20,33 +20,62 @@ type sessionCmd int
 
 const (
 	SESSION_OPEN_STREAM sessionCmd = iota
+	SESSION_STREAM_WRITE_MRT
 )
 
 type SessionStream struct {
 	req  chan sqlIn
 	resp chan sqlOut
-	wp   *WorkerPool
+	wp   *util.WorkerPool
+	ctx  context.Context
+	cf   context.CancelFunc
 }
 
-func NewSessionStream() *SessionStream {
+func NewSessionStream(ctx context.Context, wp *util.WorkerPool) *SessionStream {
 	ss := &SessionStream{}
 	ss.req = make(chan sqlIn)
-	ss.resp = make(chan sqlOut)
+	ss.resp = make(chan sqlOut, 1)
+	ss.wp = wp
+
+	childCtx, cf := context.WithCancel(ctx)
+	ss.ctx = childCtx
+	ss.cf = cf
 
 	go ss.listen()
 	return ss
 }
 
+func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
+	ss.req <- arg.(sqlIn)
+	resp := <-ss.resp
+	return resp.err
+}
+
+func (ss *SessionStream) Flush() error {
+	return nil
+}
+
 // This is the SessionStream goroutine
 func (ss *SessionStream) listen() {
+	for {
+		select {
+		case <-ss.ctx.Done():
+			ss.resp <- sqlOut{ok: false, err: fmt.Errorf("Stream closed")}
+			return
+		case <-ss.req:
+			ss.resp <- sqlOut{ok: true}
+		}
+	}
 }
 
 func (ss *SessionStream) Close() error {
 	ss.wp.Done()
+	ss.cf()
+	return nil
 }
 
 type Sessioner interface {
-	Do(cmd sessionCmd, arg interface{}) (interface{}, error)
+	Do(cmd sessionCmd, arg interface{}) (*SessionStream, error)
 	Close() error
 }
 
@@ -64,18 +93,18 @@ func (s *Session) Db() *sql.DB {
 
 // Maybe this should return a channel that the calling function
 // could read from to get the reply
-func (s *Session) Do(cmd sessionCmd, arg interface{}) (SessionStream, error) {
+func (s *Session) Do(cmd sessionCmd, arg interface{}) (*SessionStream, error) {
 	switch cmd {
 	case SESSION_OPEN_STREAM:
 		s.wp.Add()
-		ss := NewSessionStream(s.wp)
+		ss := NewSessionStream(s.ctx, s.wp)
 		return ss, nil
 	}
 	return nil, nil
 }
 
 func (s *Session) Close() error {
-	wp.Close()
+	s.wp.Close()
 	return nil
 }
 

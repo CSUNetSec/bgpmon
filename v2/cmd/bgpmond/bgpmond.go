@@ -18,6 +18,10 @@ import (
 	_ "net/http/pprof"
 )
 
+const (
+	WRITE_TIMEOUT = 10 * time.Second
+)
+
 var (
 	mainlogger = logrus.WithField("system", "main")
 )
@@ -110,34 +114,54 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 }
 
 func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
-	/*
-		var (
-			sess   db.Sessioner
-			first bool
-			exists bool
-		)
-		first = true
-		for {
-			writeRequest, err := stream.Recv()
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return err
-			}
-			if first {
-				if sess, exists = s.sessions[writeRequest.SessionId]; !exists {
-					mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
-					return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
-				}
-				first = false
-			}
-				if _, err := sess.Do(db.SESSION_WRITE_MRT, writeRequest); err != nil {
-					mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
-					return errors.Wrap(err, "session write")
-				}
+	var (
+		sess     db.Sessioner
+		first    bool
+		dbStream *db.SessionStream
+	)
+	timeutCtx, _ = context.WithTimeout(s.ctx, WRITE_TIMEOUT)
+
+	first = true
+	for {
+		if util.NBContextClosed(timeutCtx) {
+			mainlogger.Errorf()
+			return
 		}
-	*/
-	mainlogger.Infof("write stream success")
+
+		writeRequest, err := stream.Recv()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		if first {
+			if sess, exists := s.sessions[writeRequest.SessionId]; !exists {
+				mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
+				return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
+			}
+			first = false
+
+			dbStream, err = sess.Do(SESSION_OPEN_STREAM, nil)
+			if err != nil {
+				mainlogger.Errorf("Error opening session stream on session: %s", writeRequest.SessionId)
+				return errors.New(fmt.Sprntf("Error opening session stream on session: %s", writeRequest.SessionId))
+			}
+			defer dbStream.Close()
+		}
+
+		if err := dbStream.Send(db.SESSION_STREAM_WRITE_MRT, writeRequest); err != nil {
+			mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
+			return errors.Wrap(err, "session write")
+		}
+	}
+
+	if err := dbStream.Flush(); err != nil {
+		mainlogger.Errorf("write stream failed to flush")
+		return errors.Wrap(err, "session stream flush")
+	} else {
+		mainlogger.Infof("write stream success")
+	}
 
 	return nil
 }
