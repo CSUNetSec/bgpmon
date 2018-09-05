@@ -2,12 +2,15 @@ package main
 
 import (
 	"fmt"
-	//"io"
+	"io"
 	"net"
 	"os"
+	"os/signal"
+	"time"
 
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/db"
+	"github.com/CSUNetSec/bgpmon/v2/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/pkg/errors"
 
@@ -33,12 +36,12 @@ type server struct {
 	ctx        context.Context
 }
 
-func newServer(c config.Configer) *server {
+func newServer(c config.Configer, ctx context.Context) *server {
 	return &server{
 		knownNodes: c.GetConfiguredNodes(),
 		sessions:   make(map[string]db.Sessioner),
 		conf:       c,
-		ctx:        context.Background(),
+		ctx:        ctx,
 	}
 }
 
@@ -115,17 +118,16 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 
 func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 	var (
-		sess     db.Sessioner
 		first    bool
 		dbStream *db.SessionStream
 	)
-	timeutCtx, _ = context.WithTimeout(s.ctx, WRITE_TIMEOUT)
+	timeoutCtx, _ := context.WithTimeout(s.ctx, WRITE_TIMEOUT)
 
 	first = true
 	for {
-		if util.NBContextClosed(timeutCtx) {
-			mainlogger.Errorf()
-			return
+		if util.NBContextClosed(timeoutCtx) {
+			mainlogger.Errorf("context closed, aborting write")
+			return fmt.Errorf("context closed, aborting write")
 		}
 
 		writeRequest, err := stream.Recv()
@@ -136,16 +138,17 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 		}
 
 		if first {
-			if sess, exists := s.sessions[writeRequest.SessionId]; !exists {
+			sess, exists := s.sessions[writeRequest.SessionId]
+			if !exists {
 				mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
 				return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
 			}
 			first = false
 
-			dbStream, err = sess.Do(SESSION_OPEN_STREAM, nil)
+			dbStream, err = sess.Do(db.SESSION_OPEN_STREAM, nil)
 			if err != nil {
 				mainlogger.Errorf("Error opening session stream on session: %s", writeRequest.SessionId)
-				return errors.New(fmt.Sprntf("Error opening session stream on session: %s", writeRequest.SessionId))
+				return errors.New(fmt.Sprintf("Error opening session stream on session: %s", writeRequest.SessionId))
 			}
 			defer dbStream.Close()
 		}
@@ -203,9 +206,22 @@ func main() {
 		if listen, lerr := net.Listen("tcp", daemonConf.Address); lerr != nil {
 			mainlogger.Fatalf("setting up grpc server error:%s", lerr)
 		} else {
-			bgpmondServer := newServer(bc)
+			ctx, cf := context.WithCancel(context.Background())
+
+			bgpmondServer := newServer(bc, ctx)
 			grpcServer := grpc.NewServer()
 			pb.RegisterBgpmondServer(grpcServer, bgpmondServer)
+
+			close := make(chan os.Signal, 1)
+			signal.Notify(close, os.Interrupt)
+
+			go func() {
+				<-close
+				mainlogger.Infof("Received SIGINT, shutting down server")
+				cf()
+				grpcServer.Stop()
+			}()
+
 			grpcServer.Serve(listen)
 		}
 	}
