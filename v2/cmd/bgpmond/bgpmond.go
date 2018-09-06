@@ -184,6 +184,12 @@ func (s *server) getSessions(sessionIDs []string) ([]db.Sessioner, error) {
 	return sessions, nil
 }
 
+func (s *server) shutdown() {
+	for _, sess := range s.sessions {
+		sess.Close()
+	}
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		mainlogger.Fatal("no configuration file provided")
@@ -219,7 +225,8 @@ func main() {
 				<-close
 				mainlogger.Infof("Received SIGINT, shutting down server")
 				cf()
-				grpcServer.Stop()
+				grpcServer.GracefulStop()
+				bgpmondServer.shutdown()
 			}()
 
 			grpcServer.Serve(listen)

@@ -105,6 +105,7 @@ func (s *Session) Do(cmd sessionCmd, arg interface{}) (*SessionStream, error) {
 
 func (s *Session) Close() error {
 	s.wp.Close()
+	dblogger.Infof("Closing session: %s", s.uuid)
 	return nil
 }
 
