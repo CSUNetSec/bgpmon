@@ -33,15 +33,13 @@ type server struct {
 	sessions   map[string]db.Sessioner // map from uuid to session interface
 	conf       config.Configer         // the config populated from the file
 	knownNodes map[string]config.NodeConfig
-	ctx        context.Context
 }
 
-func newServer(c config.Configer, ctx context.Context) *server {
+func newServer(c config.Configer) *server {
 	return &server{
 		knownNodes: c.GetConfiguredNodes(),
 		sessions:   make(map[string]db.Sessioner),
 		conf:       c,
-		ctx:        ctx,
 	}
 }
 
@@ -106,7 +104,7 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 	} else {
 		//XXX here we are passing the background context of the server not the one in the argument.
 		//therefore cancellation will be controlled by the server. consider using joincontext here.
-		if sess, nserr := db.NewSession(s.ctx, sc, request.SessionId, int(request.Workers)); nserr != nil {
+		if sess, nserr := db.NewSession(ctx, sc, request.SessionId, int(request.Workers)); nserr != nil {
 			return nil, errors.Wrap(nserr, "can't create session")
 		} else {
 			s.sessions[request.SessionId] = sess
@@ -121,7 +119,7 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 		first    bool
 		dbStream *db.SessionStream
 	)
-	timeoutCtx, _ := context.WithTimeout(s.ctx, WRITE_TIMEOUT)
+	timeoutCtx, _ := context.WithTimeout(context.Background(), WRITE_TIMEOUT)
 
 	first = true
 	for {
@@ -154,7 +152,7 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 		}
 
 		if err := dbStream.Send(db.SESSION_STREAM_WRITE_MRT, writeRequest); err != nil {
-			mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
+			mainlogger.Errorf("error writing on session(%s): %s", writeRequest.SessionId, err)
 			return errors.Wrap(err, "session write")
 		}
 	}
@@ -212,9 +210,7 @@ func main() {
 		if listen, lerr := net.Listen("tcp", daemonConf.Address); lerr != nil {
 			mainlogger.Fatalf("setting up grpc server error:%s", lerr)
 		} else {
-			ctx, cf := context.WithCancel(context.Background())
-
-			bgpmondServer := newServer(bc, ctx)
+			bgpmondServer := newServer(bc)
 			grpcServer := grpc.NewServer()
 			pb.RegisterBgpmondServer(grpcServer, bgpmondServer)
 
@@ -224,9 +220,8 @@ func main() {
 			go func() {
 				<-close
 				mainlogger.Infof("Received SIGINT, shutting down server")
-				cf()
-				grpcServer.GracefulStop()
 				bgpmondServer.shutdown()
+				grpcServer.GracefulStop()
 			}()
 
 			grpcServer.Serve(listen)
