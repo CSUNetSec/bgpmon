@@ -31,23 +31,30 @@ type SessionStream struct {
 	cf   context.CancelFunc
 }
 
-func NewSessionStream(ctx context.Context, wp *util.WorkerPool) *SessionStream {
+func NewSessionStream(parentCtx context.Context, wp *util.WorkerPool) *SessionStream {
 	ss := &SessionStream{}
 	ss.req = make(chan sqlIn)
-	ss.resp = make(chan sqlOut, 1)
+	ss.resp = make(chan sqlOut)
 	ss.wp = wp
 
-	childCtx, cf := context.WithCancel(ctx)
-	ss.ctx = childCtx
+	ctx, cf := context.WithCancel(parentCtx)
+	ss.ctx = ctx
 	ss.cf = cf
 
 	go ss.listen()
 	return ss
 }
 
+// WARNING, sending after a close will cause a panic, and may hang
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
-	ss.req <- arg.(sqlIn)
-	resp := <-ss.resp
+	dblogger.Infof("Sending to session stream")
+	//ss.req <- arg.(sqlIn)
+	ss.req <- sqlIn{}
+	resp, ok := <-ss.resp
+
+	if !ok {
+		return fmt.Errorf("Response channel closed")
+	}
 	return resp.err
 }
 
@@ -57,10 +64,19 @@ func (ss *SessionStream) Flush() error {
 
 // This is the SessionStream goroutine
 func (ss *SessionStream) listen() {
+	defer dblogger.Infof("Session stream closed successfully")
+	defer close(ss.resp)
+
 	for {
 		select {
 		case <-ss.ctx.Done():
-			ss.resp <- sqlOut{ok: false, err: fmt.Errorf("Stream closed")}
+			_, ok := <-ss.req
+			// If the channel is still live, then this is a cancellation, and I
+			// should return an error
+			if ok {
+				ss.resp <- sqlOut{ok: false, err: fmt.Errorf("Stream closed")}
+			}
+			// Otherwise, just let it die
 			return
 		case <-ss.req:
 			ss.resp <- sqlOut{ok: true}
@@ -68,9 +84,17 @@ func (ss *SessionStream) listen() {
 	}
 }
 
+// This is only for a normal close operation. A cancellation
+// can only be done by Close()'ing the parent session while
+// the stream is still running
+// This should be called by the same goroutine as the one calling
+// send
 func (ss *SessionStream) Close() error {
-	ss.wp.Done()
+	dblogger.Infof("Closing session stream")
+
+	close(ss.req)
 	ss.cf()
+	ss.wp.Done()
 	return nil
 }
 
@@ -82,6 +106,7 @@ type Sessioner interface {
 type Session struct {
 	uuid string
 	ctx  context.Context
+	cf   context.CancelFunc
 	wp   *util.WorkerPool
 	dbo  *dbOper //this struct is responsible for providing the strings for the sql ops.
 	db   *sql.DB
@@ -96,6 +121,7 @@ func (s *Session) Db() *sql.DB {
 func (s *Session) Do(cmd sessionCmd, arg interface{}) (*SessionStream, error) {
 	switch cmd {
 	case SESSION_OPEN_STREAM:
+		dblogger.Infof("Opening stream on session: %s", s.uuid)
 		s.wp.Add()
 		ss := NewSessionStream(s.ctx, s.wp)
 		return ss, nil
@@ -104,11 +130,14 @@ func (s *Session) Do(cmd sessionCmd, arg interface{}) (*SessionStream, error) {
 }
 
 func (s *Session) Close() error {
+	s.cf()
+
 	s.wp.Close()
+	dblogger.Infof("Closing session: %s", s.uuid)
 	return nil
 }
 
-func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nworkers int) (Sessioner, error) {
+func NewSession(parentCtx context.Context, conf config.SessionConfiger, id string, nworkers int) (Sessioner, error) {
 
 	var (
 		err    error
@@ -117,7 +146,9 @@ func NewSession(ctx context.Context, conf config.SessionConfiger, id string, nwo
 	)
 	wp := util.NewWorkerPool(nworkers)
 
-	s := &Session{uuid: id, ctx: ctx, wp: wp}
+	ctx, cf := context.WithCancel(context.Background())
+
+	s := &Session{uuid: id, ctx: ctx, cf: cf, wp: wp}
 	u := conf.GetUser()
 	p := conf.GetPassword()
 	d := conf.GetDatabaseName()
