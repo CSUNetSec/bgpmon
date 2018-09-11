@@ -106,7 +106,7 @@ func (d *dbOper) getdbop(a string) (ret string) {
 	return
 }
 
-func newPostgressDboper() *dbOper {
+func newPostgressDbOper() *dbOper {
 	return &dbOper{
 		t: POSTGRES,
 	}
