@@ -54,3 +54,23 @@ func TestWorkerPool(t *testing.T) {
 		t.Errorf("Failed to close daemon\n")
 	}
 }
+
+func TestWorkerPoolClose(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	finished := false
+	wp := NewWorkerPool(1)
+	wp.Add()
+	go func() {
+		defer wp.Done()
+		time.Sleep(WP_SLEEP)
+		finished = true
+	}()
+
+	wp.Close()
+	if !finished {
+		t.Errorf("Worker pool closed before individual workers finished")
+	}
+}

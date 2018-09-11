@@ -2,12 +2,15 @@ package main
 
 import (
 	"fmt"
-	//"io"
+	"io"
 	"net"
 	"os"
+	"os/signal"
+	"time"
 
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/db"
+	"github.com/CSUNetSec/bgpmon/v2/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/pkg/errors"
 
@@ -16,6 +19,10 @@ import (
 	"google.golang.org/grpc"
 	"net/http"
 	_ "net/http/pprof"
+)
+
+const (
+	WRITE_TIMEOUT = 10 * time.Second
 )
 
 var (
@@ -29,12 +36,12 @@ type server struct {
 	ctx        context.Context
 }
 
-func newServer(c config.Configer) *server {
+func newServer(c config.Configer, ctx context.Context) *server {
 	return &server{
 		knownNodes: c.GetConfiguredNodes(),
 		sessions:   make(map[string]db.Sessioner),
 		conf:       c,
-		ctx:        context.Background(),
+		ctx:        ctx,
 	}
 }
 
@@ -110,34 +117,54 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 }
 
 func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
-	/*
-		var (
-			sess   db.Sessioner
-			first bool
-			exists bool
-		)
-		first = true
-		for {
-			writeRequest, err := stream.Recv()
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return err
-			}
-			if first {
-				if sess, exists = s.sessions[writeRequest.SessionId]; !exists {
-					mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
-					return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
-				}
-				first = false
-			}
-				if _, err := sess.Do(db.SESSION_WRITE_MRT, writeRequest); err != nil {
-					mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
-					return errors.Wrap(err, "session write")
-				}
+	var (
+		first    bool
+		dbStream *db.SessionStream
+	)
+	timeoutCtx, _ := context.WithTimeout(s.ctx, WRITE_TIMEOUT)
+
+	first = true
+	for {
+		if util.NBContextClosed(timeoutCtx) {
+			mainlogger.Errorf("context closed, aborting write")
+			return fmt.Errorf("context closed, aborting write")
 		}
-	*/
-	mainlogger.Infof("write stream success")
+
+		writeRequest, err := stream.Recv()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		if first {
+			sess, exists := s.sessions[writeRequest.SessionId]
+			if !exists {
+				mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
+				return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
+			}
+			first = false
+
+			dbStream, err = sess.Do(db.SESSION_OPEN_STREAM, nil)
+			if err != nil {
+				mainlogger.Errorf("Error opening session stream on session: %s", writeRequest.SessionId)
+				return errors.New(fmt.Sprintf("Error opening session stream on session: %s", writeRequest.SessionId))
+			}
+			defer dbStream.Close()
+		}
+
+		if err := dbStream.Send(db.SESSION_STREAM_WRITE_MRT, writeRequest); err != nil {
+			mainlogger.Errorf("error:%s writing on session:%s", err, writeRequest.SessionId)
+			return errors.Wrap(err, "session write")
+		}
+	}
+
+	if err := dbStream.Flush(); err != nil {
+		mainlogger.Errorf("write stream failed to flush")
+		return errors.Wrap(err, "session stream flush")
+	} else {
+		mainlogger.Infof("write stream success")
+	}
 
 	return nil
 }
@@ -179,9 +206,22 @@ func main() {
 		if listen, lerr := net.Listen("tcp", daemonConf.Address); lerr != nil {
 			mainlogger.Fatalf("setting up grpc server error:%s", lerr)
 		} else {
-			bgpmondServer := newServer(bc)
+			ctx, cf := context.WithCancel(context.Background())
+
+			bgpmondServer := newServer(bc, ctx)
 			grpcServer := grpc.NewServer()
 			pb.RegisterBgpmondServer(grpcServer, bgpmondServer)
+
+			close := make(chan os.Signal, 1)
+			signal.Notify(close, os.Interrupt)
+
+			go func() {
+				<-close
+				mainlogger.Infof("Received SIGINT, shutting down server")
+				cf()
+				grpcServer.Stop()
+			}()
+
 			grpcServer.Serve(listen)
 		}
 	}
