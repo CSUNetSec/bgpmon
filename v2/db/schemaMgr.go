@@ -3,7 +3,7 @@ package db
 import (
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"time"
+	"github.com/CSUNetSec/bgpmon/v2/config"
 )
 
 var (
@@ -13,25 +13,24 @@ var (
 type schemaCmdOp int
 
 const (
-	CHECKTABLE = schemaCmdOp(iota)
-	INITSCHEMA
+	INITSCHEMA = schemaCmdOp(iota)
 	CHECKSCHEMA
-	MAKESCHEMA
 	GETCOLNAME
+	SYNCNODES
+	CHECKTABLE
 )
 
 type schemaCmd struct {
 	op            schemaCmdOp
-	tableName     string
-	collectorName string
+	sin	      sqlIn
 	collectorIP   string
-	msgTimestamp  time.Time
+	tablename     string
 }
 
 type schemaReply struct {
 	err       error
-	ok        bool
-	tableName string
+	sout      sqlOut
+	ok	  bool
 }
 
 type schemaMgr struct {
@@ -51,7 +50,7 @@ func newSchemaMgr(sex SessionExecutor) *schemaMgr {
 }
 
 //should be run in a separate goroutine
-func (s *schemaMgr) Run() {
+func (s *schemaMgr) run() {
 	for {
 		ret := schemaReply{ok: true}
 		select {
@@ -59,12 +58,15 @@ func (s *schemaMgr) Run() {
 			switch icmd.op {
 			case CHECKSCHEMA:
 				slogger.Infof("checking correctness of db schema")
+				ret.sout = checkSchema(s.sex, icmd.sin)
 
 			case INITSCHEMA:
 				slogger.Infof("initializing db schema")
+				ret.sout = makeSchema(s.sex, icmd.sin)
 
-			case CHECKTABLE:
-				slogger.Infof("checking for table:%s", icmd.tableName)
+			case SYNCNODES:
+				slogger.Infof("syncing node configs")
+				ret.sout = syncNodes(s.sex, icmd.sin)
 
 			case GETCOLNAME:
 				slogger.Infof("getting collector name for collector IP:%s", icmd.collectorIP)
@@ -74,6 +76,7 @@ func (s *schemaMgr) Run() {
 				ret.ok = false
 				slogger.Errorf("error::%s", ret.err)
 			}
+			s.oChan <- ret
 		case <-s.cChan:
 			slogger.Infof("schemaMgr terminating by close channel")
 			return
@@ -82,6 +85,31 @@ func (s *schemaMgr) Run() {
 	}
 }
 
-func (s *schemaMgr) Close() {
+func (s *schemaMgr) stop() {
 	close(s.cChan)
 }
+
+func (s *schemaMgr) checkSchema(dbname,maintable,nodetable string) (bool, error) {
+	sin := sqlIn{dbname:dbname, maintable:maintable, nodetable:nodetable}
+	cmdin := schemaCmd{op:CHECKSCHEMA, sin: sin}
+	s.iChan <- cmdin
+	sreply := <-s.oChan
+	return sreply.sout.ok, sreply.sout.err
+}
+
+func (s *schemaMgr) makeSchema(dbname, maintable, nodetable string) error {
+	sin := sqlIn{dbname:dbname, maintable:maintable, nodetable:nodetable}
+	cmdin := schemaCmd{op:INITSCHEMA, sin: sin}
+	s.iChan <- cmdin
+	sreply := <-s.oChan
+	return sreply.sout.err
+}
+
+func (s *schemaMgr) syncNodes(dbname, nodetable string, knownNodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
+	sin := sqlIn{dbname:dbname, nodetable: nodetable, knownNodes: knownNodes}
+	cmdin := schemaCmd{op:SYNCNODES, sin: sin}
+	s.iChan <- cmdin
+	sreply := <- s.oChan
+	return sreply.sout.knownNodes, sreply.sout.err
+}
+
