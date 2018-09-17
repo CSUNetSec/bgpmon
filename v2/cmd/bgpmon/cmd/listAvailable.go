@@ -13,7 +13,8 @@ var listAvailableCmd = &cobra.Command{
 	Short: "list configured types of sessions and their names",
 	Long: `Lists the names and information of the sessions configured in a bgpmond
 these names can be used with the open command to open these types of sessions`,
-	Run: listAvail,
+	Args: cobra.NoArgs,
+	Run:  listAvail,
 }
 
 func listAvail(cmd *cobra.Command, args []string) {

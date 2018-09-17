@@ -12,25 +12,25 @@ import (
 var (
 	mrtFile    string
 	filterFile string
+	sessId     *string
 )
 
 // writeCmd represents the write command
 var writeCmd = &cobra.Command{
-	Use:   "write",
+	Use:   "write SESS_ID",
 	Short: "writes messages to a session ID",
-	Long: `write will write BGP captures to the open db session identified by ID
+	Long: `write will write BGP captures to the open db session identified by SESS_ID
 Depending on the flags it can read captures from an MRT file, an running gobgpd instance, or from its stdin`,
-	Run: writeFunc,
+	Args: cobra.ExactArgs(1),
+	Run:  writeFunc,
 }
 
 func writeFunc(cmd *cobra.Command, args []string) {
 	var (
-		filts []filter.Filter
+		filts  []filter.Filter
+		sessId = args[0]
 	)
-	if len(args) != 1 {
-		fmt.Printf("Error: write requires a session ID\n")
-		return
-	}
+
 	if bc, clierr := NewBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
 		return
@@ -67,7 +67,7 @@ func writeFunc(cmd *cobra.Command, args []string) {
 						parsed++
 						writeRequest := new(monpb.WriteRequest)
 						writeRequest.Type = monpb.WriteRequest_BGP_CAPTURE
-						writeRequest.SessionId = args[0]
+						writeRequest.SessionId = sessId
 						writeRequest.BgpCapture = pb
 						if err := stream.Send(writeRequest); err != nil {
 							fmt.Println("error in write request:%s. cancelling...", err)

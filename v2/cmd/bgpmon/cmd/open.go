@@ -15,25 +15,24 @@ var (
 
 // openCmd represents the open command
 var openCmd = &cobra.Command{
-	Use:   "open",
+	Use:   "open SESSION_TYPE",
 	Short: "opens a new database session from the bgpmond and returns its ID",
-	Long: `Tries to open a configured session with a specific name from the bgpmond,
+	Long: `Tries to open a available session with a specific type from the bgpmond,
 and if succesful returns the newly allocated ID for that session`,
-	Run: openSess,
+	Args: cobra.ExactArgs(1),
+	Run:  openSess,
 }
 
 func openSess(cmd *cobra.Command, args []string) {
-	if len(args) != 1 {
-		fmt.Println("Error: requiring session name to open")
-		return
-	}
-	fmt.Println("Trying to open a configured session named:", args[0], " with ID:", sid)
+	sessType := args[0]
+
+	fmt.Println("Trying to open a available session named:", sessType, " with ID:", sid)
 	if bc, clierr := NewBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
 	} else {
 		defer bc.Close()
 		emsg := &pb.OpenSessionRequest{
-			SessionName: args[0],
+			SessionName: sessType,
 			SessionId:   sid,
 			Workers:     nw,
 		}
