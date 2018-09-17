@@ -158,7 +158,7 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 	// The DB will need to be a field within session
 	switch st := conf.GetTypeName(); st {
 	case "postgres":
-		s.dbo = newPostgressDboper()
+		s.dbo = newPostgressDbOper()
 		if len(h) == 1 && p != "" && cd == "" && u != "" { //no ssl standard pw
 			constr = s.dbo.getdbop("connectNoSSL")
 		} else if cd != "" && u != "" { //ssl
