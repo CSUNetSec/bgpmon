@@ -13,7 +13,8 @@ var listOpenCmd = &cobra.Command{
 	Short: "list the open session IDs that the bgpmond currently handles",
 	Long: `Lists the IDs that the bgpmond uses to refer to individual open
 sessions, this can be used to perform bgpmon queries on them or close them.`,
-	Run: listOpen,
+	Args: cobra.NoArgs,
+	Run:  listOpen,
 }
 
 func listOpen(cmd *cobra.Command, args []string) {
