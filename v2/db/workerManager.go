@@ -56,6 +56,7 @@ type workerMgr struct {
 func (w workerMgr) Run() {
 	go func() {
 		worklogger.Info("starting worker manager gor db")
+		defer worklogger.Info("stopping worker manager for db")
 		for {
 			select {
 			case icmd := <-w.inCmd:
@@ -83,7 +84,6 @@ func (w workerMgr) Run() {
 				worklogger.Info("server context is done. worker manager quiting")
 			}
 		}
-		worklogger.Info("stopping worker manager for db")
 	}()
 }
 
