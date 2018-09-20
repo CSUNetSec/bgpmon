@@ -28,12 +28,11 @@ type SessionStream struct {
 	resp   chan sqlOut
 	cancel chan bool
 	wp     *util.WorkerPool
-	ctx    context.Context
-	cf     context.CancelFunc
+	closed bool
 }
 
 func NewSessionStream(cancel chan bool, wp *util.WorkerPool) *SessionStream {
-	ss := &SessionStream{}
+	ss := &SessionStream{closed: false}
 	ss.wp = wp
 	ss.cancel = cancel
 	ss.req = make(chan sqlIn)
@@ -70,6 +69,7 @@ func (ss *SessionStream) listen() {
 		// Alive should be true if the stream was closed from ss.Close(), and false
 		// if it was closed from a session close
 		case _, alive := <-ss.cancel:
+			ss.closed = true
 			_, ok := <-ss.req
 
 			if ok && alive {
@@ -95,9 +95,11 @@ func (ss *SessionStream) listen() {
 // send
 func (ss *SessionStream) Close() error {
 	dblogger.Infof("Closing session stream")
+	if !ss.closed {
+		ss.cancel <- true
+	}
 
 	close(ss.req)
-	ss.cancel <- true
 
 	ss.wp.Done()
 	return nil
