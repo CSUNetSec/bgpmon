@@ -44,7 +44,6 @@ func NewSessionStream(cancel chan bool, wp *util.WorkerPool) *SessionStream {
 
 // WARNING, sending after a close will cause a panic, and may hang
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
-	dblogger.Infof("Sending to session stream")
 	//ss.req <- arg.(sqlIn)
 	ss.req <- sqlIn{}
 	resp, ok := <-ss.resp
