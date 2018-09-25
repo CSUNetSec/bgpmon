@@ -15,7 +15,7 @@ var (
 // these require the sql executor to be already set up for them.
 // checkschema makes sure that all the required tables exist in the database
 func checkSchema(ex SessionExecutor, args sqlIn) (ret sqlOut) {
-	csquery := ex.getdbop("checkschema")
+	csquery := ex.getdbop(CHECK_SCHEMA)
 	var (
 		res bool
 		err error
@@ -38,8 +38,8 @@ func checkSchema(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 // it then returns back the aggregate. If a node exists in both the incoming (from config)
 // view is preffered.
 func syncNodes(ex SessionExecutor, args sqlIn) (ret sqlOut) {
-	selectNodeTmpl := ex.getdbop("selectNodeTmpl")
-	insertNodeTmpl := ex.getdbop("insertNodeTmpl")
+	selectNodeTmpl := ex.getdbop(SELECT_NODE)
+	insertNodeTmpl := ex.getdbop(INSERT_NODE)
 	dbNodes := make(map[string]config.NodeConfig) //this keeps nodeconfigs recovered from the db
 	cn := newNode()                               //the current node we will be looping over
 	rows, err := ex.Query(fmt.Sprintf(selectNodeTmpl, args.nodetable))
@@ -81,7 +81,7 @@ func syncNodes(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 
 //returns the first matching node from the db table based on ip or name
 func getNode(ex SessionExecutor, args sqlIn) (ret sqlOut) {
-	selectNodeTmpl := ex.getdbop("selectNodeTmpl")
+	selectNodeTmpl := ex.getdbop(SELECT_NODE)
 	cn := newNode()
 	rows, err := ex.Query(fmt.Sprintf(selectNodeTmpl, args.nodetable))
 	if err != nil {
@@ -109,8 +109,8 @@ func getNode(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 
 // creates the necessary bgpmon schema, if the tables don't exist
 func makeSchema(ex SessionExecutor, args sqlIn) (ret sqlOut) {
-	maintableTmpl := ex.getdbop("makeMainTableTmpl")
-	nodetableTmpl := ex.getdbop("makeNodeTableTmpl")
+	maintableTmpl := ex.getdbop(MAKE_MAIN_TABLE)
+	nodetableTmpl := ex.getdbop(MAKE_NODE_TABLE)
 	var (
 		err error
 	)

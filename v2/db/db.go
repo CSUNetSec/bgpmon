@@ -13,16 +13,26 @@ const (
 	POSTGRES = iota
 )
 
+const (
+	CONNECT_NO_SSL  = "connectNoSSL"
+	CONNECT_SSL     = "connectSSL"
+	CHECK_SCHEMA    = "checkschema"
+	SELECT_NODE     = "selectNodeTmpl"
+	INSERT_NODE     = "insertNodeTmpl"
+	MAKE_MAIN_TABLE = "makeMainTableTmpl"
+	MAKE_NODE_TABLE = "makeNodeTableTmpl"
+)
+
 var dbops = map[string][]string{
-	"connectNoSSL": []string{
+	CONNECT_NO_SSL: []string{
 		//postgress
 		`user=%s password=%s dbname=%s host=%s sslmode=disable`,
 	},
-	"connectSSL": []string{
+	CONNECT_SSL: []string{
 		//postgress
 		`user=%s password=%s dbname=%s host=%s`,
 	},
-	"checkschema": []string{
+	CHECK_SCHEMA: []string{
 		//postgress
 		`SELECT EXISTS (
 		   SELECT *
@@ -30,12 +40,12 @@ var dbops = map[string][]string{
 		   WHERE  table_name = $1
 		 );`,
 	},
-	"selectNodeTmpl": []string{
+	SELECT_NODE: []string{
 		//postgress
 		`SELECT name, ip, isCollector, tableDumpDurationMinutes,
 		   description, coords, address FROM %s;`,
 	},
-	"insertNodeTmpl": []string{
+	INSERT_NODE: []string{
 		//postgress
 		`INSERT INTO %s (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) 
 		   VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -43,7 +53,7 @@ var dbops = map[string][]string{
 		     tableDumpDurationMinutes=EXCLUDED.tableDumpDurationMinutes,
 		     description=EXCLUDED.description, coords=EXCLUDED.coords, address=EXCLUDED.address;`,
 	},
-	"makeMainTableTmpl": []string{
+	MAKE_MAIN_TABLE: []string{
 		//postgress
 		`CREATE TABLE IF NOT EXISTS %s (
 		   dbname varchar PRIMARY KEY,
@@ -52,7 +62,7 @@ var dbops = map[string][]string{
 	           dateTo timestamp
                  );`,
 	},
-	"makeNodeTableTmpl": []string{
+	MAKE_NODE_TABLE: []string{
 		//postgress
 		`CREATE TABLE IF NOT EXISTS %s (
 		   ip varchar PRIMARY KEY,
