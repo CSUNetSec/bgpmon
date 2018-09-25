@@ -73,12 +73,13 @@ func writeFunc(cmd *cobra.Command, args []string) {
 							fmt.Println("error in write request:%s. cancelling...", err)
 							cancel()
 							fmt.Println("terminating.")
+							break
 						}
 					}
 				}
 
 				if reply, err := stream.CloseAndRecv(); err != nil {
-					fmt.Printf("Write stream server error:%s", err)
+					fmt.Printf("Write stream server error:%s\n", err)
 				} else {
 					fmt.Printf("Write stream reply:%+v", reply)
 				}
