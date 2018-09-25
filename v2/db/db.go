@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -71,6 +72,23 @@ var (
 
 type Dber interface {
 	Db() *sql.DB
+}
+
+//a wrapper struct that can contain all the possible arguments to our database calls
+type sqlIn struct {
+	dbname      string                       //the name of the database we're operating on
+	maintable   string                       //the table which references all collector-day tables.
+	nodetable   string                       //the table with nodes and their configurations
+	knownNodes  map[string]config.NodeConfig //an incoming map of the known nodes
+	getNodeName string                       //a node name we want to fetch is config from the db
+	getNodeIP   string                       //a node IP we want to fetch is config from the db
+}
+
+type sqlOut struct {
+	ok         bool
+	err        error
+	knownNodes map[string]config.NodeConfig //a composition of the incoming and already known nodes
+	resultNode *node                        //the result from a getNode call
 }
 
 // sqlCtxExecutor is an interface needed for basic queries.
@@ -213,4 +231,36 @@ func (ptx *ctxTx) Done() error {
 		return ptx.tx.Commit()
 	}
 	return nil
+}
+
+//This is a representation of a node that is stored in the database using this fields.
+//a node can be either a collector or a peer, and in case of being a collector it is used
+//to generate the table names that data collected by it are stored. it should be also geolocated.
+//known nodes can be supplied by the config file.
+type node struct {
+	nodeName      string
+	nodeIP        string
+	nodeCollector bool
+	nodeDuration  int
+	nodeDescr     string
+	nodeCoords    string
+	nodeAddress   string
+}
+
+//creates an empty node
+func newNode() *node {
+	return &node{}
+}
+
+//creates a nodeconfig from a node
+func (a *node) nodeConfigFromNode() config.NodeConfig {
+	return config.NodeConfig{
+		Name:                a.nodeName,
+		IP:                  a.nodeIP,
+		IsCollector:         a.nodeCollector,
+		DumpDurationMinutes: a.nodeDuration,
+		Description:         a.nodeDescr,
+		Coords:              a.nodeCoords,
+		Location:            a.nodeAddress,
+	}
 }

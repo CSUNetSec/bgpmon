@@ -7,6 +7,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	errNoNode = errors.New("no such node in DB")
+)
+
 // DB Operations
 // these require the sql executor to be already set up for them.
 // checkschema makes sure that all the required tables exist in the database
@@ -36,40 +40,24 @@ func checkSchema(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 func syncNodes(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 	selectNodeTmpl := ex.getdbop("selectNodeTmpl")
 	insertNodeTmpl := ex.getdbop("insertNodeTmpl")
-	var (
-		nodeName      string
-		nodeIP        string
-		nodeCollector bool
-		nodeDuration  int
-		nodeDescr     string
-		nodeCoords    string
-		nodeAddress   string
-	)
+	dbNodes := make(map[string]config.NodeConfig) //this keeps nodeconfigs recovered from the db
+	cn := newNode()                               //the current node we will be looping over
 	rows, err := ex.Query(fmt.Sprintf(selectNodeTmpl, args.nodetable))
 	if err != nil {
 		dblogger.Errorf("syncNode query:", err)
 		ret.err = err
 		return
 	}
-	dbNodes := make(map[string]config.NodeConfig)
 	defer rows.Close()
 	for rows.Next() {
-		err := rows.Scan(&nodeName, &nodeIP, &nodeCollector, &nodeDuration, &nodeDescr, &nodeCoords, &nodeAddress)
+		err := rows.Scan(cn.nodeName, cn.nodeIP, cn.nodeCollector, cn.nodeDuration, cn.nodeDescr, cn.nodeCoords, cn.nodeAddress)
 		if err != nil {
 			dblogger.Errorf("syncnode fetch node row:%s", err)
 			ret.err = err
 			return
 		}
-		hereNewNode := config.NodeConfig{
-			Name:                nodeName,
-			IP:                  nodeIP,
-			IsCollector:         nodeCollector,
-			DumpDurationMinutes: nodeDuration,
-			Description:         nodeDescr,
-			Coords:              nodeCoords,
-			Location:            nodeAddress,
-		}
-		dbNodes[hereNewNode.IP] = hereNewNode
+		hereNewNodeConf := cn.nodeConfigFromNode()
+		dbNodes[hereNewNodeConf.IP] = hereNewNodeConf
 	}
 	allNodes := util.SumNodeConfs(args.knownNodes, dbNodes)
 	for _, v := range allNodes {
@@ -82,12 +70,40 @@ func syncNodes(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 			v.Coords,
 			v.Location)
 		if err != nil {
-			dblogger.Errorf("failed to insert config node. %s", err)
+			dblogger.Errorf("failed to insert node config. %s", err)
 		} else {
-			dblogger.Infof("inserted config node. %v", v)
+			dblogger.Infof("inserted node config. %v", v)
 		}
 	}
 	ret.knownNodes = allNodes
+	return
+}
+
+//returns the first matching node from the db table based on ip or name
+func getNode(ex SessionExecutor, args sqlIn) (ret sqlOut) {
+	selectNodeTmpl := ex.getdbop("selectNodeTmpl")
+	cn := newNode()
+	rows, err := ex.Query(fmt.Sprintf(selectNodeTmpl, args.nodetable))
+	if err != nil {
+		dblogger.Errorf("getNode query:", err)
+		ret.err = err
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		err := rows.Scan(cn.nodeName, cn.nodeIP, cn.nodeCollector, cn.nodeDuration, cn.nodeDescr, cn.nodeCoords, cn.nodeAddress)
+		if err != nil {
+			dblogger.Errorf("getNode fetch node row:%s", err)
+			ret.err = err
+			return
+		}
+		//try to match the node.
+		if args.getNodeName == cn.nodeName || args.getNodeIP == cn.nodeIP {
+			ret.resultNode = cn
+			return
+		}
+	}
+	ret.err = errNoNode
 	return
 }
 

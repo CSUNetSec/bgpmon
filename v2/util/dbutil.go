@@ -39,21 +39,21 @@ func NewCollectorDateString(name string, sd time.Time, dur time.Duration) *colle
 }
 
 //collector-date strings ordered by their starting date.
-type collectorsByNameDate []collectorDateString
+type CollectorsByNameDate []collectorDateString
 
 //Len implementation for sort interface
-func (c collectorsByNameDate) Len() int {
+func (c CollectorsByNameDate) Len() int {
 	return len(c)
 }
 
 //Swap implementation for sort interface
-func (c collectorsByNameDate) Swap(i, j int) {
+func (c CollectorsByNameDate) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
 //Less implementation for sort interface. uses the stable
 //sort attribute to do two keys. first by name then by date.
-func (c collectorsByNameDate) Less(i, j int) bool {
+func (c CollectorsByNameDate) Less(i, j int) bool {
 	if c[i].colName < c[j].colName {
 		return true
 	} else if c[i].colName > c[j].colName {
@@ -63,7 +63,7 @@ func (c collectorsByNameDate) Less(i, j int) bool {
 }
 
 //this will return the index and if the name and date are in the slice. caller has to check existence.
-func (c collectorsByNameDate) ColNameDateInSlice(colname string, date time.Time) (int, bool) {
+func (c CollectorsByNameDate) ColNameDateInSlice(colname string, date time.Time) (int, bool) {
 	//find a possible index
 	ind := sort.Search(c.Len(), func(i int) bool {
 		return c[i].colName == colname && (c[i].startDate.After(date) || c[i].startDate.Equal(date))

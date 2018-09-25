@@ -193,22 +193,6 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 	return s, err
 }
 
-//a wrapper struct that can contain all the possible arguments to our calls
-type sqlIn struct {
-	dbname     string                       //the name of the database we're operating on
-	maintable  string                       //the table which references all collector-day tables.
-	nodetable  string                       //the table with nodes and their configurations
-	knownNodes map[string]config.NodeConfig //an incoming map of the known nodes
-}
-
-type sqlOut struct {
-	ok         bool
-	err        error
-	knownNodes map[string]config.NodeConfig //a composition of the incoming and already known nodes
-}
-
-type workFunc func(sqlCtxExecutor, sqlIn) sqlOut
-
 func (s *Session) doSyncNodes(known map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
 	//ping to see we can connect to the db
 	if err := s.db.Ping(); err != nil {
