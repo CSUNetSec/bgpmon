@@ -97,8 +97,8 @@ func getNode(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 			ret.err = err
 			return
 		}
-		//try to match the node.
-		if args.getNodeName == cn.nodeName || args.getNodeIP == cn.nodeIP {
+		//try to match the node and ignore unset strings coming from sqlin
+		if (args.getNodeName == cn.nodeName && args.getNodeName != "") || (args.getNodeIP == cn.nodeIP && args.getNodeIP != "") {
 			ret.resultNode = cn
 			return
 		}
