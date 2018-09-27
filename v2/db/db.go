@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
+	"github.com/CSUNetSec/bgpmon/v2/util"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -101,16 +102,6 @@ type sqlOut struct {
 	resultNode *node                        //the result from a getNode call
 }
 
-// sqlCtxExecutor is an interface needed for basic queries.
-// It is implemented partly by both sql.DB and sql.Txn but we will
-// implemented on our wrapper ctxTx. ctxTx wraps these functions with a context
-// and deeper their xxxContext variant is called.
-type sqlCtxExecutor interface {
-	Exec(query string, args ...interface{}) (sql.Result, error)
-	Query(query string, args ...interface{}) (*sql.Rows, error)
-	QueryRow(query string, args ...interface{}) *sql.Row
-}
-
 type getdboper interface {
 	getdbop(string) string
 }
@@ -141,7 +132,7 @@ func newPostgressDbOper() *dbOper {
 }
 
 type SessionExecutor interface {
-	sqlCtxExecutor
+	util.SqlExecutor
 	getdboper
 }
 
@@ -221,7 +212,7 @@ func (c *ctxTx) QueryRow(query string, args ...interface{}) *sql.Row {
 
 //a wrapper of a sql.Tx that is able to accept multiple
 //db ops and run them in the same tx.
-//it will implement the sqlCtxExectutor interface and choose
+//it will implement the SqlExectutor interface and choose
 //where to apply the sql function depending on how it was constructed.
 //(either apply everything in the transaction and then the last Done()
 //will commit, or straight on the DB and the last Done() is a noop.
