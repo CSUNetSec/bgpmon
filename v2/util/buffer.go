@@ -15,26 +15,24 @@ type SqlBuffer interface {
 // Helps to optimize the amount of inserted values on a
 // single query
 type InsertBuffer struct {
-	max       int // Depending on the database, might be limited
-	ct        int
-	ex        SqlExecutor
-	stmt      string
-	addedStmt string
-	values    []interface{}
+	max        int // Depending on the database, might be limited
+	ct         int
+	ex         SqlExecutor
+	stmt       string
+	addedStmt  string
+	usePosArgs bool
+	values     []interface{}
 }
 
-func NewInsertBuffer(max int, ex SqlExecutor, stmt string) *InsertBuffer {
-	return &InsertBuffer{max: max, ex: ex, stmt: stmt, addedStmt: "", ct: 0}
+func NewInsertBuffer(max int, ex SqlExecutor, stmt string, usePositional bool) *InsertBuffer {
+	return &InsertBuffer{max: max, ex: ex, stmt: stmt, addedStmt: "", ct: 0, usePosArgs: usePositional}
 }
 
 func (ib *InsertBuffer) Add(arg ...interface{}) error {
-	ib.ct++
-	if ib.ct > ib.max {
-		ib.ct = 0
+	if ib.ct >= ib.max {
 		if err := ib.Flush(); err != nil {
 			return err
 		}
-		ib.Clear()
 	}
 
 	ib.addedStmt += "("
@@ -48,14 +46,25 @@ func (ib *InsertBuffer) Add(arg ...interface{}) error {
 	ib.addedStmt += "),"
 
 	ib.values = append(ib.values, arg...)
+	ib.ct++
 	return nil
 }
 
 func (ib *InsertBuffer) Flush() error {
+	if ib.ct == 0 {
+		return nil
+	}
+
 	ib.addedStmt = ib.addedStmt[:len(ib.addedStmt)-1]
 	ib.addedStmt += ";"
 
-	_, err := ib.ex.Exec(fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt), ib.values...)
+	convStmt := ""
+	if ib.usePosArgs {
+		convStmt = convertSqlStmt(fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt))
+	} else {
+		convStmt = fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt)
+	}
+	_, err := ib.ex.Exec(convStmt, ib.values...)
 	if err != nil {
 		return err
 	}

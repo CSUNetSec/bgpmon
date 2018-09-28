@@ -1,6 +1,8 @@
 package util
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -65,4 +67,17 @@ func (wp *WorkerPool) daemon() {
 			}
 		}
 	}
+}
+
+// Takes a stmt with "?" placeholders and replaces
+// them with position "$" placeholders
+func convertSqlStmt(stmt string) string {
+	ret := stmt
+	ct := 1
+	for strings.Index(ret, "?") != -1 {
+		rep := fmt.Sprintf("$%d", ct)
+		ret = strings.Replace(ret, "?", rep, 1)
+		ct++
+	}
+	return ret
 }
