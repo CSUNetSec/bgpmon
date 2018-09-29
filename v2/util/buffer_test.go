@@ -13,7 +13,7 @@ type TestExecutor struct {
 	lastVals []interface{}
 }
 
-func (te *TestExecutor) CheckLast(query string, args ...interface{}) bool {
+func (te *TestExecutor) checkLast(query string, args ...interface{}) bool {
 	if len(args) != len(te.lastVals) {
 		return false
 	}
@@ -49,41 +49,53 @@ func (t TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
 func TestInsertBuffer(t *testing.T) {
 	base := "INSERT INTO testTable VALUES"
 	testEx := &TestExecutor{t: t}
-	buf := NewInsertBuffer(2, testEx, base, false)
+	buf := NewInsertBuffer(2, testEx, base, false, 3)
 	buf.Add(1, 2, 3)
 	buf.Add(4, 5, 6)
 	buf.Add(8, 10, 12)
-	pass := testEx.CheckLast(base+" "+"(?,?,?),(?,?,?);", 1, 2, 3, 4, 5, 6)
+	pass := testEx.checkLast(base+" (?,?,?),(?,?,?);", 1, 2, 3, 4, 5, 6)
 	if !pass {
-		t.Errorf("Last was: %s %v", testEx.lastStmt, testEx.lastVals)
+		t.Logf("Expected: %s %v", base+" (?,?,?),(?,?,?);", []int{1, 2, 3, 4, 5, 6})
+		t.Fatalf("Received: %s %v", testEx.lastStmt, testEx.lastVals)
 	}
-	buf.Flush()
-	pass = testEx.CheckLast(base+" "+"(?,?,?);", 8, 10, 12)
+	err := buf.Flush()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pass = testEx.checkLast(base+" (?,?,?);", 8, 10, 12)
 	if !pass {
-		t.Fail()
+		t.Logf("Expected: %s %v", base+" (?,?,?);", []int{8, 10, 12})
+		t.Fatalf("Received: %s %v", testEx.lastStmt, testEx.lastVals)
 	}
 }
 
 func TestTimedBuffer(t *testing.T) {
+	// Since this test has a time delay
 	if testing.Short() {
 		t.SkipNow()
 	}
+
 	base := "INSERT INTO timed VALUES"
 	testEx := &TestExecutor{t: t}
-	buf := NewInsertBuffer(1, testEx, base, false)
+	buf := NewInsertBuffer(2, testEx, base, false, 3)
 	tbuf := NewTimedBuffer(buf, 3*time.Second)
+
 	tbuf.Add(11, 13, 15)
-	tbuf.Add(17, 19, 21)
+	tbuf.Add(17, 19, 21) // Should get flushed here
+	tbuf.Add(23, 25, 27) // These values should stay in the buffer until at least 3 seconds have passed
 	time.Sleep(1 * time.Second)
-	pass := testEx.CheckLast(base+" (?,?,?);", 11, 13, 15)
+	pass := testEx.checkLast(base+" (?,?,?),(?,?,?);", 11, 13, 15, 17, 19, 21)
 	if !pass {
-		t.FailNow()
+		t.Logf("Expected: %s %v", base+" (?,?,?),(?,?,?);", []int{11, 13, 15, 17, 19, 21})
+		t.Fatalf("Received: %s %v", testEx.lastStmt, testEx.lastVals)
 	}
 
 	time.Sleep(3 * time.Second)
-	pass = testEx.CheckLast(base+" (?,?,?);", 17, 19, 21)
+	pass = testEx.checkLast(base+" (?,?,?);", 23, 25, 27)
 	if !pass {
-		t.FailNow()
+		t.Logf("Expected: %s %v", base+" (?,?,?);", []int{23, 25, 27})
+		t.Fatalf("Received: %s %v", testEx.lastStmt, testEx.lastVals)
 	}
 
 	tbuf.Stop()
@@ -99,12 +111,18 @@ func TestBufferOnDb(t *testing.T) {
 	defer db.Close()
 
 	baseStmt := "INSERT INTO test VALUES"
-	buf := NewInsertBuffer(2, db, baseStmt, true)
-	buf.Add(21, 22, 23)
-	buf.Add(34, 35, 36)
+	buf := NewInsertBuffer(2, db, baseStmt, true, 3)
+	err = buf.Add(21, 22, 23)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = buf.Add(34, 35, 36)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = buf.Add(47, 48, 49)
 	if err != nil {
-		t.Fatalf("First error: %v", err)
+		t.Fatal(err)
 	}
 	err = buf.Flush()
 	if err != nil {

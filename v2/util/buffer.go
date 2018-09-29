@@ -15,24 +15,23 @@ type SqlBuffer interface {
 // Helps to optimize the amount of inserted values on a
 // single query
 type InsertBuffer struct {
-	max        int // Depending on the database, might be limited
-	ct         int
-	ex         SqlExecutor
-	stmt       string
-	addedStmt  string
-	usePosArgs bool
-	values     []interface{}
+	max        int           // Depending on the database, might be limited
+	ct         int           // Current number of entries
+	batchSize  int           // Number of arguments expected of an add
+	ex         SqlExecutor   // Executor to flush to
+	stmt       string        // base stmt
+	addedStmt  string        // generated statement
+	usePosArgs bool          // Use $1 style args in the statement instead of ?
+	values     []interface{} // Buffered values
 }
 
-func NewInsertBuffer(max int, ex SqlExecutor, stmt string, usePositional bool) *InsertBuffer {
-	return &InsertBuffer{max: max, ex: ex, stmt: stmt, addedStmt: "", ct: 0, usePosArgs: usePositional}
+func NewInsertBuffer(max int, ex SqlExecutor, stmt string, usePositional bool, batchSize int) *InsertBuffer {
+	return &InsertBuffer{max: max, ex: ex, stmt: stmt, addedStmt: "", ct: 0, usePosArgs: usePositional, batchSize: batchSize}
 }
 
 func (ib *InsertBuffer) Add(arg ...interface{}) error {
-	if ib.ct >= ib.max {
-		if err := ib.Flush(); err != nil {
-			return err
-		}
+	if len(arg) != ib.batchSize {
+		return fmt.Errorf("Incorrect number of arguments. Expected: %d, Got %d", ib.batchSize, len(arg))
 	}
 
 	ib.addedStmt += "("
@@ -47,12 +46,20 @@ func (ib *InsertBuffer) Add(arg ...interface{}) error {
 
 	ib.values = append(ib.values, arg...)
 	ib.ct++
+
+	if ib.ct >= ib.max {
+		return ib.Flush()
+	}
 	return nil
 }
 
 func (ib *InsertBuffer) Flush() error {
 	if ib.ct == 0 {
 		return nil
+	}
+
+	if ib.addedStmt[len(ib.addedStmt)-1] != ',' {
+		return fmt.Errorf("Improperly formatted statement: %s", ib.addedStmt)
 	}
 
 	ib.addedStmt = ib.addedStmt[:len(ib.addedStmt)-1]
