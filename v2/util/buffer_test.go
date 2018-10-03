@@ -2,6 +2,7 @@ package util
 
 import (
 	"database/sql"
+	"fmt"
 	_ "github.com/lib/pq"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ func (t TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
 func TestInsertBuffer(t *testing.T) {
 	base := "INSERT INTO testTable VALUES"
 	testEx := &TestExecutor{t: t}
-	buf := NewInsertBuffer(2, testEx, base, false, 3)
+	buf := NewInsertBuffer(testEx, base, 2, 3, false)
 	buf.Add(1, 2, 3)
 	buf.Add(4, 5, 6)
 	buf.Add(8, 10, 12)
@@ -78,7 +79,7 @@ func TestTimedBuffer(t *testing.T) {
 
 	base := "INSERT INTO timed VALUES"
 	testEx := &TestExecutor{t: t}
-	buf := NewInsertBuffer(2, testEx, base, false, 3)
+	buf := NewInsertBuffer(testEx, base, 2, 3, false)
 	tbuf := NewTimedBuffer(buf, 3*time.Second)
 
 	tbuf.Add(11, 13, 15)
@@ -111,7 +112,7 @@ func TestBufferOnDb(t *testing.T) {
 	defer db.Close()
 
 	baseStmt := "INSERT INTO test VALUES"
-	buf := NewInsertBuffer(2, db, baseStmt, true, 3)
+	buf := NewInsertBuffer(db, baseStmt, 2, 3, true)
 	err = buf.Add(21, 22, 23)
 	if err != nil {
 		t.Fatal(err)
@@ -133,5 +134,25 @@ func TestBufferOnDb(t *testing.T) {
 func getDbConnection() (*sql.DB, error) {
 	pgconstr := "user=bgpmon password=bgpmon dbname=bgpmon host=localhost sslmode=disable"
 	return sql.Open("postgres", pgconstr)
+}
 
+func TestBufferBatchSize(t *testing.T) {
+	testEx := &TestExecutor{t: t}
+	buf := NewInsertBuffer(testEx, "", 2, 3, false)
+	err := buf.Add(1, 2, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = buf.Add(4, 5, 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = buf.Add(7, 8, 9, 10)
+	if err == nil {
+		t.Fatal(fmt.Errorf("Error expected but not received"))
+	}
+	err = buf.Add(11, 12)
+	if err == nil {
+		t.Fatal(fmt.Errorf("Error expected but not received"))
+	}
 }

@@ -15,17 +15,17 @@ type SqlBuffer interface {
 // Helps to optimize the amount of inserted values on a
 // single query
 type InsertBuffer struct {
-	max        int           // Depending on the database, might be limited
-	ct         int           // Current number of entries
-	batchSize  int           // Number of arguments expected of an add
 	ex         SqlExecutor   // Executor to flush to
 	stmt       string        // base stmt
 	addedStmt  string        // generated statement
-	usePosArgs bool          // Use $1 style args in the statement instead of ?
+	max        int           // Depending on the database, might be limited
+	ct         int           // Current number of entries
+	batchSize  int           // Number of arguments expected of an add
 	values     []interface{} // Buffered values
+	usePosArgs bool          // Use $1 style args in the statement instead of ?
 }
 
-func NewInsertBuffer(max int, ex SqlExecutor, stmt string, usePositional bool, batchSize int) *InsertBuffer {
+func NewInsertBuffer(ex SqlExecutor, stmt string, max int, batchSize int, usePositional bool) *InsertBuffer {
 	return &InsertBuffer{max: max, ex: ex, stmt: stmt, addedStmt: "", ct: 0, usePosArgs: usePositional, batchSize: batchSize}
 }
 
