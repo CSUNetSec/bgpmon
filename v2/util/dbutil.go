@@ -1,6 +1,7 @@
 package util
 
 import (
+	"database/sql"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"sort"
 	"time"
@@ -81,4 +82,11 @@ func (c CollectorsByNameDate) ColNameDateInSlice(colname string, date time.Time)
 		return ind, true
 	}
 	return 0, false
+}
+
+// This is a wrapper around sql.Tx, sql.Db, and others we implement
+type SqlExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
 }
