@@ -85,6 +85,23 @@ type Dber interface {
 	Db() *sql.DB
 }
 
+//a struct for issuing queries about the existance of a ready collector table
+//for a specific time. Typically on the return we will return the starting
+//time for that table as a string so that the caller can just concat and create
+//the destination table names
+type collectorDate struct {
+	col    string    //the collector we are querying for
+	dat    time.Time //the time we are interested
+	datstr string    //the time string returned that will create the table name
+}
+
+func newCollectorDate(col string, t time.Time) collectorDate {
+	return collectorDate{
+		col: col,
+		dat: t,
+	}
+}
+
 //a wrapper struct that can contain all the possible arguments to our database calls
 type sqlIn struct {
 	dbname      string                       //the name of the database we're operating on
@@ -93,13 +110,15 @@ type sqlIn struct {
 	knownNodes  map[string]config.NodeConfig //an incoming map of the known nodes
 	getNodeName string                       //a node name we want to fetch is config from the db
 	getNodeIP   string                       //a node IP we want to fetch is config from the db
+	getColDate  collectorDate                //a collector name and a date to
 }
 
 type sqlOut struct {
-	ok         bool
-	err        error
-	knownNodes map[string]config.NodeConfig //a composition of the incoming and already known nodes
-	resultNode *node                        //the result from a getNode call
+	ok            bool
+	err           error
+	knownNodes    map[string]config.NodeConfig //a composition of the incoming and already known nodes
+	resultNode    *node                        //the result from a getNode call
+	resultColDate collectorDate                //the results of a collectorDate query
 }
 
 type getdboper interface {

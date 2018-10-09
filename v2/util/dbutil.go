@@ -31,6 +31,10 @@ type collectorDateString struct {
 	duration  time.Duration
 }
 
+type (c collectorDateString) GetNameDateStr() string {
+	return fmt.Sprintf("%s-%s", c.colName, c.startDate.Format("2006-01-02-15-04-05"))
+}
+
 func NewCollectorDateString(name string, sd time.Time, dur time.Duration) *collectorDateString {
 	return &collectorDateString{
 		colName:   name,

@@ -71,6 +71,15 @@ func (s *schemaMgr) run() {
 			case GETNODE:
 				slogger.Infof("getting node name")
 				ret.sout = getNode(s.sex, icmd.sin)
+			case CHECKTABLE:
+				slogger.Infof("checking existance of collector tables in cache")
+				gcd := icmd.sin.getColDate
+				if i, ok := s.cols.ColNameDateInSlice(gcd.col, gcd.dat); ok {
+					ret.sout = sqlOut{
+						resultColDate: s.cols[i].GetNameDateStr(),
+					}
+				}
+				ret.sout = getTable(s.sex, icmd.sin)
 
 			default:
 				ret.err = fmt.Errorf("unhandled schema manager command:%+v", icmd)
