@@ -2,6 +2,7 @@ package util
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"sort"
 	"time"
@@ -31,7 +32,7 @@ type collectorDateString struct {
 	duration  time.Duration
 }
 
-type (c collectorDateString) GetNameDateStr() string {
+func (c collectorDateString) GetNameDateStr() string {
 	return fmt.Sprintf("%s-%s", c.colName, c.startDate.Format("2006-01-02-15-04-05"))
 }
 

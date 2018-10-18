@@ -76,10 +76,17 @@ func (s *schemaMgr) run() {
 				gcd := icmd.sin.getColDate
 				if i, ok := s.cols.ColNameDateInSlice(gcd.col, gcd.dat); ok {
 					ret.sout = sqlOut{
-						resultColDate: s.cols[i].GetNameDateStr(),
+						resultColDate: collectorDate{
+							col: s.cols[i].GetNameDateStr(),
+						},
 					}
 				}
 				ret.sout = getTable(s.sex, icmd.sin)
+				if ret.err == errNoTable {
+					slogger.Infof("No existing table for that time range:%s.Creating it", icmd.sin)
+				} else if ret.err != nil {
+					slogger.Errorf("getTable error:%s", ret.err)
+				}
 
 			default:
 				ret.err = fmt.Errorf("unhandled schema manager command:%+v", icmd)

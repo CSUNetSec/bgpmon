@@ -5,10 +5,12 @@ import (
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
 	"github.com/pkg/errors"
+	"time"
 )
 
 var (
-	errNoNode = errors.New("no such node in DB")
+	errNoNode  = errors.New("no such node in DB")
+	errNoTable = errors.New("no such table in DB")
 )
 
 // DB Operations
@@ -104,6 +106,40 @@ func getNode(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 		}
 	}
 	ret.err = errNoNode
+	return
+}
+
+//returns the collector table from the main dbs table
+func getTable(ex SessionExecutor, args sqlIn) (ret sqlOut) {
+	var (
+		resdbname    string
+		rescollector string
+		restStart    time.Time
+		restEnd      time.Time
+	)
+	selectTableTmpl := ex.getdbop(SELECT_TABLE)
+	qdate := args.getColDate.dat
+	rows, err := ex.Query(fmt.Sprintf(selectTableTmpl, args.maintable, qdate, qdate))
+	if err != nil {
+		dblogger.Errorf("getTable query:", err)
+		ret.err = err
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		err := rows.Scan(&resdbname, &rescollector, &restStart, &restEnd)
+		if err != nil {
+			dblogger.Errorf("getNode fetch node row:%s", err)
+			ret.err = err
+			return
+		}
+		dblogger.Printf("got dbname:%s collector:%s tstart:%s tend:%s", resdbname, rescollector, restStart, restEnd)
+		//we found a table for that range.
+		ret.resultColDate = collectorDate{
+			col: resdbname,
+		}
+	}
+	ret.err = errNoTable
 	return
 }
 
