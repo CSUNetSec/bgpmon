@@ -5,6 +5,7 @@ import (
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
 	"github.com/sirupsen/logrus"
+	"time"
 )
 
 var (
@@ -18,7 +19,7 @@ const (
 	CHECKSCHEMA
 	GETNODE
 	SYNCNODES
-	CHECKTABLE
+	GETTABLE
 )
 
 type schemaCmd struct {
@@ -71,7 +72,8 @@ func (s *schemaMgr) run() {
 			case GETNODE:
 				slogger.Infof("getting node name")
 				ret.sout = getNode(s.sex, icmd.sin)
-			case CHECKTABLE:
+
+			case GETTABLE:
 				slogger.Infof("checking existance of collector tables in cache")
 				gcd := icmd.sin.getColDate
 				if i, ok := s.cols.ColNameDateInSlice(gcd.col, gcd.dat); ok {
@@ -128,6 +130,18 @@ func (s *schemaMgr) syncNodes(dbname, nodetable string, knownNodes map[string]co
 	s.iChan <- cmdin
 	sreply := <-s.oChan
 	return sreply.sout.knownNodes, sreply.sout.err
+}
+
+func (s *schemaMgr) getTable(dbname, maintable, ipstr string, date time.Time) (string, error) {
+	coldate := collectorDate{
+		dat: date,
+		col: ipstr,
+	}
+	sin := sqlIn{dbname: dbname, maintable: maintable, getColDate: coldate}
+	cmdin := schemaCmd{op: GETTABLE, sin: sin}
+	s.iChan <- cmdin
+	sreply := <-s.oChan
+	return sreply.sout.resultColDate.col, sreply.sout.err
 }
 
 func (s *schemaMgr) getNode(dbname, nodetable string, nodeName string, nodeIP string) (*node, error) {
