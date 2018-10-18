@@ -21,6 +21,7 @@ const (
 	SELECT_NODE     = "selectNodeTmpl"
 	INSERT_NODE     = "insertNodeTmpl"
 	MAKE_MAIN_TABLE = "makeMainTableTmpl"
+	SELECT_TABLE    = "selectTableTmpl"
 	MAKE_NODE_TABLE = "makeNodeTableTmpl"
 )
 
@@ -62,6 +63,11 @@ var dbops = map[string][]string{
 	           dateFrom timestamp,
 	           dateTo timestamp
                  );`,
+	},
+	SELECT_TABLE: []string{
+		//postgress
+		`SELECT dbname, collector, dateFrom, dateTo FROM %s 
+		 WHERE dateFrom >= %s AND dateTo < %s;`,
 	},
 	MAKE_NODE_TABLE: []string{
 		//postgress
@@ -110,7 +116,7 @@ type sqlIn struct {
 	knownNodes  map[string]config.NodeConfig //an incoming map of the known nodes
 	getNodeName string                       //a node name we want to fetch is config from the db
 	getNodeIP   string                       //a node IP we want to fetch is config from the db
-	getColDate  collectorDate                //a collector name and a date to
+	getColDate  collectorDate                //a collector name and a date that we want to write messages for
 }
 
 type sqlOut struct {
