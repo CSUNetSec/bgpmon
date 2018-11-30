@@ -1,5 +1,7 @@
 module github.com/CSUNetSec/bgpmon/v2
 
+replace github.com/CSUNetSec/netsec-protobufs v0.1.2-devel => ../../netsec-protobufs
+
 require (
 	github.com/BurntSushi/toml v0.3.0
 	github.com/CSUNetSec/netsec-protobufs v0.1.2-devel

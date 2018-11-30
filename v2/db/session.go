@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	_ "github.com/lib/pq"
-	//pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -28,13 +28,15 @@ type SessionStream struct {
 	resp   chan sqlOut
 	cancel chan bool
 	wp     *util.WorkerPool
+	schema *schemaMgr
 	closed bool
 }
 
-func NewSessionStream(cancel chan bool, wp *util.WorkerPool) *SessionStream {
+func NewSessionStream(cancel chan bool, wp *util.WorkerPool, smgr *schemaMgr) *SessionStream {
 	ss := &SessionStream{closed: false}
 	ss.wp = wp
 	ss.cancel = cancel
+	ss.schema = smgr
 	ss.req = make(chan sqlIn)
 	ss.resp = make(chan sqlOut)
 
@@ -44,7 +46,15 @@ func NewSessionStream(cancel chan bool, wp *util.WorkerPool) *SessionStream {
 
 // WARNING, sending after a close will cause a panic, and may hang
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
-	//ss.req <- arg.(sqlIn)
+	wr := arg.(*pb.WriteRequest)
+	dblogger.Infof("i got cmd:%+v type:%T arg:%+v", cmd, wr, wr)
+	cip, mtime := util.GetTimeColIP(wr)
+	dblogger.Infof("query schema for time %v col:%v", mtime, cip)
+	table, err := ss.schema.getTable("bgpmon", "dbs", cip.String(), mtime)
+	if err != nil {
+		return err
+	}
+	dblogger.Infof("table to write bgp capture:%v", table)
 	ss.req <- sqlIn{}
 	resp, ok := <-ss.resp
 
@@ -81,7 +91,8 @@ func (ss *SessionStream) listen() {
 			}
 			// Otherwise, just let it die
 			return
-		case <-ss.req:
+		case val := <-ss.req:
+			dblogger.Infof("got %+v", val)
 			ss.resp <- sqlOut{ok: true}
 		}
 	}
@@ -174,7 +185,7 @@ func (s *Session) Do(cmd sessionCmd, arg interface{}) (*SessionStream, error) {
 	case SESSION_OPEN_STREAM:
 		dblogger.Infof("Opening stream on session: %s", s.uuid)
 		s.wp.Add()
-		ss := NewSessionStream(s.cancel, s.wp)
+		ss := NewSessionStream(s.cancel, s.wp, s.schema)
 		return ss, nil
 	}
 	return nil, nil

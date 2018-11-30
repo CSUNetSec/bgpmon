@@ -82,18 +82,36 @@ func (s *schemaMgr) run() {
 							col: s.cols[i].GetNameDateStr(),
 						},
 					}
-				}
-				ret.sout = getTable(s.sex, icmd.sin)
-				if ret.err == errNoTable {
-					slogger.Infof("No existing table for that time range:%s.Creating it", icmd.sin)
-				} else if ret.err != nil {
-					slogger.Errorf("getTable error:%s", ret.err)
+				} else {
+					ret.sout = getTable(s.sex, icmd.sin)
+					if ret.sout.err == errNoTable {
+						icmd.sin.nodetable = "nodes" //XXX hardcoded adding the table
+						icmd.sin.getNodeIP = icmd.sin.getColDate.col
+						slogger.Infof("No existing table for that time range:%+v. time is :%+v.Creating it", icmd.sin, icmd.sin.getColDate.dat)
+						nodesout := getNode(s.sex, icmd.sin)
+						slogger.Infof("name of that collector node:%v", nodesout.resultNode.nodeName)
+						trunctime := icmd.sin.getColDate.dat.Truncate(time.Duration(nodesout.resultNode.nodeDuration) * time.Minute).UTC()
+						slogger.Infof("truncated time is:%v", trunctime)
+						nsin := sqlIn{maintable: icmd.sin.maintable}
+						nsin.capTableCol = icmd.sin.getColDate.col
+						nsin.capTableSdate = trunctime
+						nsin.capTableEdate = trunctime.Add(time.Duration(nodesout.resultNode.nodeDuration) * time.Minute).UTC()
+						nsin.capTableName = fmt.Sprintf("captures_%s_%s", nodesout.resultNode.nodeName, trunctime.Format("2006_01_02_15_04_05"))
+						nsout := createCaptureTable(s.sex, nsin)
+						if nsout.err != nil {
+							slogger.Errorf("createCaptureTable error:%s", nsout.err)
+						} else {
+							ret.sout = nsout
+						}
+					} else if ret.sout.err != nil {
+						slogger.Errorf("getTable error:%s", ret.err)
+					}
 				}
 
 			default:
 				ret.err = fmt.Errorf("unhandled schema manager command:%+v", icmd)
 				ret.ok = false
-				slogger.Errorf("error::%s", ret.err)
+				slogger.Errorf("error:%s", ret.err)
 			}
 			s.oChan <- ret
 		case <-s.cChan:
@@ -141,7 +159,7 @@ func (s *schemaMgr) getTable(dbname, maintable, ipstr string, date time.Time) (s
 	cmdin := schemaCmd{op: GETTABLE, sin: sin}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
-	return sreply.sout.resultColDate.col, sreply.sout.err
+	return sreply.sout.capTable, sreply.sout.err
 }
 
 func (s *schemaMgr) getNode(dbname, nodetable string, nodeName string, nodeIP string) (*node, error) {

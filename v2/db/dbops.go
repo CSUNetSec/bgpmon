@@ -87,13 +87,13 @@ func getNode(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 	cn := newNode()
 	rows, err := ex.Query(fmt.Sprintf(selectNodeTmpl, args.nodetable))
 	if err != nil {
-		dblogger.Errorf("getNode query:", err)
+		dblogger.Errorf("getNode query error:%s", err)
 		ret.err = err
 		return
 	}
 	defer rows.Close()
 	for rows.Next() {
-		err := rows.Scan(cn.nodeName, cn.nodeIP, cn.nodeCollector, cn.nodeDuration, cn.nodeDescr, cn.nodeCoords, cn.nodeAddress)
+		err := rows.Scan(&cn.nodeName, &cn.nodeIP, &cn.nodeCollector, &cn.nodeDuration, &cn.nodeDescr, &cn.nodeCoords, &cn.nodeAddress)
 		if err != nil {
 			dblogger.Errorf("getNode fetch node row:%s", err)
 			ret.err = err
@@ -109,6 +109,33 @@ func getNode(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 	return
 }
 
+//creates a table to hold captures and registers it in the main table and the current known tables in memory.
+func createCaptureTable(ex SessionExecutor, args sqlIn) (ret sqlOut) {
+	createCapTmpl := ex.getdbop(MAKE_CAPTURE_TABLE)
+	name := args.capTableName
+	q := fmt.Sprintf(createCapTmpl, name)
+	_, err := ex.Query(q)
+	if err != nil {
+		dblogger.Errorf("createCaptureTable error:%s on command :%s", err, q)
+		ret.err = err
+		return
+	}
+	insertCapTmpl := ex.getdbop(INSERT_MAIN_TABLE)
+	ip := args.capTableCol
+	sdate := args.capTableSdate
+	edate := args.capTableEdate
+	row, err := ex.Query(fmt.Sprintf(insertCapTmpl, args.maintable), name, ip, sdate, edate)
+	if err != nil {
+		dblogger.Errorf("createCaptureTable insertnode error:%s", err)
+		ret.err = err
+		return
+	} else {
+		dblogger.Infof("inserted table:%s at row:%v", name, row)
+	}
+	ret.capTable, ret.capIp, ret.capStime, ret.capEtime = name, ip, sdate, edate
+	return
+}
+
 //returns the collector table from the main dbs table
 func getTable(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 	var (
@@ -118,10 +145,10 @@ func getTable(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 		restEnd      time.Time
 	)
 	selectTableTmpl := ex.getdbop(SELECT_TABLE)
-	qdate := args.getColDate.dat
-	rows, err := ex.Query(fmt.Sprintf(selectTableTmpl, args.maintable, qdate, qdate))
+	qdate := args.getColDate.dat.UTC() //XXX this cast to utc is important. the db is dumb and doesn't figure it out. we need a better approach.
+	rows, err := ex.Query(fmt.Sprintf(selectTableTmpl, args.maintable), qdate)
 	if err != nil {
-		dblogger.Errorf("getTable query:", err)
+		dblogger.Errorf("getTable query error:%s", err)
 		ret.err = err
 		return
 	}
@@ -135,9 +162,8 @@ func getTable(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 		}
 		dblogger.Printf("got dbname:%s collector:%s tstart:%s tend:%s", resdbname, rescollector, restStart, restEnd)
 		//we found a table for that range.
-		ret.resultColDate = collectorDate{
-			col: resdbname,
-		}
+		ret.capTable, ret.capIp, ret.capStime, ret.capEtime = resdbname, rescollector, restStart, restEnd
+		return
 	}
 	ret.err = errNoTable
 	return

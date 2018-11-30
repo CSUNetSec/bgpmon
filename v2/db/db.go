@@ -15,14 +15,17 @@ const (
 )
 
 const (
-	CONNECT_NO_SSL  = "connectNoSSL"
-	CONNECT_SSL     = "connectSSL"
-	CHECK_SCHEMA    = "checkschema"
-	SELECT_NODE     = "selectNodeTmpl"
-	INSERT_NODE     = "insertNodeTmpl"
-	MAKE_MAIN_TABLE = "makeMainTableTmpl"
-	SELECT_TABLE    = "selectTableTmpl"
-	MAKE_NODE_TABLE = "makeNodeTableTmpl"
+	CONNECT_NO_SSL       = "connectNoSSL"
+	CONNECT_SSL          = "connectSSL"
+	CHECK_SCHEMA         = "checkschema"
+	SELECT_NODE          = "selectNodeTmpl"
+	INSERT_NODE          = "insertNodeTmpl"
+	INSERT_MAIN_TABLE    = "insertMainTableTmpl"
+	MAKE_MAIN_TABLE      = "makeMainTableTmpl"
+	SELECT_TABLE         = "selectTableTmpl"
+	MAKE_NODE_TABLE      = "makeNodeTableTmpl"
+	MAKE_CAPTURE_TABLE   = "makeCaptureTableTmpl"
+	INSERT_CAPTURE_TABLE = "insertCaptureTableTmpl"
 )
 
 var dbops = map[string][]string{
@@ -44,8 +47,7 @@ var dbops = map[string][]string{
 	},
 	SELECT_NODE: []string{
 		//postgress
-		`SELECT name, ip, isCollector, tableDumpDurationMinutes,
-		   description, coords, address FROM %s;`,
+		`SELECT name, ip, isCollector, tableDumpDurationMinutes, description, coords, address FROM %s;`,
 	},
 	INSERT_NODE: []string{
 		//postgress
@@ -64,10 +66,22 @@ var dbops = map[string][]string{
 	           dateTo timestamp
                  );`,
 	},
+	INSERT_MAIN_TABLE: []string{
+		//postgress
+		`INSERT INTO %s (dbname, collector, dateFrom, dateTo) VALUES ($1, $2, $3, $4);`,
+	},
+	MAKE_CAPTURE_TABLE: []string{
+		//postgress
+		`CREATE TABLE IF NOT EXISTS %s (
+		   update_id varchar PRIMARY KEY, timestamp timestamp, collector_ip inet, peer_ip inet, as_path integer[], next_hop inet, origin_as integer, update_withdraw bool, protomsg bytea);`,
+	},
+	INSERT_CAPTURE_TABLE: []string{
+		`INSERT INTO %s (update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, update_withdraw, protomsg)`,
+	},
 	SELECT_TABLE: []string{
 		//postgress
 		`SELECT dbname, collector, dateFrom, dateTo FROM %s 
-		 WHERE dateFrom >= %s AND dateTo < %s;`,
+		 WHERE dateFrom <= $1 AND dateTo > $1;`,
 	},
 	MAKE_NODE_TABLE: []string{
 		//postgress
@@ -110,13 +124,17 @@ func newCollectorDate(col string, t time.Time) collectorDate {
 
 //a wrapper struct that can contain all the possible arguments to our database calls
 type sqlIn struct {
-	dbname      string                       //the name of the database we're operating on
-	maintable   string                       //the table which references all collector-day tables.
-	nodetable   string                       //the table with nodes and their configurations
-	knownNodes  map[string]config.NodeConfig //an incoming map of the known nodes
-	getNodeName string                       //a node name we want to fetch is config from the db
-	getNodeIP   string                       //a node IP we want to fetch is config from the db
-	getColDate  collectorDate                //a collector name and a date that we want to write messages for
+	dbname        string                       //the name of the database we're operating on
+	maintable     string                       //the table which references all collector-day tables.
+	nodetable     string                       //the table with nodes and their configurations
+	knownNodes    map[string]config.NodeConfig //an incoming map of the known nodes
+	getNodeName   string                       //a node name we want to fetch is config from the db
+	getNodeIP     string                       //a node IP we want to fetch is config from the db
+	getColDate    collectorDate                //a collector name and a date that we want to write messages for
+	capTableName  string                       //the name of a capture table in the form of nodename-startdate
+	capTableCol   string                       //the ip of the capture table collector
+	capTableSdate time.Time                    //the start date of the capture table
+	capTableEdate time.Time                    //the end date of the capture table
 }
 
 type sqlOut struct {
@@ -125,6 +143,10 @@ type sqlOut struct {
 	knownNodes    map[string]config.NodeConfig //a composition of the incoming and already known nodes
 	resultNode    *node                        //the result from a getNode call
 	resultColDate collectorDate                //the results of a collectorDate query
+	capTable      string                       //the name of the capture table for that message
+	capIp         string                       //the ip of the collector for this capture table
+	capStime      time.Time                    //start time for the capture table
+	capEtime      time.Time                    //end time for the capture table
 }
 
 type getdboper interface {

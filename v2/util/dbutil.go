@@ -74,6 +74,9 @@ func (c CollectorsByNameDate) ColNameDateInSlice(colname string, date time.Time)
 	ind := sort.Search(c.Len(), func(i int) bool {
 		return c[i].colName == colname && (c[i].startDate.After(date) || c[i].startDate.Equal(date))
 	})
+	if ind >= len(c) { //it's not there
+		return 0, false
+	}
 	//validate that the name is the same
 	if c[ind].colName != colname {
 		return 0, false
