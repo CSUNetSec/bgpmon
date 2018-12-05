@@ -95,7 +95,7 @@ type TimedBuffer struct {
 
 func NewTimedBuffer(parent SqlBuffer, d time.Duration) *TimedBuffer {
 	cancel := make(chan bool)
-	t := &TimedBuffer{SqlBuffer: parent, lastUpdate: time.Now(), tick: time.NewTicker(d), duration: d, cancel: cancel}
+	t := &TimedBuffer{SqlBuffer: parent, lastUpdate: time.Now().UTC(), tick: time.NewTicker(d), duration: d, cancel: cancel}
 	go t.wait()
 	return t
 }
@@ -105,7 +105,7 @@ func (t *TimedBuffer) Add(args ...interface{}) error {
 	if err != nil {
 		return err
 	}
-	t.lastUpdate = time.Now()
+	t.lastUpdate = time.Now().UTC()
 	return nil
 }
 
@@ -118,7 +118,7 @@ func (t *TimedBuffer) wait() {
 	for {
 		select {
 		case <-t.tick.C:
-			if time.Now().Sub(t.lastUpdate) > t.duration {
+			if time.Now().UTC().Sub(t.lastUpdate) > t.duration {
 				t.Flush()
 			}
 		case _, ok := <-t.cancel:
