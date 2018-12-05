@@ -32,15 +32,29 @@ type SessionStream struct {
 	closed bool
 }
 
-func NewSessionStream(cancel chan bool, wp *util.WorkerPool, smgr *schemaMgr) *SessionStream {
-	ss := &SessionStream{closed: false}
-	ss.wp = wp
-	ss.cancel = cancel
-	ss.schema = smgr
+func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr) *SessionStream {
+	ss := &SessionStream{closed: false, wp: wp, schema: smgr}
+
+	parentCancel := pcancel
+	childCancel := make(chan bool)
+	daemonCancel := make(chan bool)
+	// If the parent requests a close, and the routine isn't already closed,
+	// pass that on to the child.
+	go func(par, child, daemon chan bool) {
+		select {
+		case <-par:
+			daemon <- false
+		case <-child:
+			daemon <- true
+		}
+		close(daemon)
+	}(parentCancel, childCancel, daemonCancel)
+	ss.cancel = childCancel
+
 	ss.req = make(chan sqlIn)
 	ss.resp = make(chan sqlOut)
 
-	go ss.listen()
+	go ss.listen(daemonCancel)
 	return ss
 }
 
@@ -69,27 +83,27 @@ func (ss *SessionStream) Flush() error {
 }
 
 // This is the SessionStream goroutine
-func (ss *SessionStream) listen() {
+// This function is a little bit tricky, because a stream needs to be closable
+// from two different directions.
+// 1. A normal close. This is when a client calls Close on the SessionStream
+//	  after it is done communicating with it.
+//		We can assume that nothing more will come in on the request channel.
+// 2. A session close. This occurs on an unexpected shutdown, such as ctrl-C.
+//		A client may try to send requests to this after it has been closed. It
+//		should return that the stream has been closed before shutting down
+//		completely.
+func (ss *SessionStream) listen(cancel chan bool) {
 	defer dblogger.Infof("Session stream closed successfully")
 	defer close(ss.resp)
 
 	for {
 		select {
-		// Alive should be true if the stream was closed from ss.Close(), and false
-		// if it was closed from a session close
-		case _, alive := <-ss.cancel:
+		case normal := <-cancel:
 			ss.closed = true
-			_, ok := <-ss.req
 
-			if ok && alive {
-				dblogger.Errorf("cancel and request channel live at the same time, should be impossible")
-				return
+			if !normal {
+				ss.resp <- sqlOut{err: fmt.Errorf("Channel closed")}
 			}
-
-			if ok {
-				ss.resp <- sqlOut{ok: false, err: fmt.Errorf("Stream closed")}
-			}
-			// Otherwise, just let it die
 			return
 		case val := <-ss.req:
 			dblogger.Infof("got %+v", val)
@@ -105,10 +119,7 @@ func (ss *SessionStream) listen() {
 // send
 func (ss *SessionStream) Close() error {
 	dblogger.Infof("Closing session stream")
-	if !ss.closed {
-		ss.cancel <- true
-	}
-
+	close(ss.cancel)
 	close(ss.req)
 
 	ss.wp.Done()
@@ -124,7 +135,7 @@ type Session struct {
 	uuid   string
 	cancel chan bool
 	wp     *util.WorkerPool
-	dbo    *dbOper //this struct is responsible for providing the strings for the sql ops.
+	dbo    *dbOper //this struct provides the strings for the sql ops.
 	db     *sql.DB
 	schema *schemaMgr
 }
