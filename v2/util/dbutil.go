@@ -33,7 +33,11 @@ type collectorDateString struct {
 }
 
 func (c collectorDateString) GetNameDateStr() string {
-	return fmt.Sprintf("%s-%s", c.colName, c.startDate.Format("2006-01-02-15-04-05"))
+	return fmt.Sprintf("%s_%s", c.colName, c.startDate.Format("2006_01_02_15_04_05"))
+}
+
+func (c collectorDateString) GetNameDates() (string, string, time.Time, time.Time) {
+	return c.colName, c.GetNameDateStr(), c.startDate, c.startDate.Add(c.duration)
 }
 
 func NewCollectorDateString(name string, sd time.Time, dur time.Duration) *collectorDateString {
@@ -90,6 +94,20 @@ func (c CollectorsByNameDate) ColNameDateInSlice(colname string, date time.Time)
 		return ind, true
 	}
 	return 0, false
+}
+
+//Add will return a new copy of the sorted array with the new collector date added.
+//it will truncate the original time to one matching the duration.
+//the caller should try to insert that new name to the nodes table and if succesful,
+//change his collectorsByNameDate reference to the new updated one.
+//it also returns the newly added argument to help the caller extract names and dates from it.
+func (c CollectorsByNameDate) Add(col string, sd time.Time, durMinutes int) (ret CollectorsByNameDate, newnode *collectorDateString) {
+	dur := time.Duration(durMinutes) * time.Minute
+	trunctime := sd.Truncate(dur).UTC()
+	newnode = NewCollectorDateString(col, trunctime, dur)
+	ret = append(c, *newnode)
+	sort.Stable(ret)
+	return
 }
 
 // This is a wrapper around sql.Tx, sql.Db, and others we implement

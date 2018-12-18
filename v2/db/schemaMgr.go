@@ -60,7 +60,6 @@ func (s *schemaMgr) run() {
 			case CHECKSCHEMA:
 				slogger.Infof("checking correctness of db schema")
 				ret.sout = checkSchema(s.sex, icmd.sin)
-
 			case INITSCHEMA:
 				slogger.Infof("initializing db schema")
 				ret.sout = makeSchema(s.sex, icmd.sin)
@@ -90,21 +89,24 @@ func (s *schemaMgr) run() {
 						slogger.Infof("No existing table for that time range:%+v. time is :%+v.Creating it", icmd.sin, icmd.sin.getColDate.dat)
 						nodesout := getNode(s.sex, icmd.sin)
 						slogger.Infof("name of that collector node:%v", nodesout.resultNode.nodeName)
-						trunctime := icmd.sin.getColDate.dat.Truncate(time.Duration(nodesout.resultNode.nodeDuration) * time.Minute).UTC()
-						slogger.Infof("truncated time is:%v", trunctime)
+						//creating a new sorted collector array from the nodename we got
+						//the date (that will be truncated according to the duration) and
+						//the duration. if the addition to the main db table succeeds this
+						//array will replace the current one.
+						newcols, nnode := s.cols.Add(nodesout.resultNode.nodeName, icmd.sin.getColDate.dat, nodesout.resultNode.nodeDuration)
 						nsin := sqlIn{maintable: icmd.sin.maintable}
-						nsin.capTableCol = icmd.sin.getColDate.col
-						nsin.capTableSdate = trunctime
-						nsin.capTableEdate = trunctime.Add(time.Duration(nodesout.resultNode.nodeDuration) * time.Minute).UTC()
-						nsin.capTableName = fmt.Sprintf("captures_%s_%s", nodesout.resultNode.nodeName, trunctime.Format("2006_01_02_15_04_05"))
+						nsin.capTableCol, nsin.capTableName, nsin.capTableSdate, nsin.capTableEdate = nnode.GetNameDates()
 						nsout := createCaptureTable(s.sex, nsin)
 						if nsout.err != nil {
 							slogger.Errorf("createCaptureTable error:%s", nsout.err)
 						} else {
 							ret.sout = nsout
+							s.cols = newcols //update the sorted cols table
 						}
 					} else if ret.sout.err != nil {
 						slogger.Errorf("getTable error:%s", ret.err)
+					} else if ret.sout.err == nil { //the table exists but current coldatestring doesn't know. update it.
+						// XXX this can be solved with the a join on dbs and nodes.
 					}
 				}
 
