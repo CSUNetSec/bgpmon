@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -73,10 +74,11 @@ var dbops = map[string][]string{
 	MAKE_CAPTURE_TABLE: []string{
 		//postgress
 		`CREATE TABLE IF NOT EXISTS %s (
-		   update_id varchar PRIMARY KEY, timestamp timestamp, collector_ip inet, peer_ip inet, as_path integer[], next_hop inet, origin_as integer, update_withdraw bool, protomsg bytea);`,
+		   update_id bytea PRIMARY KEY, timestamp timestamp, collector_ip inet, peer_ip inet, as_path integer[], next_hop inet, origin_as integer, update_withdraw bool, protomsg bytea);`,
 	},
+	// This template shouldn't need VALUES, because those will be provided by the buffer
 	INSERT_CAPTURE_TABLE: []string{
-		`INSERT INTO %s (update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, update_withdraw, protomsg)`,
+		`INSERT INTO %s (update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, update_withdraw, protomsg) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`,
 	},
 	SELECT_TABLE: []string{
 		//postgress
@@ -135,6 +137,7 @@ type sqlIn struct {
 	capTableCol   string                       //the ip of the capture table collector
 	capTableSdate time.Time                    //the start date of the capture table
 	capTableEdate time.Time                    //the end date of the capture table
+	capture       *pb.WriteRequest
 }
 
 type sqlOut struct {

@@ -30,10 +30,13 @@ type SessionStream struct {
 	wp     *util.WorkerPool
 	schema *schemaMgr
 	closed bool
+	db     Dber
+	oper   *dbOper
+	ex     *ctxtxOperExecutor
 }
 
-func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr) *SessionStream {
-	ss := &SessionStream{closed: false, wp: wp, schema: smgr}
+func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, db Dber, oper *dbOper) *SessionStream {
+	ss := &SessionStream{closed: false, wp: wp, schema: smgr, db: db, oper: oper}
 
 	parentCancel := pcancel
 	childCancel := make(chan bool)
@@ -53,6 +56,8 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr) *
 
 	ss.req = make(chan sqlIn)
 	ss.resp = make(chan sqlOut)
+	ctxTx, _ := GetNewExecutor(context.Background(), ss.db, true, CTXTIMEOUT)
+	ss.ex = newCtxTxSessionExecutor(ctxTx, ss.oper)
 
 	go ss.listen(daemonCancel)
 	return ss
@@ -68,8 +73,9 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	dblogger.Infof("table to write bgp capture:%v", table)
-	ss.req <- sqlIn{}
+	ss.req <- sqlIn{capTableName: table, capture: wr}
 	resp, ok := <-ss.resp
 
 	if !ok {
@@ -79,6 +85,7 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 }
 
 func (ss *SessionStream) Flush() error {
+	ss.ex.tx.Commit()
 	return nil
 }
 
@@ -107,7 +114,21 @@ func (ss *SessionStream) listen(cancel chan bool) {
 			return
 		case val := <-ss.req:
 			dblogger.Infof("got %+v", val)
-			ss.resp <- sqlOut{ok: true}
+
+			args := captureSqlIn{capTableName: val.capTableName}
+			args.id = util.GetUpdateID()
+			args.colIP, args.timestamp = util.GetTimeColIP(val.capture)
+			args.peerIP = util.GetPeerIP(val.capture)
+			//args.asPath = util.GetAsPath(val.capture)
+			args.asPath = []int64{}
+			args.nextHop = util.GetNextHop(val.capture)
+			args.origin = util.GetOriginAs(val.capture)
+			args.isWithdraw = false
+			//args.protoMsg = []byte(val.capture.GetBgpCapture())
+			args.protoMsg = []byte{}
+
+			ret := insertCapture(ss.ex, args)
+			ss.resp <- ret
 		}
 	}
 }
@@ -196,7 +217,7 @@ func (s *Session) Do(cmd sessionCmd, arg interface{}) (*SessionStream, error) {
 	case SESSION_OPEN_STREAM:
 		dblogger.Infof("Opening stream on session: %s", s.uuid)
 		s.wp.Add()
-		ss := NewSessionStream(s.cancel, s.wp, s.schema)
+		ss := NewSessionStream(s.cancel, s.wp, s.schema, s, s.dbo)
 		return ss, nil
 	}
 	return nil, nil

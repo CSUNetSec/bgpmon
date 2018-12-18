@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
+	"github.com/lib/pq"
 	"github.com/pkg/errors"
+	"net"
 	"time"
 )
 
@@ -196,4 +198,31 @@ func retCheckSchema(o sqlOut) (bool, error) {
 
 func retMakeSchema(o sqlOut) error {
 	return o.err
+}
+
+type captureSqlIn struct {
+	capTableName string
+	id           []byte
+	timestamp    time.Time
+	colIP        net.IP
+	peerIP       net.IP
+	asPath       []int64
+	nextHop      net.IP
+	origin       int
+	isWithdraw   bool
+	protoMsg     []byte
+}
+
+func insertCapture(ex SessionExecutor, args captureSqlIn) (ret sqlOut) {
+	insertTmpl := ex.getdbop(INSERT_CAPTURE_TABLE)
+	stmt := fmt.Sprintf(insertTmpl, args.capTableName)
+
+	var err error
+	_, err = ex.Exec(stmt, args.id, args.timestamp, args.colIP, args.peerIP, pq.Array(args.asPath), args.nextHop, args.origin, args.isWithdraw, args.protoMsg)
+	if err != nil {
+		ret.err = errors.Wrap(err, "insertCapture")
+		return
+	}
+
+	return
 }
