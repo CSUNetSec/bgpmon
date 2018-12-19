@@ -67,7 +67,7 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 	wr := arg.(*pb.WriteRequest)
 	dblogger.Infof("i got cmd:%+v type:%T arg:%+v", cmd, wr, wr)
-	cip, mtime := util.GetTimeColIP(wr)
+	mtime, cip := util.GetTimeColIP(wr)
 	dblogger.Infof("query schema for time %v col:%v", mtime, cip)
 	table, err := ss.schema.getTable("bgpmon", "dbs", cip.String(), mtime)
 	if err != nil {
@@ -117,15 +117,14 @@ func (ss *SessionStream) listen(cancel chan bool) {
 
 			args := captureSqlIn{capTableName: val.capTableName}
 			args.id = util.GetUpdateID()
-			args.colIP, args.timestamp = util.GetTimeColIP(val.capture)
+			args.timestamp, args.colIP = util.GetTimeColIP(val.capture)
 			args.peerIP = util.GetPeerIP(val.capture)
-			//args.asPath = util.GetAsPath(val.capture)
-			args.asPath = []int64{}
+			args.asPath = util.GetAsPath(val.capture)
+			//args.asPath = []int64{}
 			args.nextHop = util.GetNextHop(val.capture)
 			args.origin = util.GetOriginAs(val.capture)
 			args.isWithdraw = false
-			//args.protoMsg = []byte(val.capture.GetBgpCapture())
-			args.protoMsg = []byte{}
+			args.protoMsg = []byte(val.capture.GetBgpCapture().String())
 
 			ret := insertCapture(ss.ex, args)
 			ss.resp <- ret

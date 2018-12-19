@@ -206,7 +206,7 @@ type captureSqlIn struct {
 	timestamp    time.Time
 	colIP        net.IP
 	peerIP       net.IP
-	asPath       []int64
+	asPath       []int
 	nextHop      net.IP
 	origin       int
 	isWithdraw   bool
@@ -218,7 +218,7 @@ func insertCapture(ex SessionExecutor, args captureSqlIn) (ret sqlOut) {
 	stmt := fmt.Sprintf(insertTmpl, args.capTableName)
 
 	var err error
-	_, err = ex.Exec(stmt, args.id, args.timestamp, args.colIP, args.peerIP, pq.Array(args.asPath), args.nextHop, args.origin, args.isWithdraw, args.protoMsg)
+	_, err = ex.Exec(stmt, args.timestamp, args.colIP.String(), args.peerIP.String(), pq.Array(args.asPath), args.nextHop.String(), args.origin, args.isWithdraw, args.protoMsg)
 	if err != nil {
 		ret.err = errors.Wrap(err, "insertCapture")
 		return
