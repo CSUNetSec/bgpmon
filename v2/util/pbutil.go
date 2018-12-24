@@ -1,22 +1,34 @@
 package util
 
 import (
+	"errors"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
+	pbcomm "github.com/CSUNetSec/netsec-protobufs/common"
 	"github.com/google/uuid"
 	"net"
 	"time"
 )
 
-func GetTimeColIP(pb *pb.WriteRequest) (time.Time, net.IP) {
-	var colip net.IP
+var (
+	errnoip = errors.New("could not decode IP from protobuf IP wrapper")
+)
+
+func GetIPWrapper(pip *pbcomm.IPAddressWrapper) (ret net.IP, err error) {
+	if pip != nil && pip.Ipv4 != nil {
+		ret = net.IP(pip.Ipv4)
+	} else if pip != nil && pip.Ipv6 != nil {
+		ret = net.IP(pip.Ipv6)
+	} else {
+		err = errnoip
+	}
+	return
+}
+
+func GetTimeColIP(pb *pb.WriteRequest) (time.Time, net.IP, error) {
 	secs := time.Unix(int64(pb.GetBgpCapture().GetTimestamp()), 0)
 	locip := pb.GetBgpCapture().GetLocalIp()
-	if locip != nil && locip.Ipv4 != nil {
-		colip = net.IP(locip.Ipv4)
-	} else if locip != nil && locip.Ipv6 != nil {
-		colip = net.IP(locip.Ipv6)
-	}
-	return secs, colip
+	colip, err := GetIPWrapper(locip)
+	return secs, colip, err
 }
 
 func GetUpdateID() []byte {
@@ -24,16 +36,11 @@ func GetUpdateID() []byte {
 	return ret
 }
 
-func GetPeerIP(wr *pb.WriteRequest) net.IP {
-	var pip net.IP
+func GetPeerIP(wr *pb.WriteRequest) (net.IP, error) {
 	capt := wr.GetBgpCapture()
 	pipwrap := capt.GetPeerIp()
-	if pipwrap != nil && pipwrap.Ipv4 != nil {
-		pip = net.IP(pipwrap.Ipv4)
-	} else if pipwrap != nil && pipwrap.Ipv6 != nil {
-		pip = net.IP(pipwrap.Ipv6)
-	}
-	return pip
+	pip, err := GetIPWrapper(pipwrap)
+	return pip, err
 }
 
 func GetAsPath(wr *pb.WriteRequest) []int {
@@ -56,9 +63,10 @@ func GetAsPath(wr *pb.WriteRequest) []int {
 	return path
 }
 
-func GetNextHop(wr *pb.WriteRequest) net.IP {
+func GetNextHop(wr *pb.WriteRequest) (net.IP, error) {
 	nh := wr.GetBgpCapture().GetUpdate().GetAttrs().GetNextHop()
-	return net.IP(nh.Ipv4)
+	nhip, err := GetIPWrapper(nh)
+	return nhip, err
 }
 
 func GetOriginAs(wr *pb.WriteRequest) int {

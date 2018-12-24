@@ -17,12 +17,13 @@ import (
 	"context"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	//"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
 )
 
 const (
-	WRITE_TIMEOUT = 10 * time.Second
+	WRITE_TIMEOUT = 120 * time.Second
 )
 
 var (
@@ -192,6 +193,7 @@ func main() {
 	if len(os.Args) != 2 {
 		mainlogger.Fatal("no configuration file provided")
 	}
+	//logrus.SetOutput(ioutil.Discard)
 	mainlogger.Infof("reading config file:%s", os.Args[1])
 	if cfile, ferr := os.Open(os.Args[1]); ferr != nil {
 		mainlogger.Fatalf("error opening configuration file:%s", ferr)

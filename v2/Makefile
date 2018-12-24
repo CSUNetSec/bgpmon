@@ -3,6 +3,7 @@ BGPMON-BIN=bgpmon
 BGPMOND-BIN=bgpmond
 BGPMONSRC=cmd/bgpmon/
 BGPMONDSRC=cmd/bgpmond/
+GO111MODULE=on
 
 all: build
 
@@ -12,25 +13,25 @@ makebindir:
 
 ${BINDIR}/${BGPMON-BIN}:
 	cd ${BGPMONSRC}; \
-	vgo build; \
+	go build; \
 	mv ${BGPMON-BIN} ../../${BINDIR}; \
 	cd ../..
 
 ${BINDIR}/${BGPMOND-BIN}:
 	cd ${BGPMONDSRC}; \
-	vgo build; \
+	go build; \
 	mv ${BGPMOND-BIN} ../../${BINDIR}; \
 	cd ../..
 
 ${BINDIR}/${BGPMON-BIN}-linux:
 	cd ${BGPMONSRC}; \
-	GOOS="linux" vgo build; \
+	GOOS="linux" go build; \
 	mv ${BGPMON-BIN} ../../${BINDIR}/${BGPMON-BIN}-linux; \
 	cd ../..
 
 ${BINDIR}/${BGPMOND-BIN}-linux:
 	cd ${BGPMONDSRC}; \
-	GOOS="linux" vgo build; \
+	GOOS="linux" go build; \
 	mv ${BGPMOND-BIN} ../../${BINDIR}/${BGPMOND-BIN}-linux; \
 	cd ../..
 

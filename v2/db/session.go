@@ -9,11 +9,12 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
+	"net"
 	"time"
 )
 
 const (
-	CTXTIMEOUT = time.Duration(10) * time.Second
+	CTXTIMEOUT = time.Duration(120) * time.Second //XXX there is a write timeout in bgpmond too! merge
 )
 
 type sessionCmd int
@@ -66,7 +67,11 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 // WARNING, sending after a close will cause a panic, and may hang
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 	wr := arg.(*pb.WriteRequest)
-	mtime, cip := util.GetTimeColIP(wr)
+	mtime, cip, err := util.GetTimeColIP(wr)
+	if err != nil {
+		dblogger.Errorf("failed to get Collector IP:%v", err)
+		return err
+	}
 	dblogger.Infof("Query schema for time: %v col:%v", mtime, cip)
 	table, err := ss.schema.getTable("bgpmon", "dbs", cip.String(), mtime)
 	if err != nil {
@@ -102,6 +107,7 @@ func (ss *SessionStream) Flush() error {
 func (ss *SessionStream) listen(cancel chan bool) {
 	defer dblogger.Infof("Session stream closed successfully")
 	defer close(ss.resp)
+	var err error
 
 	for {
 		select {
@@ -113,12 +119,21 @@ func (ss *SessionStream) listen(cancel chan bool) {
 			}
 			return
 		case val := <-ss.req:
+			err = nil // reset the possible error
 			args := captureSqlIn{capTableName: val.capTableName}
 			args.id = util.GetUpdateID()
-			args.timestamp, args.colIP = util.GetTimeColIP(val.capture)
-			args.peerIP = util.GetPeerIP(val.capture)
+			args.timestamp, args.colIP, err = util.GetTimeColIP(val.capture)
+			args.peerIP, err = util.GetPeerIP(val.capture)
+			if err != nil {
+				dblogger.Errorf("failed to get peer ip:%v. ignoring message", err)
+				continue
+			}
 			args.asPath = util.GetAsPath(val.capture)
-			args.nextHop = util.GetNextHop(val.capture)
+			args.nextHop, err = util.GetNextHop(val.capture)
+			if err != nil { //non fatal error just log. XXX: the db must become resilent to null entries!
+				dblogger.Errorf("could not get next hop:%v. setting it to null", err)
+				args.nextHop = net.IPv4(0, 0, 0, 0)
+			}
 			args.origin = util.GetOriginAs(val.capture)
 			args.isWithdraw = false
 			args.protoMsg = []byte(val.capture.GetBgpCapture().String())
