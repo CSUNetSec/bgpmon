@@ -72,17 +72,14 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 		dblogger.Errorf("failed to get Collector IP:%v", err)
 		return err
 	}
-	dblogger.Infof("Query schema for time: %v col:%v", mtime, cip)
 	table, err := ss.schema.getTable("bgpmon", "dbs", cip.String(), mtime)
 	if err != nil {
 		return err
 	}
 
-	dblogger.Infof("table to write bgp capture:%v", table)
 	ss.req <- sqlIn{capTableName: table, capture: wr}
 	resp, ok := <-ss.resp
 
-	dblogger.Infof("Finished writing message")
 	if !ok {
 		return fmt.Errorf("Response channel closed")
 	}

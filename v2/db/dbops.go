@@ -162,7 +162,6 @@ func getTable(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 			ret.err = err
 			return
 		}
-		dblogger.Printf("got dbname:%s collector:%s tstart:%s tend:%s", resdbname, rescollector, restStart, restEnd)
 		//we found a table for that range.
 		ret.capTable, ret.capIp, ret.capStime, ret.capEtime = resdbname, rescollector, restStart, restEnd
 		return

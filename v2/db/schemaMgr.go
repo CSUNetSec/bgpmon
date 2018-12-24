@@ -79,11 +79,11 @@ func (s *schemaMgr) run() {
 				slogger.Infof("getting node name")
 				ret.sout = getNode(s.sex, icmd.sin)
 			case GETTABLE:
-				slogger.Infof("Checking table cache")
 				capTableName, ok := s.checkTableCache(icmd.sin.getColDate.col, icmd.sin.getColDate.dat)
 				if ok {
 					ret.sout = sqlOut{capTable: capTableName}
 				} else {
+					slogger.Infof("Table cache miss. Creating table for col: %s date: %s", icmd.sin.getColDate.col, icmd.sin.getColDate.dat)
 					ret.sout, err = s.makeCapTable(icmd.sin)
 					if err != nil {
 						slogger.Errorf("schemaMgr: %s", err)
@@ -130,7 +130,6 @@ func (s *schemaMgr) makeCapTable(sin sqlIn) (sqlOut, error) {
 }
 
 func (s *schemaMgr) checkTableCache(collector string, date time.Time) (string, bool) {
-	fmt.Printf("%v\n", s.cols)
 	i, ok := s.cols.ColNameDateInSlice(collector, date)
 	if ok {
 		return s.cols[i].GetNameDateStr(), true
