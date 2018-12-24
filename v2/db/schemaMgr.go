@@ -36,26 +36,35 @@ type schemaReply struct {
 type schemaMgr struct {
 	iChan chan schemaCmd
 	oChan chan schemaReply
-	cChan chan bool
 	sex   SessionExecutor           //this executor should be a dbSessionExecutor, not at tx.
 	cols  util.CollectorsByNameDate //collector name dates sorted by date and name for quick lookup.
 }
 
+// This function launches the run method in a separate goroutine
 func newSchemaMgr(sex SessionExecutor) *schemaMgr {
-	return &schemaMgr{
+	sm := &schemaMgr{
 		iChan: make(chan schemaCmd),
 		oChan: make(chan schemaReply),
-		cChan: make(chan bool),
 		sex:   sex,
 	}
+	go sm.run()
+	return sm
 }
 
 //should be run in a separate goroutine
 func (s *schemaMgr) run() {
+	defer slogger.Infof("Schema manager closed successfully")
+	defer close(s.oChan)
+
+	var err error
 	for {
-		ret := schemaReply{ok: true}
 		select {
-		case icmd := <-s.iChan:
+		case icmd, ok := <-s.iChan:
+			if !ok {
+				return
+			}
+			ret := schemaReply{ok: true}
+
 			switch icmd.op {
 			case CHECKSCHEMA:
 				slogger.Infof("checking correctness of db schema")
@@ -63,69 +72,78 @@ func (s *schemaMgr) run() {
 			case INITSCHEMA:
 				slogger.Infof("initializing db schema")
 				ret.sout = makeSchema(s.sex, icmd.sin)
-
 			case SYNCNODES:
 				slogger.Infof("syncing node configs")
 				ret.sout = syncNodes(s.sex, icmd.sin)
-
 			case GETNODE:
 				slogger.Infof("getting node name")
 				ret.sout = getNode(s.sex, icmd.sin)
-
 			case GETTABLE:
-				slogger.Infof("checking existance of collector tables in cache")
-				gcd := icmd.sin.getColDate
-				if i, ok := s.cols.ColNameDateInSlice(gcd.col, gcd.dat); ok {
-					ret.sout = sqlOut{
-						resultColDate: collectorDate{
-							col: s.cols[i].GetNameDateStr(),
-						},
-					}
+				slogger.Infof("Checking table cache")
+				capTableName, ok := s.checkTableCache(icmd.sin.getColDate.col, icmd.sin.getColDate.dat)
+				if ok {
+					ret.sout = sqlOut{capTable: capTableName}
 				} else {
-					ret.sout = getTable(s.sex, icmd.sin)
-					if ret.sout.err == errNoTable {
-						icmd.sin.nodetable = "nodes" //XXX hardcoded adding the table
-						icmd.sin.getNodeIP = icmd.sin.getColDate.col
-						slogger.Infof("No existing table for that time range:%+v. time is :%+v.Creating it", icmd.sin, icmd.sin.getColDate.dat)
-						nodesout := getNode(s.sex, icmd.sin)
-						slogger.Infof("name of that collector node:%v", nodesout.resultNode.nodeName)
-						//creating a new sorted collector array from the nodename we got
-						//the date (that will be truncated according to the duration) and
-						//the duration. if the addition to the main db table succeeds this
-						//array will replace the current one.
-						newcols, nnode := s.cols.Add(nodesout.resultNode.nodeName, icmd.sin.getColDate.dat, nodesout.resultNode.nodeDuration)
-						nsin := sqlIn{maintable: icmd.sin.maintable}
-						nsin.capTableCol, nsin.capTableName, nsin.capTableSdate, nsin.capTableEdate = nnode.GetNameDates()
-						nsout := createCaptureTable(s.sex, nsin)
-						if nsout.err != nil {
-							slogger.Errorf("createCaptureTable error:%s", nsout.err)
-						} else {
-							ret.sout = nsout
-							s.cols = newcols //update the sorted cols table
-						}
-					} else if ret.sout.err != nil {
-						slogger.Errorf("getTable error:%s", ret.err)
-					} else if ret.sout.err == nil { //the table exists but current coldatestring doesn't know. update it.
-						// XXX this can be solved with the a join on dbs and nodes.
+					ret.sout, err = s.makeCapTable(icmd.sin)
+					if err != nil {
+						slogger.Errorf("schemaMgr: %s", err)
+						ret.ok = false
 					}
 				}
-
 			default:
 				ret.err = fmt.Errorf("unhandled schema manager command:%+v", icmd)
 				ret.ok = false
 				slogger.Errorf("error:%s", ret.err)
 			}
+
+			// Send the result back on the channel
 			s.oChan <- ret
-		case <-s.cChan:
-			slogger.Infof("schemaMgr terminating by close channel")
-			return
 		}
-		s.oChan <- ret
 	}
 }
 
+func (s *schemaMgr) makeCapTable(sin sqlIn) (sqlOut, error) {
+	res := getTable(s.sex, sin)
+	if res.err == errNoTable {
+		sin.nodetable = "nodes"
+		sin.getNodeIP = sin.getColDate.col
+		nodesRes := getNode(s.sex, sin)
+		if nodesRes.err != nil {
+			return sqlOut{}, fmt.Errorf("makeCapTable: %s", nodesRes.err)
+		}
+
+		newcols, nnode := s.cols.Add(nodesRes.resultNode.nodeName, sin.getColDate.dat, nodesRes.resultNode.nodeDuration)
+		nsin := sqlIn{maintable: sin.maintable}
+		nsin.capTableCol, nsin.capTableName, nsin.capTableSdate, nsin.capTableEdate = nnode.GetNameDates()
+		nsout := createCaptureTable(s.sex, nsin)
+		if nsout.err != nil {
+			return sqlOut{}, fmt.Errorf("makeCapTable: %s", nsout.err)
+		}
+		s.cols = newcols
+		return nsout, nil
+	} else if res.err == nil {
+		// This means the coldatestring needs to be updated
+		return res, nil
+	} else {
+		return sqlOut{}, fmt.Errorf("makeCapTable: %s", res.err)
+	}
+}
+
+func (s *schemaMgr) checkTableCache(collector string, date time.Time) (string, bool) {
+	fmt.Printf("%v\n", s.cols)
+	i, ok := s.cols.ColNameDateInSlice(collector, date)
+	if ok {
+		return s.cols[i].GetNameDateStr(), true
+	}
+	return "", false
+}
+
+// Below this are the interface methods, called by the session streams
+
+// This doesn't need a dedicated close channel. With the way we use it,
+// none of the other interface methods will be called after close is called.
 func (s *schemaMgr) stop() {
-	close(s.cChan)
+	close(s.iChan)
 }
 
 func (s *schemaMgr) checkSchema(dbname, maintable, nodetable string) (bool, error) {

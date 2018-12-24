@@ -66,9 +66,8 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 // WARNING, sending after a close will cause a panic, and may hang
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 	wr := arg.(*pb.WriteRequest)
-	dblogger.Infof("i got cmd:%+v type:%T arg:%+v", cmd, wr, wr)
 	mtime, cip := util.GetTimeColIP(wr)
-	dblogger.Infof("query schema for time %v col:%v", mtime, cip)
+	dblogger.Infof("Query schema for time: %v col:%v", mtime, cip)
 	table, err := ss.schema.getTable("bgpmon", "dbs", cip.String(), mtime)
 	if err != nil {
 		return err
@@ -78,6 +77,7 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 	ss.req <- sqlIn{capTableName: table, capture: wr}
 	resp, ok := <-ss.resp
 
+	dblogger.Infof("Finished writing message")
 	if !ok {
 		return fmt.Errorf("Response channel closed")
 	}
@@ -113,14 +113,11 @@ func (ss *SessionStream) listen(cancel chan bool) {
 			}
 			return
 		case val := <-ss.req:
-			dblogger.Infof("got %+v", val)
-
 			args := captureSqlIn{capTableName: val.capTableName}
 			args.id = util.GetUpdateID()
 			args.timestamp, args.colIP = util.GetTimeColIP(val.capture)
 			args.peerIP = util.GetPeerIP(val.capture)
 			args.asPath = util.GetAsPath(val.capture)
-			//args.asPath = []int64{}
 			args.nextHop = util.GetNextHop(val.capture)
 			args.origin = util.GetOriginAs(val.capture)
 			args.isWithdraw = false
@@ -200,8 +197,6 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 	s.db = db
 
 	s.schema = newSchemaMgr(newDbSessionExecutor(s.db, s.dbo))
-	go s.schema.run()
-
 	return s, nil
 }
 
