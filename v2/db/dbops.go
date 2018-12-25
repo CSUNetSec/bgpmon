@@ -102,6 +102,7 @@ func getNode(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 			return
 		}
 		//try to match the node and ignore unset strings coming from sqlin
+		dblogger.Infof("trying node matching with name:%s ip:%s", cn.nodeName, cn.nodeIP)
 		if (args.getNodeName == cn.nodeName && args.getNodeName != "") || (args.getNodeIP == cn.nodeIP && args.getNodeIP != "") {
 			ret.resultNode = cn
 			return
@@ -145,10 +146,11 @@ func getTable(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 		rescollector string
 		restStart    time.Time
 		restEnd      time.Time
+		resdur       int
 	)
 	selectTableTmpl := ex.getdbop(SELECT_TABLE)
 	qdate := args.getColDate.dat.UTC() //XXX this cast to utc is important. the db is dumb and doesn't figure it out. we need a better approach.
-	rows, err := ex.Query(fmt.Sprintf(selectTableTmpl, args.maintable), qdate)
+	rows, err := ex.Query(fmt.Sprintf(selectTableTmpl, args.maintable, args.nodetable), qdate, args.getColDate.col)
 	if err != nil {
 		dblogger.Errorf("getTable query error:%s", err)
 		ret.err = err
@@ -156,14 +158,14 @@ func getTable(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		err := rows.Scan(&resdbname, &rescollector, &restStart, &restEnd)
+		err := rows.Scan(&resdbname, &rescollector, &restStart, &restEnd, &resdur)
 		if err != nil {
 			dblogger.Errorf("getNode fetch node row:%s", err)
 			ret.err = err
 			return
 		}
 		//we found a table for that range.
-		ret.capTable, ret.capIp, ret.capStime, ret.capEtime = resdbname, rescollector, restStart, restEnd
+		ret.capTable, ret.capStime, ret.capEtime, ret.resultNode = resdbname, restStart, restEnd, &node{nodeIP: args.getColDate.col, nodeName: rescollector, nodeDuration: resdur}
 		return
 	}
 	ret.err = errNoTable
@@ -219,6 +221,7 @@ func insertCapture(ex SessionExecutor, args captureSqlIn) (ret sqlOut) {
 	var err error
 	_, err = ex.Exec(stmt, args.timestamp, args.colIP.String(), args.peerIP.String(), pq.Array(args.asPath), args.nextHop.String(), args.origin, args.isWithdraw, args.protoMsg)
 	if err != nil {
+		dblogger.Infof("failing to insert capture: time:%s colip:%s  aspath:%v oas:%v ", args.timestamp, args.colIP.String(), args.asPath, args.origin)
 		ret.err = errors.Wrap(err, "insertCapture")
 		return
 	}
