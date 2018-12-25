@@ -72,7 +72,7 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 		dblogger.Errorf("failed to get Collector IP:%v", err)
 		return err
 	}
-	table, err := ss.schema.getTable("bgpmon", "dbs", cip.String(), mtime)
+	table, err := ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
 	if err != nil {
 		return err
 	}

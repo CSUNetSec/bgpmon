@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -29,7 +30,7 @@ func SumNodeConfs(confnodes, dbnodes map[string]config.NodeConfig) map[string]co
 type collectorDateString struct {
 	colName   string
 	startDate time.Time
-	duration  time.Duration
+	endDate   time.Time
 }
 
 func (c collectorDateString) GetNameDateStr() string {
@@ -37,19 +38,36 @@ func (c collectorDateString) GetNameDateStr() string {
 }
 
 func (c collectorDateString) GetNameDates() (string, string, time.Time, time.Time) {
-	return c.colName, c.GetNameDateStr(), c.startDate, c.startDate.Add(c.duration)
+	return c.colName, c.GetNameDateStr(), c.startDate, c.endDate
 }
 
-func NewCollectorDateString(name string, sd time.Time, dur time.Duration) *collectorDateString {
+//this function gets the date for a new collector table to be added with the desired duration minutes
+//and returns a string that should be the table name, the truncated time, and the end time.
+func GetNodeTableNameDates(name string, stime time.Time, durmin int) (string, time.Time, time.Time) {
+	dur := time.Duration(durmin) * time.Minute
+	trunctime := stime.Truncate(dur).UTC()
+	tname := fmt.Sprintf("%s_%s", name, trunctime.Format("2006_01_02_15_04_05"))
+	return tname, trunctime, trunctime.Add(dur)
+}
+
+func NewCollectorDateString(name string, sd time.Time, ed time.Time) *collectorDateString {
 	return &collectorDateString{
 		colName:   name,
 		startDate: sd,
-		duration:  dur,
+		endDate:   ed,
 	}
 }
 
 //collector-date strings ordered by their starting date.
 type CollectorsByNameDate []collectorDateString
+
+func (c CollectorsByNameDate) String() string {
+	var ret strings.Builder
+	for i := range c {
+		ret.WriteString(fmt.Sprintf("[name:%s, sTime:%s etime:%s],", c[i].colName, c[i].startDate, c[i].endDate))
+	}
+	return ret.String()
+}
 
 //Len implementation for sort interface
 func (c CollectorsByNameDate) Len() int {
@@ -74,10 +92,11 @@ func (c CollectorsByNameDate) Less(i, j int) bool {
 
 //this will return the index and if the name and date are in the slice. caller has to check existence.
 func (c CollectorsByNameDate) ColNameDateInSlice(colname string, date time.Time) (int, bool) {
+	//fmt.Printf("looking for %s , date :%v in slice:%s\n", colname, date, c)
 	//find a possible index
 	ind := sort.Search(c.Len(), func(i int) bool {
-		return c[i].colName == colname && (c[i].startDate.After(date) || c[i].startDate.Equal(date))
-	})
+		return (c[i].colName == colname && c[i].startDate.After(date)) || (c[i].colName == colname && c[i].startDate.Equal(date))
+	}) - 1 //XXX observe: This was the bug that Will found in the cache cause if you don't subtract 1 it gives you the pos where it would add the next item.
 	if ind >= len(c) { //it's not there
 		return 0, false
 	}
@@ -90,23 +109,23 @@ func (c CollectorsByNameDate) ColNameDateInSlice(colname string, date time.Time)
 		return ind, true
 	}
 	//catch the normal case where it is after the startdate, and before the startdate+duration
-	if c[ind].startDate.Before(date) && date.Before(c[ind].startDate.Add(c[ind].duration)) {
+	if c[ind].startDate.Before(date) && date.Before(c[ind].endDate) {
 		return ind, true
 	}
 	return 0, false
 }
 
 //Add will return a new copy of the sorted array with the new collector date added.
-//it will truncate the original time to one matching the duration.
+//the time should be the truncated time according to the the duration provided in the arguments of
+//a GetNodeTableNameDates() call, as well as the end time to be stime+duration
 //the caller should try to insert that new name to the nodes table and if succesful,
 //change his collectorsByNameDate reference to the new updated one.
-//it also returns the newly added argument to help the caller extract names and dates from it.
-func (c CollectorsByNameDate) Add(col string, sd time.Time, durMinutes int) (ret CollectorsByNameDate, newnode *collectorDateString) {
-	dur := time.Duration(durMinutes) * time.Minute
-	trunctime := sd.Truncate(dur).UTC()
-	newnode = NewCollectorDateString(col, trunctime, dur)
+//there is a helper func in schemamgr for this called AddNodeAndTableInCache
+func (c CollectorsByNameDate) Add(col string, sd time.Time, ed time.Time) (ret CollectorsByNameDate) {
+	newnode := NewCollectorDateString(col, sd, ed)
 	ret = append(c, *newnode)
 	sort.Stable(ret)
+	//fmt.Printf("cols from :%+v --> %+v\n", c, ret)
 	return
 }
 
