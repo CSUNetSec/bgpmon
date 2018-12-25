@@ -83,8 +83,8 @@ var dbops = map[string][]string{
 	},
 	SELECT_TABLE: []string{
 		//postgress
-		`SELECT dbname, collector, dateFrom, dateTo FROM %s 
-		 WHERE dateFrom <= $1 AND dateTo > $1;`,
+		`SELECT dbname, collector, dateFrom, dateTo, tableDumpDurationMinutes FROM %s,%s 
+		 WHERE dateFrom <= $1 AND dateTo > $1 AND ip = $2;`,
 	},
 	MAKE_NODE_TABLE: []string{
 		//postgress
