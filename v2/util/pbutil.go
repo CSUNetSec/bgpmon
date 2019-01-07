@@ -73,3 +73,55 @@ func GetOriginAs(wr *pb.WriteRequest) int {
 	as := wr.GetBgpCapture().GetUpdate().GetAttrs().GetOrigin()
 	return int(as)
 }
+
+func GetAdvertizedPrefixes(wr *pb.WriteRequest) ([]*net.IPNet, error) {
+	routes := wr.GetBgpCapture().GetUpdate().GetAdvertizedRoutes()
+	if routes == nil {
+		return nil, errors.New("No advertized prefixes")
+	}
+
+	return GetPrefixListAsIPNet(routes.Prefixes)
+}
+
+func GetWithdrawnPrefixes(wr *pb.WriteRequest) ([]*net.IPNet, error) {
+	routes := wr.GetBgpCapture().GetUpdate().GetWithdrawnRoutes()
+	if routes == nil {
+		return nil, errors.New("No withdrawn prefixes")
+	}
+	return GetPrefixListAsIPNet(routes.Prefixes)
+}
+
+func GetPrefixListAsIPNet(prefs []*pbcomm.PrefixWrapper) ([]*net.IPNet, error) {
+	if prefs == nil {
+		return nil, errors.New("No prefixes provided.")
+	}
+	var ret []*net.IPNet
+	for _, pref := range prefs {
+		net, err := GetPrefixAsIPNet(pref)
+
+		// Should this return an empty set or just ignore this entry?
+		if err != nil {
+			return nil, err
+		}
+
+		ret = append(ret, net)
+	}
+
+	return ret, nil
+}
+
+func GetPrefixAsIPNet(pw *pbcomm.PrefixWrapper) (*net.IPNet, error) {
+	ip, err := GetIPWrapper(pw.Prefix)
+	if err != nil {
+		return nil, err
+	}
+	var mask net.IPMask
+	// This is true if it's an IPv4 or a special IPv6 address, might need to be fixed
+	if ip.To4() != nil {
+		mask = net.CIDRMask(int(pw.Mask), 32)
+	} else {
+		mask = net.CIDRMask(int(pw.Mask), 128)
+	}
+
+	return &net.IPNet{ip, mask}, nil
+}

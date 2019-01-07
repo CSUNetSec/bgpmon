@@ -118,7 +118,6 @@ func (ss *SessionStream) listen(cancel chan bool) {
 		case val := <-ss.req:
 			err = nil // reset the possible error
 			args := captureSqlIn{capTableName: val.capTableName}
-			args.id = util.GetUpdateID()
 			args.timestamp, args.colIP, err = util.GetTimeColIP(val.capture)
 			args.peerIP, err = util.GetPeerIP(val.capture)
 			if err != nil {
@@ -128,11 +127,13 @@ func (ss *SessionStream) listen(cancel chan bool) {
 			args.asPath = util.GetAsPath(val.capture)
 			args.nextHop, err = util.GetNextHop(val.capture)
 			if err != nil { //non fatal error just log. XXX: the db must become resilent to null entries!
-				dblogger.Errorf("could not get next hop:%v. setting it to null", err)
+				// This pollutes the log, a lot
+				//dblogger.Errorf("could not get next hop:%v. setting it to null", err)
 				args.nextHop = net.IPv4(0, 0, 0, 0)
 			}
 			args.origin = util.GetOriginAs(val.capture)
-			args.isWithdraw = false
+			args.advertized, _ = util.GetAdvertizedPrefixes(val.capture)
+			args.withdrawn, _ = util.GetWithdrawnPrefixes(val.capture)
 			args.protoMsg = []byte(val.capture.GetBgpCapture().String())
 
 			ret := insertCapture(ss.ex, args)

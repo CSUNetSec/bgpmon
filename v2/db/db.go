@@ -31,15 +31,15 @@ const (
 
 var dbops = map[string][]string{
 	CONNECT_NO_SSL: []string{
-		//postgress
+		//postgres
 		`user=%s password=%s dbname=%s host=%s sslmode=disable`,
 	},
 	CONNECT_SSL: []string{
-		//postgress
+		//postgres
 		`user=%s password=%s dbname=%s host=%s`,
 	},
 	CHECK_SCHEMA: []string{
-		//postgress
+		//postgres
 		`SELECT EXISTS (
 		   SELECT *
 		   FROM   information_schema.tables
@@ -47,11 +47,11 @@ var dbops = map[string][]string{
 		 );`,
 	},
 	SELECT_NODE: []string{
-		//postgress
+		//postgres
 		`SELECT name, ip, isCollector, tableDumpDurationMinutes, description, coords, address FROM %s;`,
 	},
 	INSERT_NODE: []string{
-		//postgress
+		//postgres
 		`INSERT INTO %s (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) 
 		   VALUES ($1, $2, $3, $4, $5, $6, $7)
 		   ON CONFLICT (ip) DO UPDATE SET name=EXCLUDED.name, isCollector=EXCLUDED.isCollector, 
@@ -59,7 +59,7 @@ var dbops = map[string][]string{
 		     description=EXCLUDED.description, coords=EXCLUDED.coords, address=EXCLUDED.address;`,
 	},
 	MAKE_MAIN_TABLE: []string{
-		//postgress
+		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   dbname varchar PRIMARY KEY,
 	           collector varchar,
@@ -68,26 +68,35 @@ var dbops = map[string][]string{
                  );`,
 	},
 	INSERT_MAIN_TABLE: []string{
-		//postgress
+		//postgres
 		`INSERT INTO %s (dbname, collector, dateFrom, dateTo) VALUES ($1, $2, $3, $4);`,
 	},
 	MAKE_CAPTURE_TABLE: []string{
-		//postgress
+		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
-		   update_id BIGSERIAL PRIMARY KEY, timestamp timestamp, collector_ip inet, peer_ip inet, as_path integer[], next_hop inet, origin_as integer, update_withdraw bool, protomsg bytea);`,
+		   update_id BIGSERIAL PRIMARY KEY, 
+		   timestamp timestamp, 
+		   collector_ip inet, 
+		   peer_ip inet, 
+		   as_path integer[], 
+		   next_hop inet, 
+		   origin_as integer, 
+		   adv_prefixes cidr[], 
+		   wdr_prefixes cidr[], 
+		   protomsg bytea);`,
 	},
 	// This template shouldn't need VALUES, because those will be provided by the buffer
 	INSERT_CAPTURE_TABLE: []string{
-		//`INSERT INTO %s (update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, update_withdraw, protomsg) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`,
-		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, update_withdraw, protomsg) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`,
+		//postgres
+		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes, protomsg) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`,
 	},
 	SELECT_TABLE: []string{
-		//postgress
+		//postgres
 		`SELECT dbname, collector, dateFrom, dateTo, tableDumpDurationMinutes FROM %s,%s 
 		 WHERE dateFrom <= $1 AND dateTo > $1 AND ip = $2;`,
 	},
 	MAKE_NODE_TABLE: []string{
-		//postgress
+		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   ip varchar PRIMARY KEY,
 		   name varchar, 
