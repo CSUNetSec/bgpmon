@@ -88,7 +88,7 @@ var dbops = map[string][]string{
 	// This template shouldn't need VALUES, because those will be provided by the buffer
 	INSERT_CAPTURE_TABLE: []string{
 		//postgres
-		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes, protomsg) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`,
+		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes, protomsg) VALUES `,
 	},
 	SELECT_TABLE: []string{
 		//postgres

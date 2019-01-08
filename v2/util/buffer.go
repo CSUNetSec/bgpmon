@@ -71,6 +71,7 @@ func (ib *InsertBuffer) Flush() error {
 	} else {
 		convStmt = fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt)
 	}
+
 	_, err := ib.ex.Exec(convStmt, ib.values...)
 	if err != nil {
 		return err

@@ -7,14 +7,15 @@ import (
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	"net"
 	"time"
 )
 
 const (
-	CTXTIMEOUT = time.Duration(120) * time.Second //XXX there is a write timeout in bgpmond too! merge
+	CTXTIMEOUT  = time.Duration(120) * time.Second //XXX there is a write timeout in bgpmond too! merge
+	BUFFER_SIZE = 40
 )
 
 type sessionCmd int
@@ -25,15 +26,16 @@ const (
 )
 
 type SessionStream struct {
-	req    chan sqlIn
-	resp   chan sqlOut
-	cancel chan bool
-	wp     *util.WorkerPool
-	schema *schemaMgr
-	closed bool
-	db     Dber
-	oper   *dbOper
-	ex     *ctxtxOperExecutor
+	req     chan sqlIn
+	resp    chan sqlOut
+	cancel  chan bool
+	wp      *util.WorkerPool
+	schema  *schemaMgr
+	closed  bool
+	db      Dber
+	oper    *dbOper
+	ex      *ctxtxOperExecutor
+	buffers map[string]util.SqlBuffer
 }
 
 func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, db Dber, oper *dbOper) *SessionStream {
@@ -57,6 +59,7 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 
 	ss.req = make(chan sqlIn)
 	ss.resp = make(chan sqlOut)
+	ss.buffers = make(map[string]util.SqlBuffer)
 	ctxTx, _ := GetNewExecutor(context.Background(), ss.db, true, CTXTIMEOUT)
 	ss.ex = newCtxTxSessionExecutor(ctxTx, ss.oper)
 
@@ -87,6 +90,9 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 }
 
 func (ss *SessionStream) Flush() error {
+	for key := range ss.buffers {
+		ss.buffers[key].Flush()
+	}
 	ss.ex.tx.Commit()
 	return nil
 }
@@ -104,7 +110,6 @@ func (ss *SessionStream) Flush() error {
 func (ss *SessionStream) listen(cancel chan bool) {
 	defer dblogger.Infof("Session stream closed successfully")
 	defer close(ss.resp)
-	var err error
 
 	for {
 		select {
@@ -116,30 +121,50 @@ func (ss *SessionStream) listen(cancel chan bool) {
 			}
 			return
 		case val := <-ss.req:
-			err = nil // reset the possible error
-			args := captureSqlIn{capTableName: val.capTableName}
-			args.timestamp, args.colIP, err = util.GetTimeColIP(val.capture)
-			args.peerIP, err = util.GetPeerIP(val.capture)
-			if err != nil {
-				dblogger.Errorf("failed to get peer ip:%v. ignoring message", err)
-				continue
-			}
-			args.asPath = util.GetAsPath(val.capture)
-			args.nextHop, err = util.GetNextHop(val.capture)
-			if err != nil { //non fatal error just log. XXX: the db must become resilent to null entries!
-				// This pollutes the log, a lot
-				//dblogger.Errorf("could not get next hop:%v. setting it to null", err)
-				args.nextHop = net.IPv4(0, 0, 0, 0)
-			}
-			args.origin = util.GetOriginAs(val.capture)
-			args.advertized, _ = util.GetAdvertizedPrefixes(val.capture)
-			args.withdrawn, _ = util.GetWithdrawnPrefixes(val.capture)
-			args.protoMsg = []byte(val.capture.GetBgpCapture().String())
-
-			ret := insertCapture(ss.ex, args)
-			ss.resp <- ret
+			ss.resp <- sqlOut{err: ss.addToBuffer(val)}
 		}
 	}
+}
+
+func (ss *SessionStream) addToBuffer(val sqlIn) error {
+	if _, ok := ss.buffers[val.capTableName]; !ok {
+		dblogger.Infof("Creating new buffer for table: %s", val.capTableName)
+		stmt := fmt.Sprintf(ss.oper.getdbop(INSERT_CAPTURE_TABLE), val.capTableName)
+		ss.buffers[val.capTableName] = util.NewInsertBuffer(ss.ex, stmt, BUFFER_SIZE, 9, true)
+	}
+	buf := ss.buffers[val.capTableName]
+	ts, colIP, _ := util.GetTimeColIP(val.capture)
+	peerIP, err := util.GetPeerIP(val.capture)
+	if err != nil {
+		dblogger.Infof("Unable to parse peer ip, ignoring message")
+		return nil
+	}
+
+	asPath := util.GetAsPath(val.capture)
+	nextHop, err := util.GetNextHop(val.capture)
+	if err != nil {
+		nextHop = net.IPv4(0, 0, 0, 0)
+	}
+	origin := util.GetOriginAs(val.capture)
+	advertized, _ := util.GetAdvertizedPrefixes(val.capture)
+	withdrawn, _ := util.GetWithdrawnPrefixes(val.capture)
+	protoMsg := []byte(val.capture.GetBgpCapture().String())
+
+	advStr := IPNetToStrings(advertized)
+	wdrStr := IPNetToStringA(withdrawn)
+
+	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, pq.Array(advStr), pq.Array(wdrStr), protoMsg)
+}
+
+func IPNetToStringA(nets []*net.IPNet) []string {
+	if nets == nil {
+		return []string{}
+	}
+	ret := make([]string, len(nets))
+	for ct := range nets {
+		ret[ct] = nets[ct].String()
+	}
+	return ret
 }
 
 // This is only for a normal close operation. A cancellation
