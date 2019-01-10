@@ -235,6 +235,9 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 	s.db = db
 
 	s.schema = newSchemaMgr(newDbSessionExecutor(s.db, s.dbo))
+	if err := s.schema.makeSchema(d, "dbs", "nodes"); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
