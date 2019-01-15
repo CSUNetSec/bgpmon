@@ -120,8 +120,12 @@ func (ss *SessionStream) listen(cancel chan bool) {
 				ss.resp <- sqlOut{err: fmt.Errorf("Channel closed")}
 			}
 			return
-		case val := <-ss.req:
-			ss.resp <- sqlOut{err: ss.addToBuffer(val)}
+		case val, ok := <-ss.req:
+			// The ss.req channel might see it's close before the cancel channel.
+			// If that happens, this will add an empty sqlIn to the buffer
+			if ok {
+				ss.resp <- sqlOut{err: ss.addToBuffer(val)}
+			}
 		}
 	}
 }
