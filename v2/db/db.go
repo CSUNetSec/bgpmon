@@ -62,9 +62,9 @@ var dbops = map[string][]string{
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   dbname varchar PRIMARY KEY,
-	           collector varchar,
-	           dateFrom timestamp,
-	           dateTo timestamp
+	           collector varchar NOT NULL,
+	           dateFrom timestamp NOT NULL,
+	           dateTo timestamp NOT NULL
                  );`,
 	},
 	INSERT_MAIN_TABLE: []string{
@@ -75,15 +75,15 @@ var dbops = map[string][]string{
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   update_id BIGSERIAL PRIMARY KEY, 
-		   timestamp timestamp, 
-		   collector_ip inet, 
-		   peer_ip inet, 
-		   as_path integer[], 
-		   next_hop inet, 
-		   origin_as integer, 
-		   adv_prefixes cidr[], 
-		   wdr_prefixes cidr[], 
-		   protomsg bytea);`,
+		   timestamp timestamp NOT NULL,
+		   collector_ip inet NOT NULL, 
+		   peer_ip inet NOT NULL, 
+		   as_path integer[] NOT NULL, 
+		   next_hop inet NOT NULL, 
+		   origin_as integer NOT NULL, 
+		   adv_prefixes cidr[] NOT NULL, 
+		   wdr_prefixes cidr[] NOT NULL, 
+		   protomsg bytea NOT NULL);`,
 	},
 	// This template shouldn't need VALUES, because those will be provided by the buffer
 	INSERT_CAPTURE_TABLE: []string{
@@ -99,12 +99,12 @@ var dbops = map[string][]string{
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   ip varchar PRIMARY KEY,
-		   name varchar, 
-		   isCollector boolean,
-		   tableDumpDurationMinutes integer,
-		   description varchar,
-		   coords varchar,
-		   address varchar
+		   name varchar NOT NULL, 
+		   isCollector boolean NOT NULL,
+		   tableDumpDurationMinutes integer NOT NULL,
+		   description varchar NOT NULL,
+		   coords varchar NOT NULL,
+		   address varchar NOT NULL
 	         );`,
 	},
 }
