@@ -10,6 +10,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	"net"
+	"os"
 	"time"
 )
 
@@ -215,6 +216,7 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 	d := conf.GetDatabaseName()
 	h := conf.GetHostNames()
 	cd := conf.GetCertDir()
+	cn := conf.GetConfiguredNodes()
 
 	// The DB will need to be a field within session
 	switch st := conf.GetTypeName(); st {
@@ -237,11 +239,17 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 		return nil, errors.New("Unknown session type")
 	}
 	s.db = db
+	sex := newDbSessionExecutor(s.db, s.dbo)
 
-	s.schema = newSchemaMgr(newDbSessionExecutor(s.db, s.dbo))
+	s.schema = newSchemaMgr(sex)
 	if err := s.schema.makeSchema(d, "dbs", "nodes"); err != nil {
 		return nil, err
 	}
+	//calling syncnodes on the new schema manager
+	sin := sqlIn{dbname: d, nodetable: "nodes", knownNodes: cn}
+	sout := syncNodes(sex, sin)
+	fmt.Print("merged nodes, from the config file and the db are:")
+	config.PutConfiguredNodes(sout.knownNodes, os.Stdout)
 	return s, nil
 }
 

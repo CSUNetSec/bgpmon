@@ -41,6 +41,7 @@ type BgpmonDaemonConfig struct {
 }
 
 type SessionConfiger interface {
+	Configer
 	GetHostNames() []string
 	GetName() string
 	GetDatabaseName() string
@@ -98,6 +99,7 @@ func PutConfiguredNodes(a map[string]NodeConfig, w io.Writer) error {
 }
 
 type sessionConfig struct {
+	Configer
 	name     string   // will be the key of the dictionary, populated after the toml parsing.
 	Type     string   // cockroachdb, postgres, etc
 	CertDir  string   // directory on the bgpmond host containing the certs
@@ -147,15 +149,18 @@ func (s sessionConfig) GetCertDir() string {
 }
 
 // helper function to sanity check the config file.
-func checkConfig(c bgpmondConfig) error {
+func (c *bgpmondConfig) checkConfig() error {
 	inSlice := false
 	var nip net.IP
-	for _, s := range c.Sessions {
+	for si, s := range c.Sessions {
 		for _, stn := range sessionTypeNames {
 			if s.Type == stn {
 				inSlice = true
 			}
 		}
+		//set the pointer to the parent config to make it satisfy Configer too
+		s.Configer = c
+		c.Sessions[si] = s
 	}
 	if !inSlice {
 		return errors.New(fmt.Sprintf("unknown session type name. Known session types are:%v\n", sessionTypeNames))
@@ -186,7 +191,7 @@ func NewConfig(creader io.Reader) (*bgpmondConfig, error) {
 		sval.name = sname
 		bc.Sessions[sname] = sval //update the reference.
 	}
-	if cerr := checkConfig(bc); cerr != nil {
+	if cerr := bc.checkConfig(); cerr != nil {
 		return nil, errors.Wrap(cerr, "config")
 	}
 	return &bc, nil

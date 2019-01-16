@@ -54,7 +54,7 @@ func syncNodes(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		err := rows.Scan(cn.nodeName, cn.nodeIP, cn.nodeCollector, cn.nodeDuration, cn.nodeDescr, cn.nodeCoords, cn.nodeAddress)
+		err := rows.Scan(&cn.nodeName, &cn.nodeIP, &cn.nodeCollector, &cn.nodeDuration, &cn.nodeDescr, &cn.nodeCoords, &cn.nodeAddress)
 		if err != nil {
 			dblogger.Errorf("syncnode fetch node row:%s", err)
 			ret.err = err
@@ -63,6 +63,7 @@ func syncNodes(ex SessionExecutor, args sqlIn) (ret sqlOut) {
 		hereNewNodeConf := cn.nodeConfigFromNode()
 		dbNodes[hereNewNodeConf.IP] = hereNewNodeConf
 	}
+	dblogger.Infof("calling sumnodes. known:%v, db:%v", args.knownNodes, dbNodes)
 	allNodes := util.SumNodeConfs(args.knownNodes, dbNodes)
 	for _, v := range allNodes {
 		_, err := ex.Exec(fmt.Sprintf(insertNodeTmpl, args.nodetable),
