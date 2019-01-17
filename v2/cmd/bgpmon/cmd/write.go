@@ -7,6 +7,7 @@ import (
 	"github.com/CSUNetSec/protoparse/filter"
 
 	"github.com/spf13/cobra"
+	"io"
 )
 
 var (
@@ -78,10 +79,10 @@ func writeFunc(cmd *cobra.Command, args []string) {
 					}
 				}
 
-				if reply, err := stream.CloseAndRecv(); err != nil {
+				if reply, err := stream.CloseAndRecv(); err != io.EOF {
 					fmt.Printf("Write stream server error:%s\n", err)
 				} else {
-					fmt.Printf("Write stream reply:%+v", reply)
+					fmt.Printf("Write stream reply:%+v\n", reply)
 				}
 				if err := mf.Err(); err != nil {
 					fmt.Printf("MRT file reader error:%s\n", mf.Err())
