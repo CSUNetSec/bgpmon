@@ -9,6 +9,7 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
+	"net"
 	"os"
 	"time"
 )
