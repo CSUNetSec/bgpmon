@@ -153,7 +153,7 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 		}
 
 		if err := dbStream.Send(db.SESSION_STREAM_WRITE_MRT, writeRequest); err != nil {
-			mainlogger.Errorf("error writing on session(%s): %s", writeRequest.SessionId, err)
+			mainlogger.Errorf("error writing on session(%s): %s. message:%+v", writeRequest.SessionId, err, writeRequest)
 			return errors.Wrap(err, "session write")
 		}
 	}
