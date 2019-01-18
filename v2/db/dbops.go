@@ -219,11 +219,11 @@ func insertCapture(ex SessionExecutor, args captureSqlIn) (ret sqlOut) {
 	insertTmpl := ex.getdbop(INSERT_CAPTURE_TABLE)
 	stmt := fmt.Sprintf(insertTmpl, args.capTableName)
 
-	adv := IPNetToStrings(args.advertized)
-	wdr := IPNetToStrings(args.withdrawn)
+	adv := util.PrefixesToPQArray(args.advertized)
+	wdr := util.PrefixesToPQArray(args.withdrawn)
 
 	var err error
-	_, err = ex.Exec(stmt, args.timestamp, args.colIP.String(), args.peerIP.String(), pq.Array(args.asPath), args.nextHop.String(), args.origin, pq.Array(adv), pq.Array(wdr), args.protoMsg)
+	_, err = ex.Exec(stmt, args.timestamp, args.colIP.String(), args.peerIP.String(), pq.Array(args.asPath), args.nextHop.String(), args.origin, adv, wdr, args.protoMsg)
 	if err != nil {
 		dblogger.Infof("failing to insert capture: time:%s colip:%s  aspath:%v oas:%v ", args.timestamp, args.colIP.String(), args.asPath, args.origin)
 		ret.err = errors.Wrap(err, "insertCapture")
@@ -231,16 +231,4 @@ func insertCapture(ex SessionExecutor, args captureSqlIn) (ret sqlOut) {
 	}
 
 	return
-}
-
-func IPNetToStrings(n []*net.IPNet) []string {
-	if n == nil {
-		return []string{}
-	}
-
-	ret := make([]string, len(n))
-	for ct := range n {
-		ret[ct] = n[ct].String()
-	}
-	return ret
 }

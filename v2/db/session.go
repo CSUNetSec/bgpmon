@@ -9,7 +9,6 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
-	"net"
 	"os"
 	"time"
 )
@@ -94,7 +93,7 @@ func (ss *SessionStream) Flush() error {
 	for key := range ss.buffers {
 		ss.buffers[key].Flush()
 	}
-	ss.ex.tx.Commit()
+	ss.ex.Done()
 	return nil
 }
 
@@ -151,25 +150,15 @@ func (ss *SessionStream) addToBuffer(val sqlIn) error {
 		nextHop = net.IPv4(0, 0, 0, 0)
 	}
 	origin := util.GetOriginAs(val.capture)
+	//here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
 	advertized, _ := util.GetAdvertizedPrefixes(val.capture)
 	withdrawn, _ := util.GetWithdrawnPrefixes(val.capture)
 	protoMsg := []byte(val.capture.GetBgpCapture().String())
 
-	advStr := IPNetToStrings(advertized)
-	wdrStr := IPNetToStringA(withdrawn)
+	advArr := util.PrefixesToPQArray(advertized)
+	wdrArr := util.PrefixesToPQArray(withdrawn)
 
-	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, pq.Array(advStr), pq.Array(wdrStr), protoMsg)
-}
-
-func IPNetToStringA(nets []*net.IPNet) []string {
-	if nets == nil {
-		return []string{}
-	}
-	ret := make([]string, len(nets))
-	for ct := range nets {
-		ret[ct] = nets[ct].String()
-	}
-	return ret
+	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, advArr, protoMsg)
 }
 
 // This is only for a normal close operation. A cancellation

@@ -2,8 +2,11 @@ package util
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
+	"github.com/lib/pq"
+	"net"
 	"sort"
 	"strings"
 	"time"
@@ -134,4 +137,26 @@ type SqlExecutor interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+//handles a strange case where protobuf deserialize an array element of nil as "<nil>"
+//and that kills the db insert statement cause it can't make it into a cidr.
+func PrefixesToPQArray(n []*net.IPNet) interface {
+	driver.Valuer
+	sql.Scanner
+} {
+	if n == nil || len(n) == 0 {
+		return nil //database will accept NULL on this field
+	}
+
+	ret := make([]string, len(n))
+	for ct := range n {
+		ret[ct] = n[ct].String()
+		if ret[ct] == "" || ret[ct] == "<nil>" {
+			//lol someone (protobuf!?) makes this string be <nil>. change it
+			//to a database default value
+			ret[ct] = "0.0.0.0/0"
+		}
+	}
+	return pq.Array(ret)
 }
