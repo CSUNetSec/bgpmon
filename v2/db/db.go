@@ -74,15 +74,15 @@ var dbops = map[string][]string{
 	MAKE_CAPTURE_TABLE: []string{
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
-		   update_id BIGSERIAL PRIMARY KEY, 
+		   update_id BIGSERIAL PRIMARY KEY NOT NULL, 
 		   timestamp timestamp NOT NULL,
 		   collector_ip inet NOT NULL, 
 		   peer_ip inet NOT NULL, 
-		   as_path integer[] NOT NULL, 
-		   next_hop inet NOT NULL, 
-		   origin_as integer NOT NULL, 
-		   adv_prefixes cidr[] NOT NULL, 
-		   wdr_prefixes cidr[] NOT NULL, 
+                   as_path integer[] DEFAULT '{}'::integer[],
+                   next_hop inet DEFAULT '0.0.0.0'::inet,
+                   origin_as integer DEFAULT '0'::integer,
+                   adv_prefixes cidr[] DEFAULT '{}'::cidr[],
+                   wdr_prefixes cidr[] DEFAULT '{}'::cidr[],
 		   protomsg bytea NOT NULL);`,
 	},
 	// This template shouldn't need VALUES, because those will be provided by the buffer
