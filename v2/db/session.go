@@ -150,7 +150,12 @@ func (ss *SessionStream) addToBuffer(val sqlIn) error {
 	if err != nil {
 		nextHop = net.IPv4(0, 0, 0, 0)
 	}
-	origin := util.GetOriginAs(val.capture)
+	origin := 0
+	if len(asPath) != 0 {
+		origin = asPath[len(asPath)-1]
+	} else {
+		origin = 0
+	}
 	//here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
 	advertized, _ := util.GetAdvertizedPrefixes(val.capture)
 	withdrawn, _ := util.GetWithdrawnPrefixes(val.capture)
