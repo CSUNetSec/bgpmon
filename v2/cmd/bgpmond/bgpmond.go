@@ -157,6 +157,9 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 			return errors.Wrap(err, "session write")
 		}
 	}
+	if dbStream == nil {
+		return fmt.Errorf("failed to create session stream")
+	}
 
 	if err := dbStream.Flush(); err != nil {
 		mainlogger.Errorf("write stream failed to flush")
