@@ -159,7 +159,7 @@ func (ss *SessionStream) addToBuffer(val sqlIn) error {
 	advArr := util.PrefixesToPQArray(advertized)
 	wdrArr := util.PrefixesToPQArray(withdrawn)
 
-	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, advArr, protoMsg)
+	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
 }
 
 // This is only for a normal close operation. A cancellation

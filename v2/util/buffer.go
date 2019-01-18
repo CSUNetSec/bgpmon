@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -15,14 +16,15 @@ type SqlBuffer interface {
 // Helps to optimize the amount of inserted values on a
 // single query
 type InsertBuffer struct {
-	ex         SqlExecutor   // Executor to flush to
-	stmt       string        // base stmt
-	addedStmt  string        // generated statement
-	max        int           // Depending on the database, might be limited
-	ct         int           // Current number of entries
-	batchSize  int           // Number of arguments expected of an add
-	values     []interface{} // Buffered values
-	usePosArgs bool          // Use $1 style args in the statement instead of ?
+	ex         SqlExecutor     // Executor to flush to
+	stmt       string          // base stmt
+	addedStmt  string          // generated statement
+	stmtbld    strings.Builder //to efficiently build the string
+	max        int             // Depending on the database, might be limited
+	ct         int             // Current number of entries
+	batchSize  int             // Number of arguments expected of an add
+	values     []interface{}   // Buffered values
+	usePosArgs bool            // Use $1 style args in the statement instead of ?
 }
 
 func NewInsertBuffer(ex SqlExecutor, stmt string, max int, batchSize int, usePositional bool) *InsertBuffer {
@@ -34,15 +36,15 @@ func (ib *InsertBuffer) Add(arg ...interface{}) error {
 		return fmt.Errorf("Incorrect number of arguments. Expected: %d, Got %d", ib.batchSize, len(arg))
 	}
 
-	ib.addedStmt += "("
+	ib.stmtbld.WriteString("(")
 	for i := range arg {
 		if i == 0 {
-			ib.addedStmt += "?"
+			ib.stmtbld.WriteString("?")
 		} else {
-			ib.addedStmt += ",?"
+			ib.stmtbld.WriteString(",?")
 		}
 	}
-	ib.addedStmt += "),"
+	ib.stmtbld.WriteString("),")
 
 	ib.values = append(ib.values, arg...)
 	ib.ct++
@@ -54,9 +56,11 @@ func (ib *InsertBuffer) Add(arg ...interface{}) error {
 }
 
 func (ib *InsertBuffer) Flush() error {
+	var convStmt string
 	if ib.ct == 0 {
 		return nil
 	}
+	ib.addedStmt = ib.stmtbld.String()
 
 	if ib.addedStmt[len(ib.addedStmt)-1] != ',' {
 		return fmt.Errorf("Improperly formatted statement: %s", ib.addedStmt)
@@ -65,7 +69,6 @@ func (ib *InsertBuffer) Flush() error {
 	ib.addedStmt = ib.addedStmt[:len(ib.addedStmt)-1]
 	ib.addedStmt += ";"
 
-	convStmt := ""
 	if ib.usePosArgs {
 		convStmt = convertSqlStmt(fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt))
 	} else {
@@ -84,6 +87,7 @@ func (ib *InsertBuffer) Clear() {
 	ib.values = ib.values[:0]
 	ib.ct = 0
 	ib.addedStmt = ""
+	ib.stmtbld.Reset()
 }
 
 type TimedBuffer struct {
