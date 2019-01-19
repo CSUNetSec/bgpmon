@@ -104,6 +104,10 @@ func (s *schemaMgr) run() {
 	}
 }
 
+func (s *schemaMgr) CheckTableCache(colstr string, date time.Time) (string, bool) {
+	return s.checkTableCache(colstr, date)
+}
+
 func (s *schemaMgr) makeCapTable(sin sqlIn) (sqlOut, error) {
 	res := getTable(s.sex, sin)
 	var (

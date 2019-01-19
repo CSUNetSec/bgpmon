@@ -70,15 +70,21 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 
 // WARNING, sending after a close will cause a panic, and may hang
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
+	var (
+		table string
+		ok    bool
+	)
 	wr := arg.(*pb.WriteRequest)
 	mtime, cip, err := util.GetTimeColIP(wr)
 	if err != nil {
 		dblogger.Errorf("failed to get Collector IP:%v", err)
 		return err
 	}
-	table, err := ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
-	if err != nil {
-		return err
+	if table, ok = ss.schema.CheckTableCache(cip.String(), mtime); !ok { //we have not seen the collector so go through the chan of schemamgr
+		table, err = ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
+		if err != nil {
+			return err
+		}
 	}
 
 	ss.req <- sqlIn{capTableName: table, capture: wr}
