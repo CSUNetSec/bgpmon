@@ -84,7 +84,7 @@ func writeFunc(cmd *cobra.Command, args []string) {
 				} else {
 					fmt.Printf("Write stream reply:%+v\n", reply)
 				}
-				if err := mf.Err(); err != nil {
+				if err := mf.Err(); err != nil && err != io.EOF {
 					fmt.Printf("MRT file reader error:%s\n", mf.Err())
 				}
 				fmt.Printf("Total messages:%d \n", tot)
