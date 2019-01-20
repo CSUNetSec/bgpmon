@@ -192,7 +192,7 @@ func newPostgressDbOper() *dbOper {
 }
 
 type SessionExecutor interface {
-	util.SqlExecutor
+	util.SqlErrorExecutor
 	getdboper
 }
 
@@ -211,12 +211,19 @@ func newCtxTxSessionExecutor(cex *ctxTx, dbo *dbOper) *ctxtxOperExecutor {
 type dbOperExecutor struct {
 	*sql.DB
 	*dbOper
+	err error
+}
+
+func (d *dbOperExecutor) SetError(e error) {
+	dblogger.Infof("setting the dbOperExecutor error to:%s. It will not have an effect since we are not in a tx.", e)
+	d.err = e
 }
 
 func newDbSessionExecutor(db *sql.DB, dbo *dbOper) *dbOperExecutor {
 	return &dbOperExecutor{
 		db,
 		dbo,
+		nil,
 	}
 }
 
@@ -246,10 +253,21 @@ func GetNewExecutor(pc context.Context, s Dber, doTx bool, ctxTimeout time.Durat
 		cf:   cf,
 		ctx:  ctx,
 		db:   db,
+		err:  nil,
 	}, nil
 }
 
+//it will set the internal error state of the ctxtx and cause the rest of the functions to become noops.
+//if a transaction is involved, it will be rolled back
+func (c *ctxTx) SetError(e error) {
+	c.err = e
+}
+
 func (c *ctxTx) Exec(query string, args ...interface{}) (sql.Result, error) {
+	if c.err != nil {
+		dblogger.Infof("Exec called in ctxTx but err has been set:%s", c.err)
+		return nil, c.err
+	}
 	if c.doTx && c.tx != nil {
 		return c.tx.ExecContext(c.ctx, query, args...)
 	}
@@ -257,6 +275,10 @@ func (c *ctxTx) Exec(query string, args ...interface{}) (sql.Result, error) {
 }
 
 func (c *ctxTx) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	if c.err != nil {
+		dblogger.Infof("Query called in ctxTx but err has been set:%s", c.err)
+		return nil, c.err
+	}
 	if c.doTx && c.tx != nil {
 		return c.tx.QueryContext(c.ctx, query, args...)
 	}
@@ -264,6 +286,10 @@ func (c *ctxTx) Query(query string, args ...interface{}) (*sql.Rows, error) {
 }
 
 func (c *ctxTx) QueryRow(query string, args ...interface{}) *sql.Row {
+	if c.err != nil {
+		dblogger.Infof("QueryRow called in ctxTx but err has been set:%s", c.err)
+		return nil
+	}
 	if c.doTx && c.tx != nil {
 		return c.tx.QueryRowContext(c.ctx, query, args...)
 	}
@@ -272,15 +298,18 @@ func (c *ctxTx) QueryRow(query string, args ...interface{}) *sql.Row {
 
 //a wrapper of a sql.Tx that is able to accept multiple
 //db ops and run them in the same tx.
-//it will implement the SqlExectutor interface and choose
+//it will implement the SqlErrorExectutor interface and choose
 //where to apply the sql function depending on how it was constructed.
 //(either apply everything in the transaction and then the last Done()
 //will commit, or straight on the DB and the last Done() is a noop.
 //the ctxTx structs are created by the specific sessions.
+//if there was an error that was set though, and it has a transaction , it
+//will be rolled back
 type ctxTx struct {
 	doTx bool
 	tx   *sql.Tx
 	db   *sql.DB
+	err  error
 	cf   context.CancelFunc
 	ctx  context.Context
 }
@@ -289,7 +318,11 @@ type ctxTx struct {
 func (ptx *ctxTx) Done() error {
 	defer ptx.cf() //release resources if it's done.
 	if ptx.doTx && ptx.tx != nil {
-		return ptx.tx.Commit()
+		if ptx.err == nil {
+			return ptx.tx.Commit()
+		} else {
+			return ptx.tx.Rollback()
+		}
 	}
 	return nil
 }
