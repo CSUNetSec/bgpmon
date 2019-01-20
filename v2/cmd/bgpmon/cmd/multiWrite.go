@@ -49,6 +49,9 @@ func multiWriteFunc(cmd *cobra.Command, args []string) {
 		wp.Add()
 		go func() {
 			ct, err := writeMRTFile(bc, fname, sessId)
+			if err == io.EOF { //do not consider that an error
+				err = nil
+			}
 			results <- writeMRTResult{fname: fname, wCt: ct, err: err}
 			wp.Done()
 		}()
