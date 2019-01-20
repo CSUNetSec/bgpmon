@@ -261,6 +261,7 @@ func GetNewExecutor(pc context.Context, s Dber, doTx bool, ctxTimeout time.Durat
 //if a transaction is involved, it will be rolled back
 func (c *ctxTx) SetError(e error) {
 	c.err = e
+	c.Done()
 }
 
 func (c *ctxTx) Exec(query string, args ...interface{}) (sql.Result, error) {
