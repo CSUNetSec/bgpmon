@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	WRITE_TIMEOUT = 120 * time.Second
+	WRITE_TIMEOUT = 240 * time.Second
 )
 
 var (

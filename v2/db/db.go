@@ -319,8 +319,10 @@ func (ptx *ctxTx) Done() error {
 	defer ptx.cf() //release resources if it's done.
 	if ptx.doTx && ptx.tx != nil {
 		if ptx.err == nil {
+			dblogger.Infof("tx commit successfull")
 			return ptx.tx.Commit()
 		} else {
+			dblogger.Infof("rolling back the transaction due to error:%s", ptx.err)
 			return ptx.tx.Rollback()
 		}
 	}
