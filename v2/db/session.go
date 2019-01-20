@@ -80,11 +80,9 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 		dblogger.Errorf("failed to get Collector IP:%v", err)
 		return err
 	}
-	if table, ok = ss.schema.CheckTableCache(cip.String(), mtime); !ok { //we have not seen the collector so go through the chan of schemamgr
-		table, err = ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
-		if err != nil {
-			return err
-		}
+	table, err = ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
+	if err != nil {
+		return err
 	}
 
 	ss.req <- sqlIn{capTableName: table, capture: wr}
