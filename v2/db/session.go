@@ -94,11 +94,34 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 	return resp.err
 }
 
+// This is called when a stream finishes successfully
+// It flushes all remaining buffers
 func (ss *SessionStream) Flush() error {
 	for key := range ss.buffers {
 		ss.buffers[key].Flush()
 	}
 	ss.ex.Done()
+	return nil
+}
+
+// This is used when theres an error on the client-side,
+// called to rollback all executed queries
+func (ss *SessionStream) Cancel() error {
+	ss.ex.SetError(fmt.Errorf("Session stream cancelled"))
+	return nil
+}
+
+// This is only for a normal close operation. A cancellation
+// can only be done by Close()'ing the parent session while
+// the stream is still running
+// This should be called by the same goroutine as the one calling
+// send
+func (ss *SessionStream) Close() error {
+	dblogger.Infof("Closing session stream")
+	close(ss.cancel)
+	close(ss.req)
+
+	ss.wp.Done()
 	return nil
 }
 
@@ -169,20 +192,6 @@ func (ss *SessionStream) addToBuffer(val sqlIn) error {
 	wdrArr := util.PrefixesToPQArray(withdrawn)
 
 	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
-}
-
-// This is only for a normal close operation. A cancellation
-// can only be done by Close()'ing the parent session while
-// the stream is still running
-// This should be called by the same goroutine as the one calling
-// send
-func (ss *SessionStream) Close() error {
-	dblogger.Infof("Closing session stream")
-	close(ss.cancel)
-	close(ss.req)
-
-	ss.wp.Done()
-	return nil
 }
 
 type Sessioner interface {
