@@ -2,6 +2,7 @@ package db
 
 import (
 	"github.com/CSUNetSec/bgpmon/v2/config"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"time"
 )
 
@@ -39,16 +40,12 @@ type nodesMessage struct {
 	nodes map[string]config.NodeConfig
 }
 
-func NewNodesMessage(nodes map[string]config.NodeConfig) *nodesMessage {
-	return &nodesMessage{CommonMessage: NewMessage(), nodes: nodes}
+func NewNodesMessage(nodes map[string]config.NodeConfig) nodesMessage {
+	return nodesMessage{CommonMessage: NewMessage(), nodes: nodes}
 }
 
-func (n *nodesMessage) GetNodes() map[string]config.NodeConfig {
+func (n nodesMessage) GetNodes() map[string]config.NodeConfig {
 	return n.nodes
-}
-
-func (n *nodesMessage) SetParent(p CommonMessage) {
-	n.CommonMessage = p
 }
 
 type nodeMessage struct {
@@ -58,7 +55,7 @@ type nodeMessage struct {
 }
 
 func NewNodeMessage(name, ip string) nodeMessage {
-	return nodeMessage{nodeName: name, nodeIP: ip}
+	return nodeMessage{CommonMessage: NewMessage(), nodeName: name, nodeIP: ip}
 }
 
 func (n nodeMessage) GetNodeName() string {
@@ -104,6 +101,24 @@ func NewTableMessage(colDate collectorDate) tableMessage {
 
 func (t tableMessage) GetColDate() collectorDate {
 	return t.colDate
+}
+
+type captureMessage struct {
+	CommonMessage
+	tableName string
+	capture   *pb.WriteRequest
+}
+
+func NewCaptureMessage(name string, cap *pb.WriteRequest) captureMessage {
+	return captureMessage{CommonMessage: NewMessage(), tableName: name, capture: cap}
+}
+
+func (c captureMessage) GetTableName() string {
+	return c.tableName
+}
+
+func (c captureMessage) GetCapture() *pb.WriteRequest {
+	return c.capture
 }
 
 type CommonReply interface {

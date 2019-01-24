@@ -119,14 +119,14 @@ func (s *schemaMgr) makeCapTable(msg CommonMessage) (CommonReply, error) {
 		cd := tMsg.GetColDate()
 		nodeip = cd.col
 		// This name is intentionally left blank
-		nodesRes := getNode(s.sex, NewNodeMessage("", cd.col)).(nodeReply)
+		nodeRes := getNode(s.sex, NewNodeMessage("", nodeip)).(nodeReply)
 		//nodesRes, err := s.getNode(sin.dbname, sin.nodetable, "", sin.getColDate.col) //the colname is empty. we don't know it yet.
-		if nodesRes.GetErr() != nil {
-			return nodesRes, fmt.Errorf("makeCapTable: %s", nodesRes.GetErr())
+		if nodeRes.GetErr() != nil {
+			return nodeRes, fmt.Errorf("makeCapTable: %s", nodeRes.GetErr())
 		}
 		//we resolved the node, now calling getnodetablenamedates to get the fields for the new tablename
-		tname, stime, etime := util.GetNodeTableNameDates(nodesRes.GetNode().nodeName, cd.dat, nodesRes.GetNode().nodeDuration)
-		nodename = nodesRes.GetNode().nodeName
+		tname, stime, etime := util.GetNodeTableNameDates(nodeRes.GetNode().nodeName, cd.dat, nodeRes.GetNode().nodeDuration)
+		nodename = nodeRes.GetNode().nodeName
 
 		cMsg := NewCapTableMessage(tname, nodename, stime, etime)
 		nsout := createCaptureTable(s.sex, cMsg).(capTableReply)
@@ -134,10 +134,10 @@ func (s *schemaMgr) makeCapTable(msg CommonMessage) (CommonReply, error) {
 			return nsout, fmt.Errorf("makeCapTable: %s", nsout.GetErr())
 		}
 		s, e := nsout.GetDates()
-		res = NewTableReply(nsout.GetName(), s, e, nodesRes.GetNode(), nil)
+		res = NewTableReply(nsout.GetName(), s, e, nodeRes.GetNode(), nil)
 	} else if res.GetErr() == nil {
 		// we have a node table already and res contains the correct vaules to be added in the cache
-		stime, etime := res.GetDates()
+		stime, etime = res.GetDates()
 		nodename, nodeip = res.GetNode().nodeName, res.GetNode().nodeIP
 	} else {
 		return NewReply(nil), fmt.Errorf("makeCapTable: %s", res.GetErr())
@@ -209,6 +209,10 @@ func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date ti
 	cmdin := schemaCmd{op: GETTABLE, msg: tMsg}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
+
+	if !sreply.ok {
+		return "", sreply.rep.GetErr()
+	}
 	tRep := sreply.rep.(tableReply)
 	return tRep.GetName(), tRep.GetErr()
 }
