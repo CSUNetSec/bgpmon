@@ -55,14 +55,14 @@ func syncNodes(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 	rows, err := ex.Query(fmt.Sprintf(selectNodeTmpl, nodesMsg.GetNodeTable()))
 	if err != nil {
 		dblogger.Errorf("syncNode query:", err)
-		return NewReply(err)
+		return NewNodesReply(nil, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		err := rows.Scan(&cn.nodeName, &cn.nodeIP, &cn.nodeCollector, &cn.nodeDuration, &cn.nodeDescr, &cn.nodeCoords, &cn.nodeAddress)
 		if err != nil {
 			dblogger.Errorf("syncnode fetch node row:%s", err)
-			return NewReply(err)
+			return NewNodesReply(nil, err)
 		}
 		hereNewNodeConf := cn.nodeConfigFromNode()
 		dbNodes[hereNewNodeConf.IP] = hereNewNodeConf
@@ -96,14 +96,14 @@ func getNode(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 	rows, err := ex.Query(fmt.Sprintf(selectNodeTmpl, nodeMsg.GetNodeTable()))
 	if err != nil {
 		dblogger.Errorf("getNode query error:%s", err)
-		return NewReply(err)
+		return NewNodeReply(nil, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		err := rows.Scan(&cn.nodeName, &cn.nodeIP, &cn.nodeCollector, &cn.nodeDuration, &cn.nodeDescr, &cn.nodeCoords, &cn.nodeAddress)
 		if err != nil {
 			dblogger.Errorf("getNode fetch node row:%s", err)
-			return NewReply(err)
+			return NewNodeReply(nil, err)
 		}
 		//try to match the node and ignore unset strings coming from sqlin
 		dblogger.Infof("trying node matching with name:%s ip:%s", cn.nodeName, cn.nodeIP)
@@ -113,7 +113,7 @@ func getNode(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 		}
 	}
 
-	return NewReply(errNoNode)
+	return NewNodeReply(nil, errNoNode)
 }
 
 //creates a table to hold captures and registers it in the main table and the current known tables in memory.
@@ -126,7 +126,7 @@ func createCaptureTable(ex SessionExecutor, msg CommonMessage) (rep CommonReply)
 	_, err := ex.Query(q)
 	if err != nil {
 		dblogger.Errorf("createCaptureTable error:%s on command :%s", err, q)
-		return NewReply(err)
+		return NewCapTableReply("", "", time.Now(), time.Now(), err)
 	}
 
 	insertCapTmpl := ex.getdbop(INSERT_MAIN_TABLE)
@@ -135,7 +135,7 @@ func createCaptureTable(ex SessionExecutor, msg CommonMessage) (rep CommonReply)
 	row, err := ex.Query(fmt.Sprintf(insertCapTmpl, cMsg.GetMainTable()), name, ip, sdate, edate)
 	if err != nil {
 		dblogger.Errorf("createCaptureTable insertnode error:%s", err)
-		return NewReply(err)
+		return NewCapTableReply("", "", time.Now(), time.Now(), err)
 	} else {
 		dblogger.Infof("inserted table:%s at row:%v", name, row)
 	}
@@ -160,21 +160,21 @@ func getTable(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 	rows, err := ex.Query(fmt.Sprintf(selectTableTmpl, tMsg.GetMainTable(), tMsg.GetNodeTable()), qdate, cd.col)
 	if err != nil {
 		dblogger.Errorf("getTable query error:%s", err)
-		return NewReply(err)
+		return NewTableReply("", time.Now(), time.Now(), nil, err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		err := rows.Scan(&resdbname, &rescollector, &restStart, &restEnd, &resdur)
 		if err != nil {
 			dblogger.Errorf("getNode fetch node row:%s", err)
-			return NewReply(err)
+			return NewTableReply("", time.Now(), time.Now(), nil, err)
 		}
 		//we found a table for that range.
 		n := &node{nodeIP: cd.col, nodeName: rescollector, nodeDuration: resdur}
 		return NewTableReply(resdbname, restStart, restEnd, n, nil)
 	}
 
-	return NewReply(errNoTable)
+	return NewTableReply("", time.Now(), time.Now(), nil, errNoTable)
 }
 
 // creates the necessary bgpmon schema, if the tables don't exist

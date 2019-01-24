@@ -24,13 +24,13 @@ const (
 
 type schemaCmd struct {
 	op  schemaCmdOp
-	sin sqlIn
+	msg CommonMessage
 }
 
 type schemaReply struct {
-	err  error
-	sout sqlOut
-	ok   bool
+	err error
+	rep CommonReply
+	ok  bool
 }
 
 type schemaMgr struct {
@@ -70,23 +70,26 @@ func (s *schemaMgr) run() {
 			switch icmd.op {
 			case CHECKSCHEMA:
 				slogger.Infof("checking correctness of db schema")
-				ret.sout = checkSchema(s.sex, icmd.sin)
+				ret.rep = checkSchema(s.sex, icmd.msg)
 			case INITSCHEMA:
 				slogger.Infof("initializing db schema")
-				ret.sout = makeSchema(s.sex, icmd.sin)
+				ret.rep = makeSchema(s.sex, icmd.msg)
 			case SYNCNODES:
 				slogger.Infof("syncing node configs")
-				ret.sout = syncNodes(s.sex, icmd.sin)
+				ret.rep = syncNodes(s.sex, icmd.msg)
 			case GETNODE:
 				slogger.Infof("getting node name")
-				ret.sout = getNode(s.sex, icmd.sin)
+				ret.rep = getNode(s.sex, icmd.msg)
 			case GETTABLE:
-				capTableName, ok := s.checkTableCache(icmd.sin.getColDate.col, icmd.sin.getColDate.dat.UTC())
+				tMsg := icmd.msg.(tableMessage)
+				cd := tMsg.GetColDate()
+				capTableName, ok := s.checkTableCache(cd.col, cd.dat.UTC())
 				if ok {
-					ret.sout = sqlOut{capTable: capTableName}
+					// Most of these fields have default values, by design
+					ret.rep = NewTableReply(capTableName, time.Now(), time.Now(), nil, nil)
 				} else {
-					slogger.Infof("Table cache miss. Creating table for col: %s date: %s", icmd.sin.getColDate.col, icmd.sin.getColDate.dat)
-					ret.sout, err = s.makeCapTable(icmd.sin)
+					slogger.Infof("Table cache miss. Creating table for col: %s date: %s", cd.col, cd.dat)
+					ret.rep, err = s.makeCapTable(tMsg)
 					if err != nil {
 						slogger.Errorf("schemaMgr: %s", err)
 						ret.ok = false
@@ -104,36 +107,40 @@ func (s *schemaMgr) run() {
 	}
 }
 
-func (s *schemaMgr) makeCapTable(sin sqlIn) (sqlOut, error) {
-	res := getTable(s.sex, sin)
+func (s *schemaMgr) makeCapTable(msg CommonMessage) (CommonReply, error) {
+	res := getTable(s.sex, msg).(tableReply)
 	var (
 		nodename, nodeip string
 		stime, etime     time.Time
 	)
-	if res.err == errNoTable {
-		nodeip = sin.getColDate.col
-		sin.getNodeIP = sin.getColDate.col //we need to set this so that it appears it is coming from a getnode call
-		nodesRes := getNode(s.sex, sin)
+
+	if res.GetErr() == errNoTable {
+		tMsg := msg.(tableMessage)
+		cd := tMsg.GetColDate()
+		nodeip = cd.col
+		// This name is intentionally left blank
+		nodesRes := getNode(s.sex, NewNodeMessage("", cd.col)).(nodeReply)
 		//nodesRes, err := s.getNode(sin.dbname, sin.nodetable, "", sin.getColDate.col) //the colname is empty. we don't know it yet.
-		if nodesRes.err != nil {
-			return sqlOut{}, fmt.Errorf("makeCapTable: %s", nodesRes.err)
+		if nodesRes.GetErr() != nil {
+			return nodesRes, fmt.Errorf("makeCapTable: %s", nodesRes.GetErr())
 		}
 		//we resolved the node, now calling getnodetablenamedates to get the fields for the new tablename
-		tname, stime, etime := util.GetNodeTableNameDates(nodesRes.resultNode.nodeName, sin.getColDate.dat, nodesRes.resultNode.nodeDuration)
-		nodename = nodesRes.resultNode.nodeName
-		//making a new sqlin to create a new table
-		nsin := sqlIn{maintable: sin.maintable, capTableCol: nodename}
-		nsin.capTableName, nsin.capTableSdate, nsin.capTableEdate = tname, stime, etime
-		nsout := createCaptureTable(s.sex, nsin)
-		if nsout.err != nil {
-			return sqlOut{}, fmt.Errorf("makeCapTable: %s", nsout.err)
+		tname, stime, etime := util.GetNodeTableNameDates(nodesRes.GetNode().nodeName, cd.dat, nodesRes.GetNode().nodeDuration)
+		nodename = nodesRes.GetNode().nodeName
+
+		cMsg := NewCapTableMessage(tname, nodename, stime, etime)
+		nsout := createCaptureTable(s.sex, cMsg).(capTableReply)
+		if nsout.GetErr() != nil {
+			return nsout, fmt.Errorf("makeCapTable: %s", nsout.GetErr())
 		}
-		res = nsout //will return the new sqlout at exit
-	} else if res.err == nil {
+		s, e := nsout.GetDates()
+		res = NewTableReply(nsout.GetName(), s, e, nodesRes.GetNode(), nil)
+	} else if res.GetErr() == nil {
 		// we have a node table already and res contains the correct vaules to be added in the cache
-		nodename, nodeip, stime, etime = res.resultNode.nodeName, res.resultNode.nodeIP, res.capStime, res.capEtime
+		stime, etime := res.GetDates()
+		nodename, nodeip = res.GetNode().nodeName, res.GetNode().nodeIP
 	} else {
-		return sqlOut{}, fmt.Errorf("makeCapTable: %s", res.err)
+		return NewReply(nil), fmt.Errorf("makeCapTable: %s", res.GetErr())
 	}
 	s.AddNodeAndTableInCache(nodename, nodeip, stime, etime)
 	return res, nil
@@ -168,27 +175,27 @@ func (s *schemaMgr) stop() {
 }
 
 func (s *schemaMgr) checkSchema(dbname, maintable, nodetable string) (bool, error) {
-	sin := sqlIn{dbname: dbname, maintable: maintable, nodetable: nodetable}
-	cmdin := schemaCmd{op: CHECKSCHEMA, sin: sin}
+	cmdin := schemaCmd{op: CHECKSCHEMA, msg: NewCustomMessage(maintable, nodetable)}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
-	return sreply.sout.ok, sreply.sout.err
+	return sreply.rep.GetErr() == nil, sreply.rep.GetErr()
 }
 
 func (s *schemaMgr) makeSchema(dbname, maintable, nodetable string) error {
-	sin := sqlIn{dbname: dbname, maintable: maintable, nodetable: nodetable}
-	cmdin := schemaCmd{op: INITSCHEMA, sin: sin}
+	cmdin := schemaCmd{op: INITSCHEMA, msg: NewCustomMessage(maintable, nodetable)}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
-	return sreply.sout.err
+	return sreply.rep.GetErr()
 }
 
 func (s *schemaMgr) syncNodes(dbname, nodetable string, knownNodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
-	sin := sqlIn{dbname: dbname, nodetable: nodetable, knownNodes: knownNodes}
-	cmdin := schemaCmd{op: SYNCNODES, sin: sin}
+	nMsg := NewNodesMessage(knownNodes)
+	nMsg.SetNodeTable(nodetable)
+	cmdin := schemaCmd{op: SYNCNODES, msg: nMsg}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
-	return sreply.sout.knownNodes, sreply.sout.err
+	nRep := sreply.rep.(nodesReply)
+	return nRep.GetNodes(), nRep.GetErr()
 }
 
 func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date time.Time) (string, error) {
@@ -196,17 +203,22 @@ func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date ti
 		dat: date,
 		col: ipstr,
 	}
-	sin := sqlIn{dbname: dbname, maintable: maintable, nodetable: nodetable, getColDate: coldate}
-	cmdin := schemaCmd{op: GETTABLE, sin: sin}
+	tMsg := NewTableMessage(coldate)
+	tMsg.SetMainTable(maintable)
+	tMsg.SetNodeTable(nodetable)
+	cmdin := schemaCmd{op: GETTABLE, msg: tMsg}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
-	return sreply.sout.capTable, sreply.sout.err
+	tRep := sreply.rep.(tableReply)
+	return tRep.GetName(), tRep.GetErr()
 }
 
 func (s *schemaMgr) getNode(dbname, nodetable string, nodeName string, nodeIP string) (*node, error) {
-	sin := sqlIn{dbname: dbname, nodetable: nodetable, getNodeName: nodeName, getNodeIP: nodeIP}
-	cmdin := schemaCmd{op: GETNODE, sin: sin}
+	nMsg := NewNodeMessage(nodeName, nodeIP)
+	nMsg.SetNodeTable(nodetable)
+	cmdin := schemaCmd{op: GETNODE, msg: nMsg}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
-	return sreply.sout.resultNode, sreply.sout.err
+	nRep := sreply.rep.(nodeReply)
+	return nRep.GetNode(), nRep.GetErr()
 }

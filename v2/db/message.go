@@ -12,15 +12,26 @@ import (
 type CommonMessage interface {
 	GetMainTable() string // This table holds the names of all other tables created
 	GetNodeTable() string // This holds all info on the collectors
+	SetMainTable(string)
+	SetNodeTable(string)
 }
 
-type msg struct{}
+type msg struct {
+	mainTable string
+	nodeTable string
+}
 
-func (m msg) GetMainTable() string { return "dbs" }
-func (m msg) GetNodeTable() string { return "nodes" }
+func (m *msg) GetMainTable() string  { return m.mainTable }
+func (m *msg) GetNodeTable() string  { return m.nodeTable }
+func (m *msg) SetMainTable(n string) { m.mainTable = n }
+func (m *msg) SetNodeTable(n string) { m.nodeTable = n }
 
 func NewMessage() CommonMessage {
-	return msg{}
+	return &msg{mainTable: "dbs", nodeTable: "nodes"}
+}
+
+func NewCustomMessage(main, node string) CommonMessage {
+	return &msg{mainTable: main, nodeTable: node}
 }
 
 type nodesMessage struct {
@@ -28,12 +39,16 @@ type nodesMessage struct {
 	nodes map[string]config.NodeConfig
 }
 
-func NewNodesMessage(nodes map[string]config.NodeConfig) nodesMessage {
-	return nodesMessage{CommonMessage: NewMessage(), nodes: nodes}
+func NewNodesMessage(nodes map[string]config.NodeConfig) *nodesMessage {
+	return &nodesMessage{CommonMessage: NewMessage(), nodes: nodes}
 }
 
-func (n nodesMessage) GetNodes() map[string]config.NodeConfig {
+func (n *nodesMessage) GetNodes() map[string]config.NodeConfig {
 	return n.nodes
+}
+
+func (n *nodesMessage) SetParent(p CommonMessage) {
+	n.CommonMessage = p
 }
 
 type nodeMessage struct {
