@@ -16,18 +16,18 @@ type SqlBuffer interface {
 // Helps to optimize the amount of inserted values on a
 // single query
 type InsertBuffer struct {
-	ex         SqlExecutor     // Executor to flush to
-	stmt       string          // base stmt
-	addedStmt  string          // generated statement
-	stmtbld    strings.Builder //to efficiently build the string
-	max        int             // Depending on the database, might be limited
-	ct         int             // Current number of entries
-	batchSize  int             // Number of arguments expected of an add
-	values     []interface{}   // Buffered values
-	usePosArgs bool            // Use $1 style args in the statement instead of ?
+	ex         SqlErrorExecutor // Executor to flush to (with the ability to set the internal error)
+	stmt       string           // base stmt
+	addedStmt  string           // generated statement
+	stmtbld    strings.Builder  //to efficiently build the string
+	max        int              // Depending on the database, might be limited
+	ct         int              // Current number of entries
+	batchSize  int              // Number of arguments expected of an add
+	values     []interface{}    // Buffered values
+	usePosArgs bool             // Use $1 style args in the statement instead of ?
 }
 
-func NewInsertBuffer(ex SqlExecutor, stmt string, max int, batchSize int, usePositional bool) *InsertBuffer {
+func NewInsertBuffer(ex SqlErrorExecutor, stmt string, max int, batchSize int, usePositional bool) *InsertBuffer {
 	return &InsertBuffer{max: max, ex: ex, stmt: stmt, addedStmt: "", ct: 0, usePosArgs: usePositional, batchSize: batchSize}
 }
 
@@ -77,6 +77,7 @@ func (ib *InsertBuffer) Flush() error {
 
 	_, err := ib.ex.Exec(convStmt, ib.values...)
 	if err != nil {
+		ib.ex.SetError(err)
 		return err
 	}
 	ib.Clear()

@@ -70,13 +70,17 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 
 // WARNING, sending after a close will cause a panic, and may hang
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
+	var (
+		table string
+		ok    bool
+	)
 	wr := arg.(*pb.WriteRequest)
 	mtime, cip, err := util.GetTimeColIP(wr)
 	if err != nil {
 		dblogger.Errorf("failed to get Collector IP:%v", err)
 		return err
 	}
-	table, err := ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
+	table, err = ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
 	if err != nil {
 		return err
 	}
@@ -90,11 +94,34 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 	return resp.GetErr()
 }
 
+// This is called when a stream finishes successfully
+// It flushes all remaining buffers
 func (ss *SessionStream) Flush() error {
 	for key := range ss.buffers {
 		ss.buffers[key].Flush()
 	}
 	ss.ex.Done()
+	return nil
+}
+
+// This is used when theres an error on the client-side,
+// called to rollback all executed queries
+func (ss *SessionStream) Cancel() error {
+	ss.ex.SetError(fmt.Errorf("Session stream cancelled"))
+	return nil
+}
+
+// This is only for a normal close operation. A cancellation
+// can only be done by Close()'ing the parent session while
+// the stream is still running
+// This should be called by the same goroutine as the one calling
+// send
+func (ss *SessionStream) Close() error {
+	dblogger.Infof("Closing session stream")
+	close(ss.cancel)
+	close(ss.req)
+
+	ss.wp.Done()
 	return nil
 }
 
@@ -157,7 +184,12 @@ func (ss *SessionStream) addToBuffer(msg CommonMessage) error {
 	if err != nil {
 		nextHop = net.IPv4(0, 0, 0, 0)
 	}
-	origin := util.GetOriginAs(cap)
+	origin := 0
+	if len(asPath) != 0 {
+		origin = asPath[len(asPath)-1]
+	} else {
+		origin = 0
+	}
 	//here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
 	advertized, _ := util.GetAdvertizedPrefixes(cap)
 	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
@@ -167,20 +199,6 @@ func (ss *SessionStream) addToBuffer(msg CommonMessage) error {
 	wdrArr := util.PrefixesToPQArray(withdrawn)
 
 	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
-}
-
-// This is only for a normal close operation. A cancellation
-// can only be done by Close()'ing the parent session while
-// the stream is still running
-// This should be called by the same goroutine as the one calling
-// send
-func (ss *SessionStream) Close() error {
-	dblogger.Infof("Closing session stream")
-	close(ss.cancel)
-	close(ss.req)
-
-	ss.wp.Done()
-	return nil
 }
 
 type Sessioner interface {

@@ -139,6 +139,11 @@ type SqlExecutor interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
+type SqlErrorExecutor interface {
+	SqlExecutor
+	SetError(error)
+}
+
 //handles a strange case where protobuf deserialize an array element of nil as "<nil>"
 //and that kills the db insert statement cause it can't make it into a cidr.
 func PrefixesToPQArray(n []*net.IPNet) interface {

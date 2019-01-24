@@ -123,7 +123,7 @@ func createCaptureTable(ex SessionExecutor, msg CommonMessage) (rep CommonReply)
 	createCapTmpl := ex.getdbop(MAKE_CAPTURE_TABLE)
 	name := cMsg.GetTableName()
 	q := fmt.Sprintf(createCapTmpl, name)
-	_, err := ex.Query(q)
+	_, err := ex.Exec(q)
 	if err != nil {
 		dblogger.Errorf("createCaptureTable error:%s on command :%s", err, q)
 		return NewCapTableReply("", "", time.Now(), time.Now(), err)
@@ -132,12 +132,13 @@ func createCaptureTable(ex SessionExecutor, msg CommonMessage) (rep CommonReply)
 	insertCapTmpl := ex.getdbop(INSERT_MAIN_TABLE)
 	ip := cMsg.GetTableCol()
 	sdate, edate := cMsg.GetDates()
-	row, err := ex.Query(fmt.Sprintf(insertCapTmpl, cMsg.GetMainTable()), name, ip, sdate, edate)
+	_, err = ex.Exec(fmt.Sprintf(insertCapTmpl, cMsg.GetMainTable()), name, ip, sdate, edate)
+
 	if err != nil {
 		dblogger.Errorf("createCaptureTable insertnode error:%s", err)
 		return NewCapTableReply("", "", time.Now(), time.Now(), err)
 	} else {
-		dblogger.Infof("inserted table:%s at row:%v", name, row)
+		dblogger.Infof("inserted table:%s", name)
 	}
 
 	return NewCapTableReply(name, ip, sdate, edate, nil)

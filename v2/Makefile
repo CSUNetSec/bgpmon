@@ -13,13 +13,13 @@ makebindir:
 
 ${BINDIR}/${BGPMON-BIN}:
 	cd ${BGPMONSRC}; \
-	go build; \
+	GO111MODULE=on go build; \
 	mv ${BGPMON-BIN} ../../${BINDIR}; \
 	cd ../..
 
 ${BINDIR}/${BGPMOND-BIN}:
 	cd ${BGPMONDSRC}; \
-	go build; \
+	GO111MODULE=on go build; \
 	mv ${BGPMOND-BIN} ../../${BINDIR}; \
 	cd ../..
 
