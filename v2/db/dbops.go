@@ -54,7 +54,7 @@ func syncNodes(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 	cn := newNode()                               //the current node we will be looping over
 	rows, err := ex.Query(fmt.Sprintf(selectNodeTmpl, nodesMsg.GetNodeTable()))
 	if err != nil {
-		dblogger.Errorf("syncNode query:", err)
+		dblogger.Errorf("syncNode query: %v", err)
 		return NewNodesReply(nil, err)
 	}
 	defer rows.Close()
