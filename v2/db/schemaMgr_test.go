@@ -31,7 +31,6 @@ func getex() (SessionExecutor, *sql.DB) {
 func TestSchemaMgrStartStop(t *testing.T) {
 	sx, _ := getex()
 	sm := newSchemaMgr(sx)
-	go sm.run()
 	sm.stop()
 	//give it a sec to close
 	time.Sleep(1 * time.Second)
@@ -41,9 +40,8 @@ func TestSchemaMgrStartStop(t *testing.T) {
 func TestSchemaCheckSchema(t *testing.T) {
 	sx, _ := getex()
 	sm := newSchemaMgr(sx)
-	go sm.run()
 	ok, err := sm.checkSchema("bgpmon", "dbs", "nodes")
-	t.Logf("schema mgr checkSchema: [ok:%v , err:%v]" , ok, err)
+	t.Logf("schema mgr checkSchema: [ok:%v , err:%v]", ok, err)
 	sm.stop()
 	//give it a sec to close
 	time.Sleep(1 * time.Second)

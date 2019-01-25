@@ -27,8 +27,8 @@ const (
 )
 
 type SessionStream struct {
-	req     chan sqlIn
-	resp    chan sqlOut
+	req     chan CommonMessage
+	resp    chan CommonReply
 	cancel  chan bool
 	wp      *util.WorkerPool
 	schema  *schemaMgr
@@ -58,8 +58,8 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 	}(parentCancel, childCancel, daemonCancel)
 	ss.cancel = childCancel
 
-	ss.req = make(chan sqlIn)
-	ss.resp = make(chan sqlOut)
+	ss.req = make(chan CommonMessage)
+	ss.resp = make(chan CommonReply)
 	ss.buffers = make(map[string]util.SqlBuffer)
 	ctxTx, _ := GetNewExecutor(context.Background(), ss.db, true, CTXTIMEOUT)
 	ss.ex = newCtxTxSessionExecutor(ctxTx, ss.oper)
@@ -85,13 +85,13 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 		return err
 	}
 
-	ss.req <- sqlIn{capTableName: table, capture: wr}
+	ss.req <- NewCaptureMessage(table, wr)
 	resp, ok := <-ss.resp
 
 	if !ok {
 		return fmt.Errorf("Response channel closed")
 	}
-	return resp.err
+	return resp.GetErr()
 }
 
 // This is called when a stream finishes successfully
@@ -145,35 +145,42 @@ func (ss *SessionStream) listen(cancel chan bool) {
 			ss.closed = true
 
 			if !normal {
-				ss.resp <- sqlOut{err: fmt.Errorf("Channel closed")}
+				ss.resp <- NewReply(fmt.Errorf("Channel closed"))
 			}
 			return
 		case val, ok := <-ss.req:
 			// The ss.req channel might see it's close before the cancel channel.
 			// If that happens, this will add an empty sqlIn to the buffer
 			if ok {
-				ss.resp <- sqlOut{err: ss.addToBuffer(val)}
+				ss.resp <- NewReply(ss.addToBuffer(val))
 			}
 		}
 	}
 }
 
-func (ss *SessionStream) addToBuffer(val sqlIn) error {
-	if _, ok := ss.buffers[val.capTableName]; !ok {
-		dblogger.Infof("Creating new buffer for table: %s", val.capTableName)
-		stmt := fmt.Sprintf(ss.oper.getdbop(INSERT_CAPTURE_TABLE), val.capTableName)
-		ss.buffers[val.capTableName] = util.NewInsertBuffer(ss.ex, stmt, BUFFER_SIZE, 9, true)
+func (ss *SessionStream) addToBuffer(msg CommonMessage) error {
+	cMsg := msg.(captureMessage)
+
+	tName := cMsg.GetTableName()
+	if _, ok := ss.buffers[tName]; !ok {
+		dblogger.Infof("Creating new buffer for table: %s", tName)
+		stmt := fmt.Sprintf(ss.oper.getdbop(INSERT_CAPTURE_TABLE), tName)
+		ss.buffers[tName] = util.NewInsertBuffer(ss.ex, stmt, BUFFER_SIZE, 9, true)
 	}
-	buf := ss.buffers[val.capTableName]
-	ts, colIP, _ := util.GetTimeColIP(val.capture)
-	peerIP, err := util.GetPeerIP(val.capture)
+	buf := ss.buffers[tName]
+	// This actually returns a WriteRequest, not a BGPCapture, but all the utility functions were built around
+	// WriteRequests
+	cap := cMsg.GetCapture()
+
+	ts, colIP, _ := util.GetTimeColIP(cap)
+	peerIP, err := util.GetPeerIP(cap)
 	if err != nil {
 		dblogger.Infof("Unable to parse peer ip, ignoring message")
 		return nil
 	}
 
-	asPath := util.GetAsPath(val.capture)
-	nextHop, err := util.GetNextHop(val.capture)
+	asPath := util.GetAsPath(cap)
+	nextHop, err := util.GetNextHop(cap)
 	if err != nil {
 		nextHop = net.IPv4(0, 0, 0, 0)
 	}
@@ -184,9 +191,9 @@ func (ss *SessionStream) addToBuffer(val sqlIn) error {
 		origin = 0
 	}
 	//here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
-	advertized, _ := util.GetAdvertizedPrefixes(val.capture)
-	withdrawn, _ := util.GetWithdrawnPrefixes(val.capture)
-	protoMsg := []byte(val.capture.GetBgpCapture().String())
+	advertized, _ := util.GetAdvertizedPrefixes(cap)
+	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
+	protoMsg := []byte(cap.GetBgpCapture().String())
 
 	advArr := util.PrefixesToPQArray(advertized)
 	wdrArr := util.PrefixesToPQArray(withdrawn)
@@ -254,10 +261,10 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 		return nil, err
 	}
 	//calling syncnodes on the new schema manager
-	sin := sqlIn{dbname: d, nodetable: "nodes", knownNodes: cn}
-	sout := syncNodes(sex, sin)
+	nMsg := NewNodesMessage(cn)
+	nRep := syncNodes(sex, nMsg).(nodesReply)
 	fmt.Print("merged nodes, from the config file and the db are:")
-	config.PutConfiguredNodes(sout.knownNodes, os.Stdout)
+	config.PutConfiguredNodes(nRep.GetNodes(), os.Stdout)
 	return s, nil
 }
 
