@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
-	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/sirupsen/logrus"
 	"time"
 )
@@ -132,34 +131,6 @@ func newCollectorDate(col string, t time.Time) collectorDate {
 		col: col,
 		dat: t,
 	}
-}
-
-//a wrapper struct that can contain all the possible arguments to our database calls
-type sqlIn struct {
-	dbname        string                       //the name of the database we're operating on
-	maintable     string                       //the table which references all collector-day tables.
-	nodetable     string                       //the table with nodes and their configurations
-	knownNodes    map[string]config.NodeConfig //an incoming map of the known nodes
-	getNodeName   string                       //a node name we want to fetch is config from the db
-	getNodeIP     string                       //a node IP we want to fetch is config from the db
-	getColDate    collectorDate                //a collector name and a date that we want to write messages for
-	capTableName  string                       //the name of a capture table in the form of nodename-startdate
-	capTableCol   string                       //the ip of the capture table collector
-	capTableSdate time.Time                    //the start date of the capture table
-	capTableEdate time.Time                    //the end date of the capture table
-	capture       *pb.WriteRequest
-}
-
-type sqlOut struct {
-	ok            bool
-	err           error
-	knownNodes    map[string]config.NodeConfig //a composition of the incoming and already known nodes
-	resultNode    *node                        //the result from a getNode call
-	resultColDate collectorDate                //the results of a collectorDate query
-	capTable      string                       //the name of the capture table for that message
-	capIp         string                       //the ip of the collector for this capture table
-	capStime      time.Time                    //start time for the capture table
-	capEtime      time.Time                    //end time for the capture table
 }
 
 type getdboper interface {

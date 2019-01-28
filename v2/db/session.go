@@ -193,7 +193,7 @@ func (ss *SessionStream) addToBuffer(msg CommonMessage) error {
 	//here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
 	advertized, _ := util.GetAdvertizedPrefixes(cap)
 	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
-	protoMsg := []byte(cap.GetBgpCapture().String())
+	protoMsg := util.GetProtoMsg(cap)
 
 	advArr := util.PrefixesToPQArray(advertized)
 	wdrArr := util.PrefixesToPQArray(withdrawn)

@@ -4,7 +4,6 @@ import (
 	"errors"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	pbcomm "github.com/CSUNetSec/netsec-protobufs/common"
-	"github.com/google/uuid"
 	"net"
 	"time"
 )
@@ -29,11 +28,6 @@ func GetTimeColIP(pb *pb.WriteRequest) (time.Time, net.IP, error) {
 	locip := pb.GetBgpCapture().GetLocalIp()
 	colip, err := GetIPWrapper(locip)
 	return secs, colip, err
-}
-
-func GetUpdateID() []byte {
-	ret, _ := uuid.New().MarshalBinary()
-	return ret
 }
 
 func GetPeerIP(wr *pb.WriteRequest) (net.IP, error) {
@@ -124,4 +118,8 @@ func GetPrefixAsIPNet(pw *pbcomm.PrefixWrapper) (*net.IPNet, error) {
 	}
 
 	return &net.IPNet{ip, mask}, nil
+}
+
+func GetProtoMsg(wr *pb.WriteRequest) []byte {
+	return []byte(wr.GetBgpCapture().String())
 }

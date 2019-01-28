@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
-	//"github.com/lib/pq"
+	"github.com/lib/pq"
 	"github.com/pkg/errors"
-	//"net"
 	"time"
 )
 
@@ -197,43 +196,31 @@ func makeSchema(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 	return NewReply(nil)
 }
 
-func retCheckSchema(o sqlOut) (bool, error) {
-	return o.ok, o.err
-}
+func insertCapture(ex SessionExecutor, msg CommonMessage) CommonReply {
+	cMsg := msg.(captureMessage)
 
-func retMakeSchema(o sqlOut) error {
-	return o.err
-}
-
-/*
-type captureSqlIn struct {
-	capTableName string
-	timestamp    time.Time
-	colIP        net.IP
-	peerIP       net.IP
-	asPath       []int
-	nextHop      net.IP
-	origin       int
-	advertized   []*net.IPNet
-	withdrawn    []*net.IPNet
-	protoMsg     []byte
-}
-
-func insertCapture(ex SessionExecutor, args captureSqlIn) (ret sqlOut) {
 	insertTmpl := ex.getdbop(INSERT_CAPTURE_TABLE)
-	stmt := fmt.Sprintf(insertTmpl, args.capTableName)
+	stmt := fmt.Sprintf(insertTmpl, cMsg.GetTableName())
 
-	adv := util.PrefixesToPQArray(args.advertized)
-	wdr := util.PrefixesToPQArray(args.withdrawn)
+	advPrefixes, _ := util.GetAdvertizedPrefixes(cMsg.GetCapture())
+	wdrPrefixes, _ := util.GetWithdrawnPrefixes(cMsg.GetCapture())
 
-	var err error
-	_, err = ex.Exec(stmt, args.timestamp, args.colIP.String(), args.peerIP.String(), pq.Array(args.asPath), args.nextHop.String(), args.origin, adv, wdr, args.protoMsg)
+	adv := util.PrefixesToPQArray(advPrefixes)
+	wdr := util.PrefixesToPQArray(wdrPrefixes)
+
+	time, colIP, _ := util.GetTimeColIP(cMsg.GetCapture())
+	peerIP, _ := util.GetPeerIP(cMsg.GetCapture())
+	asPath := util.GetAsPath(cMsg.GetCapture())
+	nextHop, _ := util.GetNextHop(cMsg.GetCapture())
+	// This util function needs to be fixed
+	origin := util.GetOriginAs(cMsg.GetCapture())
+	protoMsg := util.GetProtoMsg(cMsg.GetCapture())
+
+	_, err := ex.Exec(stmt, time, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, adv, wdr, protoMsg)
 	if err != nil {
-		dblogger.Infof("failing to insert capture: time:%s colip:%s  aspath:%v oas:%v ", args.timestamp, args.colIP.String(), args.asPath, args.origin)
-		ret.err = errors.Wrap(err, "insertCapture")
-		return
+		dblogger.Infof("failing to insert capture: time:%s colip:%s  aspath:%v oas:%v ", time, colIP.String(), asPath, origin)
+		return NewReply(errors.Wrap(err, "insertCapture"))
 	}
 
-	return
+	return NewReply(nil)
 }
-*/
