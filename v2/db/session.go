@@ -213,19 +213,30 @@ type Session struct {
 	dbo    *dbOper //this struct provides the strings for the sql ops.
 	db     *sql.DB
 	schema *schemaMgr
+	maxWC  int
 }
 
-func NewSession(parentCtx context.Context, conf config.SessionConfiger, id string, nworkers int) (Sessioner, error) {
+func NewSession(parentCtx context.Context, conf config.SessionConfiger, id string, nworkers int) (*Session, error) {
 	var (
 		err    error
 		constr string
 		db     *sql.DB
 	)
-	wp := util.NewWorkerPool(nworkers)
 
 	cancel := make(chan bool)
 
-	s := &Session{uuid: id, cancel: cancel, wp: wp}
+	var wc int
+	// If neither was specified, default to 1
+	if nworkers == 0 && conf.GetWorkerCt() == 0 {
+		wc = 1
+	} else if nworkers == 0 { // If the client didn't request a WC, default to the server one
+		wc = conf.GetWorkerCt()
+	} else { // The user specified a worker count, go with that
+		wc = nworkers
+	}
+
+	wp := util.NewWorkerPool(wc)
+	s := &Session{uuid: id, cancel: cancel, wp: wp, maxWC: wc}
 	u := conf.GetUser()
 	p := conf.GetPassword()
 	d := conf.GetDatabaseName()
@@ -293,4 +304,8 @@ func (s *Session) Close() error {
 	s.schema.stop()
 
 	return nil
+}
+
+func (s *Session) GetMaxWorkers() int {
+	return s.maxWC
 }

@@ -49,7 +49,7 @@ func openSess(cmd *cobra.Command, args []string) {
 func init() {
 	rootCmd.AddCommand(openCmd)
 	openCmd.Flags().StringVarP(&sid, "sessionId", "s", genuuid(), "UUID for the session")
-	openCmd.Flags().Uint32VarP(&nw, "workers", "w", 1, "number of maximum concurrent workers")
+	openCmd.Flags().Uint32VarP(&nw, "workers", "w", 0, "number of maximum concurrent workers")
 }
 
 func genuuid() string {
