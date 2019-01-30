@@ -226,6 +226,9 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 	cancel := make(chan bool)
 
 	var wc int
+	// The configuration will default to 0 if not specified,
+	// and the nworkers will be 0 if that flag isn't provided on
+	// bgpmon. This creates a sane default system.
 	// If neither was specified, default to 1
 	if nworkers == 0 && conf.GetWorkerCt() == 0 {
 		wc = 1
