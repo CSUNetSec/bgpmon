@@ -38,10 +38,16 @@ func (ib *InsertBuffer) Add(arg ...interface{}) error {
 
 	ib.stmtbld.WriteString("(")
 	for i := range arg {
+		idx := ",?"
+		if ib.usePosArgs {
+			// There is no $0
+			idx = fmt.Sprintf(",$%d", (ib.ct*ib.batchSize)+i+1)
+		}
+
 		if i == 0 {
-			ib.stmtbld.WriteString("?")
+			ib.stmtbld.WriteString(idx[1:])
 		} else {
-			ib.stmtbld.WriteString(",?")
+			ib.stmtbld.WriteString(idx)
 		}
 	}
 	ib.stmtbld.WriteString("),")
@@ -69,11 +75,14 @@ func (ib *InsertBuffer) Flush() error {
 	ib.addedStmt = ib.addedStmt[:len(ib.addedStmt)-1]
 	ib.addedStmt += ";"
 
-	if ib.usePosArgs {
-		convStmt = convertSqlStmt(fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt))
-	} else {
-		convStmt = fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt)
-	}
+	/*
+		if ib.usePosArgs {
+			convStmt = convertSqlStmt(fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt))
+		} else {
+			convStmt = fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt)
+		}
+	*/
+	convStmt = fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt)
 
 	_, err := ib.ex.Exec(convStmt, ib.values...)
 	if err != nil {
