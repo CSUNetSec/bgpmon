@@ -50,7 +50,7 @@ func multiWriteFunc(cmd *cobra.Command, args []string) {
 
 	if wc == 0 {
 		wc = int(reply.Workers)
-		fmt.Printf("Using server worker count: %d\n", reply.Workers)
+		fmt.Printf("Using server worker count: %d\n", wc)
 	} else if wc > int(reply.Workers) {
 		fmt.Printf("WARNING: Requested workers is higher than server workers. Some requests may time out.\n")
 	}
@@ -65,14 +65,14 @@ func multiWriteFunc(cmd *cobra.Command, args []string) {
 	for _, fname := range args[1:] {
 		wp.Add()
 		fmt.Printf("Writing %s\n", fname)
-		go func() {
-			ct, err := writeMRTFile(bc, fname, sessId)
+		go func(f string) {
+			ct, err := writeMRTFile(bc, f, sessId)
 			if err == io.EOF { //do not consider that an error
 				err = nil
 			}
-			results <- writeMRTResult{fname: fname, wCt: ct, err: err}
+			results <- writeMRTResult{fname: f, wCt: ct, err: err}
 			wp.Done()
-		}()
+		}(fname)
 	}
 	wp.Close()
 	close(results)
@@ -109,8 +109,8 @@ func summarizeResults(in chan writeMRTResult, wg *sync.WaitGroup) {
 	fmt.Printf("Total completed: %d\n", tot)
 	fmt.Printf("Total failures: %d\n", failCt)
 	if failCt > 0 {
-		for ct := range failed {
-			fmt.Printf("%s : %s\n", failed[ct], reasons[ct])
+		for i := 0; i < failCt; i++ {
+			fmt.Printf("%s : %s\n", failed[i], reasons[i])
 		}
 	}
 }
@@ -149,7 +149,7 @@ func writeMRTFile(bc *bgpmonCli, fname, sessId string) (int, error) {
 		}
 	}
 
-	if _, err := stream.CloseAndRecv(); err != io.EOF {
+	if _, err := stream.CloseAndRecv(); err != io.EOF && err != nil {
 		return parsed, fmt.Errorf("Write stream server error: %s", err)
 	} else if err := mf.Err(); err != nil {
 		return parsed, fmt.Errorf("MRT file reader error: %s", err)
