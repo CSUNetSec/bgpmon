@@ -31,15 +31,20 @@ var (
 )
 
 type server struct {
-	sessions   map[string]db.Sessioner // map from uuid to session interface
-	conf       config.Configer         // the config populated from the file
+	sessions   map[string]SessionHandle // map from uuid to session interface
+	conf       config.Configer          // the config populated from the file
 	knownNodes map[string]config.NodeConfig
+}
+
+type SessionHandle struct {
+	sessType *pb.SessionType
+	sess     *db.Session
 }
 
 func newServer(c config.Configer) *server {
 	return &server{
 		knownNodes: c.GetConfiguredNodes(),
-		sessions:   make(map[string]db.Sessioner),
+		sessions:   make(map[string]SessionHandle),
 		conf:       c,
 	}
 }
@@ -59,11 +64,11 @@ func (s *server) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
 //Session RPC Calls
 func (s *server) CloseSession(ctx context.Context, request *pb.CloseSessionRequest) (*pb.Empty, error) {
 	mainlogger.Infof("Closing session %s", request.SessionId)
-	sess, exists := s.sessions[request.SessionId]
+	sh, exists := s.sessions[request.SessionId]
 	if !exists {
 		return nil, errors.New(fmt.Sprintf("session ID %s not found", request.SessionId))
 	} else {
-		sess.Close()
+		sh.sess.Close()
 		delete(s.sessions, request.SessionId)
 	}
 
@@ -108,11 +113,24 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 		if sess, nserr := db.NewSession(ctx, sc, request.SessionId, int(request.Workers)); nserr != nil {
 			return nil, errors.Wrap(nserr, "can't create session")
 		} else {
-			s.sessions[request.SessionId] = sess
+			s.sessions[request.SessionId] = SessionHandle{sessType: &pb.SessionType{Name: sc.GetName(),
+				Type: sc.GetTypeName(),
+				Desc: fmt.Sprintf("hosts:%v", sc.GetHostNames())}, sess: sess}
 			mainlogger.Infof("Session %s opened", request.SessionId)
 		}
 	}
 	return &pb.OpenSessionReply{SessionId: request.SessionId}, nil
+}
+
+func (s *server) GetSessionInfo(ctx context.Context, request *pb.SessionInfoRequest) (*pb.SessionInfoReply, error) {
+	mainlogger.Infof("Returning info on session: %s", request.SessionId)
+
+	sh, exists := s.sessions[request.SessionId]
+	if !exists {
+		return nil, errors.New(fmt.Sprintf("Session: %s does not exist", request.SessionId))
+	}
+
+	return &pb.SessionInfoReply{Type: sh.sessType, SessionId: request.SessionId, Workers: uint32(sh.sess.GetMaxWorkers())}, nil
 }
 
 func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
@@ -140,14 +158,14 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 		}
 
 		if first {
-			sess, exists := s.sessions[writeRequest.SessionId]
+			sh, exists := s.sessions[writeRequest.SessionId]
 			if !exists {
 				mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
 				return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
 			}
 			first = false
 
-			dbStream, err = sess.Do(db.SESSION_OPEN_STREAM, nil)
+			dbStream, err = sh.sess.Do(db.SESSION_OPEN_STREAM, nil)
 			if err != nil {
 				mainlogger.Errorf("Error opening session stream on session: %s", writeRequest.SessionId)
 				return errors.New(fmt.Sprintf("Error opening session stream on session: %s", writeRequest.SessionId))
@@ -177,22 +195,22 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 
 //getSessions looks for the sessions with IDs provided in the string slice, in the server's
 //active session map, and returns those back.
-func (s *server) getSessions(sessionIDs []string) ([]db.Sessioner, error) {
-	sessions := []db.Sessioner{}
+func (s *server) getSessions(sessionIDs []string) ([]*db.Session, error) {
+	sessions := []*db.Session{}
 	for _, sessionID := range sessionIDs {
-		sess, exists := s.sessions[sessionID]
+		sh, exists := s.sessions[sessionID]
 		if !exists {
 			return nil, errors.New(fmt.Sprintf("Session '%s' does not exist", sessionID))
 		}
 
-		sessions = append(sessions, sess)
+		sessions = append(sessions, sh.sess)
 	}
 	return sessions, nil
 }
 
 func (s *server) shutdown() {
-	for _, sess := range s.sessions {
-		sess.Close()
+	for _, sh := range s.sessions {
+		sh.sess.Close()
 	}
 }
 

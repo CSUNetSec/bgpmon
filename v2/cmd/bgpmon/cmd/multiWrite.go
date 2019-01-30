@@ -38,6 +38,23 @@ func multiWriteFunc(cmd *cobra.Command, args []string) {
 	}
 	defer bc.Close()
 
+	ctx, cancel := getBackgroundCtxWithCancel()
+	// First get the session info
+	reply, err := bc.cli.GetSessionInfo(ctx, &monpb.SessionInfoRequest{SessionId: sessId})
+	if err != nil {
+		fmt.Printf("Error getting session info: %s\n", err)
+		cancel()
+		return
+	}
+	cancel()
+
+	if wc == 0 {
+		wc = int(reply.Workers)
+		fmt.Printf("Using server worker count: %d\n", reply.Workers)
+	} else if wc > int(reply.Workers) {
+		fmt.Printf("WARNING: Requested workers is higher than server workers. Some requests may time out.\n")
+	}
+
 	results := make(chan writeMRTResult)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -47,6 +64,7 @@ func multiWriteFunc(cmd *cobra.Command, args []string) {
 	wp := util.NewWorkerPool(wc)
 	for _, fname := range args[1:] {
 		wp.Add()
+		fmt.Printf("Writing %s\n", fname)
 		go func() {
 			ct, err := writeMRTFile(bc, fname, sessId)
 			if err == io.EOF { //do not consider that an error
@@ -141,5 +159,5 @@ func writeMRTFile(bc *bgpmonCli, fname, sessId string) (int, error) {
 
 func init() {
 	rootCmd.AddCommand(multiWriteCmd)
-	multiWriteCmd.Flags().IntVarP(&wc, "workers", "w", 1, "Override the number of workers writing files")
+	multiWriteCmd.Flags().IntVarP(&wc, "workers", "w", 0, "Override the number of workers writing files")
 }

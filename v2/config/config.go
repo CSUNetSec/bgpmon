@@ -49,6 +49,7 @@ type SessionConfiger interface {
 	GetUser() string
 	GetPassword() string
 	GetCertDir() string
+	GetWorkerCt() int
 }
 
 type bgpmondConfig struct {
@@ -107,6 +108,7 @@ type sessionConfig struct {
 	Password string   // user's password
 	Hosts    []string // list of hosts for that cluster
 	Database string   // the database under which the bgpmond relations live
+	WorkerCt int      // The default worker count for this kind of session
 }
 
 //describes another BGP node, either a collector or a peer.
@@ -146,6 +148,10 @@ func (s sessionConfig) GetPassword() string {
 
 func (s sessionConfig) GetCertDir() string {
 	return s.CertDir
+}
+
+func (s sessionConfig) GetWorkerCt() int {
+	return s.WorkerCt
 }
 
 // helper function to sanity check the config file.
