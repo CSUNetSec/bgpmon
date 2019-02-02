@@ -52,7 +52,7 @@ func newServer(c config.Configer) *server {
 //Get Messages from bgpmon
 func (s *server) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
 	switch req.Type {
-	case pb.GetRequest_BGP_CAPTURE:
+	case pb.GetRequest_CAPTURE:
 		mainlogger.Infof("Running Get with request:%v", req)
 		return nil
 
