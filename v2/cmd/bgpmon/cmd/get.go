@@ -27,27 +27,89 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"time"
 
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/spf13/cobra"
+)
+
+var (
+	oas              uint32    //origin as filter
+	ststamp, etstamp time.Time //start and end timestamps
+	ststr, etstr     string    //timestamps before they get parsed
 )
 
 // getCmd represents the get command
 var getCmd = &cobra.Command{
 	Use:   "get",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "fetches filtered captures, prefixes and as-paths from bgpmond",
+	Long: `get requires filters to bring back a number of either captures, prefixes, or aspaths
+from bgpmond. Filters startTime and endTime should be specified together. Time layout should be
+in RFC3339 form like 2006-01-02T15:04:05Z.
+`,
+	RunE: get,
+}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("get called")
-	},
+func get(cmd *cobra.Command, args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("argument for session needed")
+	}
+	sessID := args[0]
+	//populate Filters
+	filts := []pb.Filter{}
+	if cmd.Flags().Changed("originAs") {
+		filts = append(filts, pb.Filter{Type: pb.Filter_ORIGIN_AS, OriginAs: oas})
+	}
+
+	ac := cmd.Flags().Changed("startTime")
+	bc := cmd.Flags().Changed("endTime")
+	if ac || bc {
+		//make sure they were both specified
+		if !(ac && bc) { //they must be specified together. else error
+			return fmt.Errorf("start and end time must be specified together")
+		}
+		_, err1 := time.Parse(time.RFC3339, ststr)
+		_, err2 := time.Parse(time.RFC3339, etstr)
+		if err1 != nil || err2 != nil {
+			return fmt.Errorf("failed to parse time as an RFC3339 string")
+		}
+		filts = append(filts, pb.Filter{Type: pb.Filter_TIME, StartTimestamp: ststr, EndTimestamp: etstr})
+	}
+	moncli, clierr := NewBgpmonCli(bgpmondHost, bgpmondPort)
+	if clierr != nil {
+		fmt.Printf("Error: %s\n", clierr)
+		return clierr
+	}
+	defer moncli.Close()
+	ctx, cancel := getBackgroundCtxWithCancel()
+	// First get the session info
+	pbr := &pb.GetRequest{Type: pb.GetRequest_CAPTURE, SessionId: sessID}
+	stream, err := moncli.cli.Get(ctx, pbr)
+	if err != nil {
+		fmt.Printf("Error getting session info: %s\n", err)
+		cancel()
+		return err
+	}
+	for {
+		thing, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Printf("Error: %s\n", err)
+		}
+		fmt.Printf("received a thing:%v", thing)
+
+	}
+	return nil
 }
 
 func init() {
 	rootCmd.AddCommand(getCmd)
+	getCmd.PersistentFlags().Uint32VarP(&oas, "originAs", "o", 0, "origin as filter")
+	getCmd.PersistentFlags().StringVarP(&ststr, "startTime", "s", "", "startTimestamp")
+	getCmd.PersistentFlags().StringVarP(&etstr, "endTime", "e", "", "endTimestamp")
 
 	// Here you will define your flags and configuration settings.
 
