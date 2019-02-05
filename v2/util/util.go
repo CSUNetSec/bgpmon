@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"strings"
 	"sync"
 )
@@ -80,4 +81,9 @@ func convertSqlStmt(stmt string) string {
 		ct++
 	}
 	return ret
+}
+
+func LogAndReturn(logger logrus.FieldLogger, fmt string, args ...interface{}) error {
+	logger.Errorf(fmt, args...)
+	return fmt.Errorf(fmt, args...)
 }
