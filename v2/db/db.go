@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
-	"github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -109,7 +108,7 @@ var dbops = map[string][]string{
 }
 
 var (
-	dblogger = logrus.WithField("system", "db")
+	dblogger = util.NewLogger("system", "db")
 )
 
 type Dber interface {
