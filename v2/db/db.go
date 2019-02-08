@@ -4,11 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
-	"github.com/sirupsen/logrus"
+	"time"
 )
 
 const (
@@ -114,7 +113,7 @@ var dbops = map[string][]string{
 }
 
 var (
-	dblogger = logrus.WithField("system", "db")
+	dblogger = util.NewLogger("system", "db")
 )
 
 //Dber is an interface that returns a reference to the underlying *sql.DB

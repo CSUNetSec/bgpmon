@@ -17,7 +17,6 @@ import (
 
 	"context"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	//"io/ioutil"
@@ -30,7 +29,7 @@ const (
 )
 
 var (
-	mainlogger     = logrus.WithField("system", "main")
+	mainlogger     = util.NewLogger("system", "main")
 	mkNxSessionErr = func(a string) error {
 		return errors.New(fmt.Sprintf("session ID %s not found", a))
 	}
@@ -163,8 +162,7 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 	first = true
 	for {
 		if util.NBContextClosed(timeoutCtx) {
-			mainlogger.Errorf("context closed, aborting write")
-			return fmt.Errorf("context closed, aborting write")
+			return mainlogger.Errorf("Context closed, aborting write")
 		}
 
 		writeRequest, err := stream.Recv()
@@ -187,25 +185,24 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 
 			dbStream, err = sh.sess.Do(db.SessionOpenStream, nil)
 			if err != nil {
-				mainlogger.Errorf("Error opening session stream on session: %s", writeRequest.SessionId)
-				return errors.New(fmt.Sprintf("Error opening session stream on session: %s", writeRequest.SessionId))
+				return mainlogger.Errorf("Error opening session stream on session: %s", writeRequest.SessionId)
 			}
 			defer dbStream.Close()
 		}
 
 		if err := dbStream.Send(db.SessionStreamWriteMRT, writeRequest); err != nil {
-			mainlogger.Errorf("error writing on session(%s): %s. message:%+v", writeRequest.SessionId, err, writeRequest)
 			dbStream.Cancel()
-			return errors.Wrap(err, "session write")
+			return mainlogger.Errorf("Error writing on session(%s): %s", writeRequest.SessionId, err)
 		}
 	}
 	if dbStream == nil {
-		return fmt.Errorf("failed to create session stream")
+		return mainlogger.Errorf("Session stream was never created")
 	}
 
 	if err := dbStream.Flush(); err != nil {
-		mainlogger.Errorf("write stream failed to flush")
-		return errors.Wrap(err, "session stream flush")
+		return mainlogger.Errorf("Write stream failed to flush: %s", err)
+	} else {
+		mainlogger.Infof("write stream success")
 	}
 	mainlogger.Infof("write stream success")
 
@@ -235,7 +232,7 @@ func (s *server) shutdown() {
 
 func main() {
 	if len(os.Args) != 2 {
-		mainlogger.Fatal("no configuration file provided")
+		mainlogger.Fatalf("no configuration file provided")
 	}
 	//logrus.SetOutput(ioutil.Discard)
 	mainlogger.Infof("reading config file:%s", os.Args[1])
@@ -248,9 +245,9 @@ func main() {
 		daemonConf := bc.GetDaemonConfig()
 		if daemonConf.ProfilerOn {
 			mainlogger.Infof("Starting pprof at address:%s", daemonConf.ProfilerHostPort)
-			go func(addr string, log *logrus.Entry) {
-				log.Fatal(http.ListenAndServe(addr, nil))
-			}(daemonConf.ProfilerHostPort, mainlogger.WithField("system", "pprof"))
+			go func(addr string, log util.Logger) {
+				log.Fatalf("%v", http.ListenAndServe(addr, nil))
+			}(daemonConf.ProfilerHostPort, util.NewLogger("system", "pprof"))
 		}
 		mainlogger.Infof("starting grpc server at address:%s", daemonConf.Address)
 		if listen, lerr := net.Listen("tcp", daemonConf.Address); lerr != nil {

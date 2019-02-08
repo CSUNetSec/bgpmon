@@ -2,15 +2,14 @@ package db
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
-	"github.com/sirupsen/logrus"
+	"time"
 )
 
 var (
-	slogger = logrus.WithField("system", "schema")
+	slogger = util.NewLogger("system", "schema")
 )
 
 type schemaCmdOp int
