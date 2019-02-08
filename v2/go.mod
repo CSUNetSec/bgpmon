@@ -8,6 +8,7 @@ require (
 	github.com/CSUNetSec/protoparse v0.1.1
 	github.com/alecthomas/gometalinter v3.0.0+incompatible // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
+	github.com/araddon/dateparse v0.0.0-20181123171228-21df004e09ca
 	github.com/armon/go-radix v0.0.0-20170727155443-1fca145dffbc
 	github.com/cosiner/argv v0.0.1 // indirect
 	github.com/davidrjenni/reftools v0.0.0-20180914123528-654d0ba4f96d // indirect

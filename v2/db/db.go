@@ -27,6 +27,7 @@ const (
 	makeNodeTableOp      = "makeNodeTableTmpl"
 	makeCaptureTableOp   = "makeCaptureTableTmpl"
 	insertCaptureTableOp = "insertCaptureTableTmpl"
+	getCaptureTablesOp   = "getCaptureTablesTmpl"
 )
 
 var dbops = map[string][]string{
@@ -106,6 +107,9 @@ var dbops = map[string][]string{
 		   coords varchar NOT NULL,
 		   address varchar NOT NULL
 	         );`,
+	},
+	getCaptureTablesOp: []string{
+		`SELECT dbname FROM %s WHERE collector=$1 AND dateFrom>=$2 AND dateTo<$3;`,
 	},
 }
 

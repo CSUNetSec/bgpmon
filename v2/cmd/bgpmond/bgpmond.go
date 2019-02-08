@@ -68,11 +68,7 @@ func (s *server) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
 	case pb.GetRequest_CAPTURE:
 		cchan := db.GetCaptures(sh.sess, req)
 		for capt := range cchan {
-			if gerr := capt.Error(); gerr != nil {
-				return errors.Wrap(gerr, "failed to fetch updates")
-			}
-			grep := &pb.GetReply{}
-			if serr := rep.Send(grep); serr != nil {
+			if serr := rep.Send(&capt); serr != nil {
 				return errors.Wrap(serr, "failed to send capture to client")
 			}
 		}

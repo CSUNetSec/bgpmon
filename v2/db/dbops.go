@@ -224,3 +224,39 @@ func insertCapture(ex SessionExecutor, msg CommonMessage) CommonReply {
 
 	return newReply(nil)
 }
+
+//the reason that i'm implementing getCaptures to manually iterate on
+//all tables and not to use a dbfunction that via dynamic sql would return
+//the result, is that i am worried that someone might request too many captures
+//and i would like the return to be streamed. therefore i iterate on the table and
+//create a common replies. it also differs in the sense that it has a channel reply
+func getCaptures(ex SessionExecutor, msg CommonMessage) chan CommonReply {
+	retc := make(chan CommonReply)
+	go func(SessionExecutor, CommonMessage, chan CommonReply) {
+		defer close(retc)
+		var tablename string
+		cMsg := msg.(getCapMessage)
+		getCapTablesTmpl := ex.getdbop(getCaptureTablesOp)
+		stmt := fmt.Sprintf(getCapTablesTmpl, msg.GetMainTable())
+		stime, etime := cMsg.getDates()
+		rows, err := ex.Query(stmt, cMsg.getTableCol(), stime, etime)
+		if err != nil {
+			dblogger.Errorf("getTable query error:%s", err)
+			retc <- newGetCapReply(nil, err)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			err := rows.Scan(&tablename)
+			if err != nil {
+				dblogger.Errorf("getCaptures can't find tables to scan:%s", err)
+				retc <- newGetCapReply(nil, err)
+				return
+			}
+			dblogger.Infof("opening table:%s to get captures", tablename)
+			//XXX implement
+
+		}
+	}(ex, msg, retc)
+	return retc
+}

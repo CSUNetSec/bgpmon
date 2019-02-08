@@ -138,8 +138,8 @@ func (s *schemaMgr) makeCapTable(msg CommonMessage) (CommonReply, error) {
 		res = newTableReply(nsout.GetName(), s, e, nodeRes.GetNode(), nil)
 	} else if err == nil {
 		// we have a node table already and res contains the correct vaules to be added in the cache
-		stime, etime = res.GetDates()
-		nodename, nodeip = res.GetNode().nodeName, res.GetNode().nodeIP
+		stime, etime = res.getDates()
+		nodename, nodeip = res.getNode().nodeName, res.getNode().nodeIP
 	} else {
 		return newReply(nil), fmt.Errorf("makeCapTable: %s", err)
 	}
@@ -215,7 +215,7 @@ func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date ti
 		return "", sreply.rep.Error()
 	}
 	tRep := sreply.rep.(tableReply)
-	return tRep.GetName(), tRep.Error()
+	return tRep.getName(), tRep.Error()
 }
 
 func (s *schemaMgr) getNode(dbname, nodetable string, nodeName string, nodeIP string) (*node, error) {

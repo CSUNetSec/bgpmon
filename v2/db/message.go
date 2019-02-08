@@ -200,34 +200,48 @@ func newTableReply(name string, start, end time.Time, n *node, err error) tableR
 	return tableReply{CommonReply: newReply(err), name: name, sDate: start, eDate: end, node: n}
 }
 
-func (t tableReply) GetName() string {
+func (t tableReply) getName() string {
 	return t.name
 }
 
-func (t tableReply) GetDates() (time.Time, time.Time) {
+func (t tableReply) getDates() (time.Time, time.Time) {
 	return t.sDate, t.eDate
 }
 
-func (t tableReply) GetNode() *node {
+func (t tableReply) getNode() *node {
 	return t.node
 }
 
-type captureReply struct {
-	CommonReply
-	captsz  int
-	capblob []byte
+//an internal struct that represents most of the things we extract
+//from the db for each capture that will be sent to the client
+type capture struct {
+	fromTable string //mostly debug
+	id        string //the capture_id that together with the table make it unique
+	oas       int    //origin as
+	blob      []byte //the protobuf blob
 }
 
-func newCaptureReply(blob []byte, err error) captureReply {
-	return captureReply{
+type getCapMessage struct {
+	capTableMessage // this query needs all the fields of a captablemessage to find the table
+	//XXX filters etc
+}
+
+type getCapReply struct {
+	CommonReply
+	caps []capture
+}
+
+func newGetCapReply(caps []capture, err error) getCapReply {
+	return getCapReply{
 		CommonReply: newReply(err),
-		captsz:      len(blob),
-		capblob:     blob,
+		caps:        caps,
 	}
 }
 
-func (c captureReply) MarshalBinary() ([]byte, error) {
-	return c.capblob, nil
+//MarshalBinary on a will make the capture array into a protobuf stream
+//of [len][bytes]
+func (c getCapReply) MarshalBinary() ([]byte, error) {
+	return nil, nil //XXX not ready
 }
 
 //SerializableReply is a CommonReply that provides Error as well as
