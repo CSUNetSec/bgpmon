@@ -1,15 +1,16 @@
 package db
 
 import (
+	"time"
+
+	"encoding"
+
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
-	"time"
 )
 
-// This file is meant to define a heirarchy of messages
-// These are meant to be a substitute for the sqlIn/sqlOut
-// structures, which have become bloated
-
+//CommonMessage is a basic interface which allows the getting and setting of the the main
+//and node tables that are usually involved in most db operations
 type CommonMessage interface {
 	GetMainTable() string // This table holds the names of all other tables created
 	GetNodeTable() string // This holds all info on the collectors
@@ -27,11 +28,11 @@ func (m *msg) GetNodeTable() string  { return m.nodeTable }
 func (m *msg) SetMainTable(n string) { m.mainTable = n }
 func (m *msg) SetNodeTable(n string) { m.nodeTable = n }
 
-func NewMessage() CommonMessage {
+func newMessage() CommonMessage {
 	return &msg{mainTable: "dbs", nodeTable: "nodes"}
 }
 
-func NewCustomMessage(main, node string) CommonMessage {
+func newCustomMessage(main, node string) CommonMessage {
 	return &msg{mainTable: main, nodeTable: node}
 }
 
@@ -40,11 +41,14 @@ type nodesMessage struct {
 	nodes map[string]config.NodeConfig
 }
 
-func NewNodesMessage(nodes map[string]config.NodeConfig) nodesMessage {
-	return nodesMessage{CommonMessage: NewMessage(), nodes: nodes}
+//newNodesMessage creates a nodes message that will pass to the db
+//a map of NodeConfigs. the string in the map should be the textual IP
+//of the node that will have that config.
+func newNodesMessage(nodes map[string]config.NodeConfig) nodesMessage {
+	return nodesMessage{CommonMessage: newMessage(), nodes: nodes}
 }
 
-func (n nodesMessage) GetNodes() map[string]config.NodeConfig {
+func (n nodesMessage) getNodes() map[string]config.NodeConfig {
 	return n.nodes
 }
 
@@ -54,15 +58,15 @@ type nodeMessage struct {
 	nodeIP   string
 }
 
-func NewNodeMessage(name, ip string) nodeMessage {
-	return nodeMessage{CommonMessage: NewMessage(), nodeName: name, nodeIP: ip}
+func newNodeMessage(name, ip string) nodeMessage {
+	return nodeMessage{CommonMessage: newMessage(), nodeName: name, nodeIP: ip}
 }
 
-func (n nodeMessage) GetNodeName() string {
+func (n nodeMessage) getNodeName() string {
 	return n.nodeName
 }
 
-func (n nodeMessage) GetNodeIP() string {
+func (n nodeMessage) getNodeIP() string {
 	return n.nodeIP
 }
 
@@ -74,19 +78,19 @@ type capTableMessage struct {
 	eDate     time.Time
 }
 
-func NewCapTableMessage(name, col string, start, end time.Time) capTableMessage {
-	return capTableMessage{CommonMessage: NewMessage(), tableName: name, tableCol: col, sDate: start, eDate: end}
+func newCapTableMessage(name, col string, start, end time.Time) capTableMessage {
+	return capTableMessage{CommonMessage: newMessage(), tableName: name, tableCol: col, sDate: start, eDate: end}
 }
 
-func (c capTableMessage) GetTableName() string {
+func (c capTableMessage) getTableName() string {
 	return c.tableName
 }
 
-func (c capTableMessage) GetTableCol() string {
+func (c capTableMessage) getTableCol() string {
 	return c.tableCol
 }
 
-func (c capTableMessage) GetDates() (time.Time, time.Time) {
+func (c capTableMessage) getDates() (time.Time, time.Time) {
 	return c.sDate, c.eDate
 }
 
@@ -95,11 +99,11 @@ type tableMessage struct {
 	colDate collectorDate
 }
 
-func NewTableMessage(colDate collectorDate) tableMessage {
-	return tableMessage{CommonMessage: NewMessage(), colDate: colDate}
+func newTableMessage(colDate collectorDate) tableMessage {
+	return tableMessage{CommonMessage: newMessage(), colDate: colDate}
 }
 
-func (t tableMessage) GetColDate() collectorDate {
+func (t tableMessage) getColDate() collectorDate {
 	return t.colDate
 }
 
@@ -109,27 +113,28 @@ type captureMessage struct {
 	capture   *pb.WriteRequest
 }
 
-func NewCaptureMessage(name string, cap *pb.WriteRequest) captureMessage {
-	return captureMessage{CommonMessage: NewMessage(), tableName: name, capture: cap}
+func newCaptureMessage(name string, cap *pb.WriteRequest) captureMessage {
+	return captureMessage{CommonMessage: newMessage(), tableName: name, capture: cap}
 }
 
-func (c captureMessage) GetTableName() string {
+func (c captureMessage) getTableName() string {
 	return c.tableName
 }
 
-func (c captureMessage) GetCapture() *pb.WriteRequest {
+func (c captureMessage) getCapture() *pb.WriteRequest {
 	return c.capture
 }
 
+//CommonReply is an interface that provides the Error interface
 type CommonReply interface {
-	GetErr() error
+	Error() error
 }
 
 type rpy struct{ err error }
 
-func (r rpy) GetErr() error { return r.err }
+func (r rpy) Error() error { return r.err }
 
-func NewReply(e error) CommonReply {
+func newReply(e error) CommonReply {
 	return rpy{err: e}
 }
 
@@ -138,8 +143,8 @@ type nodesReply struct {
 	nodes map[string]config.NodeConfig
 }
 
-func NewNodesReply(nodes map[string]config.NodeConfig, err error) nodesReply {
-	return nodesReply{CommonReply: NewReply(err), nodes: nodes}
+func newNodesReply(nodes map[string]config.NodeConfig, err error) nodesReply {
+	return nodesReply{CommonReply: newReply(err), nodes: nodes}
 }
 
 func (n nodesReply) GetNodes() map[string]config.NodeConfig {
@@ -151,8 +156,8 @@ type nodeReply struct {
 	node *node
 }
 
-func NewNodeReply(n *node, err error) nodeReply {
-	return nodeReply{CommonReply: NewReply(err), node: n}
+func newNodeReply(n *node, err error) nodeReply {
+	return nodeReply{CommonReply: newReply(err), node: n}
 }
 
 func (n nodeReply) GetNode() *node {
@@ -167,8 +172,8 @@ type capTableReply struct {
 	eDate time.Time
 }
 
-func NewCapTableReply(name, ip string, sDate, eDate time.Time, err error) capTableReply {
-	return capTableReply{CommonReply: NewReply(err), name: name, ip: ip, sDate: sDate, eDate: eDate}
+func newCapTableReply(name, ip string, sDate, eDate time.Time, err error) capTableReply {
+	return capTableReply{CommonReply: newReply(err), name: name, ip: ip, sDate: sDate, eDate: eDate}
 }
 
 func (c capTableReply) GetName() string {
@@ -191,18 +196,57 @@ type tableReply struct {
 	node  *node
 }
 
-func NewTableReply(name string, start, end time.Time, n *node, err error) tableReply {
-	return tableReply{CommonReply: NewReply(err), name: name, sDate: start, eDate: end, node: n}
+func newTableReply(name string, start, end time.Time, n *node, err error) tableReply {
+	return tableReply{CommonReply: newReply(err), name: name, sDate: start, eDate: end, node: n}
 }
 
-func (t tableReply) GetName() string {
+func (t tableReply) getName() string {
 	return t.name
 }
 
-func (t tableReply) GetDates() (time.Time, time.Time) {
+func (t tableReply) getDates() (time.Time, time.Time) {
 	return t.sDate, t.eDate
 }
 
-func (t tableReply) GetNode() *node {
+func (t tableReply) getNode() *node {
 	return t.node
+}
+
+//an internal struct that represents most of the things we extract
+//from the db for each capture that will be sent to the client
+type capture struct {
+	fromTable string //mostly debug
+	id        string //the capture_id that together with the table make it unique
+	oas       int    //origin as
+	blob      []byte //the protobuf blob
+}
+
+type getCapMessage struct {
+	capTableMessage // this query needs all the fields of a captablemessage to find the table
+	//XXX filters etc
+}
+
+type getCapReply struct {
+	CommonReply
+	caps []capture
+}
+
+func newGetCapReply(caps []capture, err error) getCapReply {
+	return getCapReply{
+		CommonReply: newReply(err),
+		caps:        caps,
+	}
+}
+
+//MarshalBinary on a will make the capture array into a protobuf stream
+//of [len][bytes]
+func (c getCapReply) MarshalBinary() ([]byte, error) {
+	return nil, nil //XXX not ready
+}
+
+//SerializableReply is a CommonReply that provides Error as well as
+//something that can be Marshaled to Binary
+type SerializableReply interface {
+	CommonReply
+	encoding.BinaryMarshaler
 }

@@ -4,28 +4,34 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
+	"os"
+	"time"
+
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
-	"net"
-	"os"
-	"time"
 )
 
 const (
-	CTXTIMEOUT  = time.Duration(120) * time.Second //XXX there is a write timeout in bgpmond too! merge
-	BUFFER_SIZE = 40
+	ctxTimeout = time.Duration(120) * time.Second //XXX there is a write timeout in bgpmond too! merge
+	bufferSize = 40
 )
 
 type sessionCmd int
 
 const (
-	SESSION_OPEN_STREAM sessionCmd = iota
-	SESSION_STREAM_WRITE_MRT
+	//SessionOpenStream is an argument for Do
+	SessionOpenStream sessionCmd = iota
+	//SessionStreamWriteMRT is an argument for Send
+	SessionStreamWriteMRT
 )
 
+//SessionStream accepts CommonMessages and returns CommonReplies.
+//internally it synchronizes with the schema manager and keeps open buffers
+//for efficient writes
 type SessionStream struct {
 	req     chan CommonMessage
 	resp    chan CommonReply
@@ -39,6 +45,7 @@ type SessionStream struct {
 	buffers map[string]util.SqlBuffer
 }
 
+//NewSessionStream returns a newly allocated SessionStream
 func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, db Dber, oper *dbOper) *SessionStream {
 	ss := &SessionStream{closed: false, wp: wp, schema: smgr, db: db, oper: oper}
 
@@ -61,14 +68,15 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 	ss.req = make(chan CommonMessage)
 	ss.resp = make(chan CommonReply)
 	ss.buffers = make(map[string]util.SqlBuffer)
-	ctxTx, _ := GetNewExecutor(context.Background(), ss.db, true, CTXTIMEOUT)
+	ctxTx, _ := GetNewExecutor(context.Background(), ss.db, true, ctxTimeout)
 	ss.ex = newCtxTxSessionExecutor(ctxTx, ss.oper)
 
 	go ss.listen(daemonCancel)
 	return ss
 }
 
-// WARNING, sending after a close will cause a panic, and may hang
+//Send performs a type of send on the sessionstream with an arbitrary argument
+//WARNING, sending after a close will cause a panic, and may hang
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 	var (
 		table string
@@ -85,17 +93,17 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 		return err
 	}
 
-	ss.req <- NewCaptureMessage(table, wr)
+	ss.req <- newCaptureMessage(table, wr)
 	resp, ok := <-ss.resp
 
 	if !ok {
 		return fmt.Errorf("Response channel closed")
 	}
-	return resp.GetErr()
+	return resp.Error()
 }
 
-// This is called when a stream finishes successfully
-// It flushes all remaining buffers
+//Flush is called when a stream finishes successfully
+//It flushes all remaining buffers
 func (ss *SessionStream) Flush() error {
 	for key := range ss.buffers {
 		ss.buffers[key].Flush()
@@ -104,18 +112,17 @@ func (ss *SessionStream) Flush() error {
 	return nil
 }
 
-// This is used when theres an error on the client-side,
-// called to rollback all executed queries
+//Cancel is used when there is an error on the client-side,
+//called to rollback all executed queries
 func (ss *SessionStream) Cancel() error {
 	ss.ex.SetError(fmt.Errorf("Session stream cancelled"))
 	return nil
 }
 
-// This is only for a normal close operation. A cancellation
-// can only be done by Close()'ing the parent session while
-// the stream is still running
-// This should be called by the same goroutine as the one calling
-// send
+//Close is only for a normal close operation. A cancellation
+//can only be done by Closing the parent session while
+//the stream is still running
+//This should be called by the same goroutine as the one calling Send
 func (ss *SessionStream) Close() error {
 	dblogger.Infof("Closing session stream")
 	close(ss.cancel)
@@ -145,14 +152,14 @@ func (ss *SessionStream) listen(cancel chan bool) {
 			ss.closed = true
 
 			if !normal {
-				ss.resp <- NewReply(fmt.Errorf("Channel closed"))
+				ss.resp <- newReply(fmt.Errorf("Channel closed"))
 			}
 			return
 		case val, ok := <-ss.req:
 			// The ss.req channel might see it's close before the cancel channel.
 			// If that happens, this will add an empty sqlIn to the buffer
 			if ok {
-				ss.resp <- NewReply(ss.addToBuffer(val))
+				ss.resp <- newReply(ss.addToBuffer(val))
 			}
 		}
 	}
@@ -161,16 +168,16 @@ func (ss *SessionStream) listen(cancel chan bool) {
 func (ss *SessionStream) addToBuffer(msg CommonMessage) error {
 	cMsg := msg.(captureMessage)
 
-	tName := cMsg.GetTableName()
+	tName := cMsg.getTableName()
 	if _, ok := ss.buffers[tName]; !ok {
 		dblogger.Infof("Creating new buffer for table: %s", tName)
-		stmt := fmt.Sprintf(ss.oper.getdbop(INSERT_CAPTURE_TABLE), tName)
-		ss.buffers[tName] = util.NewInsertBuffer(ss.ex, stmt, BUFFER_SIZE, 9, true)
+		stmt := fmt.Sprintf(ss.oper.getdbop(insertCaptureTableOp), tName)
+		ss.buffers[tName] = util.NewInsertBuffer(ss.ex, stmt, bufferSize, 9, true)
 	}
 	buf := ss.buffers[tName]
 	// This actually returns a WriteRequest, not a BGPCapture, but all the utility functions were built around
 	// WriteRequests
-	cap := cMsg.GetCapture()
+	cap := cMsg.getCapture()
 
 	ts, colIP, _ := util.GetTimeColIP(cap)
 	peerIP, err := util.GetPeerIP(cap)
@@ -201,11 +208,13 @@ func (ss *SessionStream) addToBuffer(msg CommonMessage) error {
 	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
 }
 
+//Sessioner is an interface that wraps Do and Close
 type Sessioner interface {
 	Do(cmd sessionCmd, arg interface{}) (*SessionStream, error)
 	Close() error
 }
 
+//Session represents a session to the underlying db. It holds references to the schema manager and workerpool.
 type Session struct {
 	uuid   string
 	cancel chan bool
@@ -216,6 +225,7 @@ type Session struct {
 	maxWC  int
 }
 
+//NewSession returns a newly allocated Session
 func NewSession(parentCtx context.Context, conf config.SessionConfiger, id string, nworkers int) (*Session, error) {
 	var (
 		err    error
@@ -275,22 +285,24 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 		return nil, err
 	}
 	//calling syncnodes on the new schema manager
-	nMsg := NewNodesMessage(cn)
+	nMsg := newNodesMessage(cn)
 	nRep := syncNodes(sex, nMsg).(nodesReply)
 	fmt.Print("merged nodes, from the config file and the db are:")
 	config.PutConfiguredNodes(nRep.GetNodes(), os.Stdout)
 	return s, nil
 }
 
+//Db satisfies the Dber interface on a Session
 func (s *Session) Db() *sql.DB {
 	return s.db
 }
 
-// Maybe this should return a channel that the calling function
-// could read from to get the reply
+//Do returns a SessionStream that will provide the output from the Do command
+//Maybe this should return a channel that the calling function
+//could read from to get the reply
 func (s *Session) Do(cmd sessionCmd, arg interface{}) (*SessionStream, error) {
 	switch cmd {
-	case SESSION_OPEN_STREAM:
+	case SessionOpenStream:
 		dblogger.Infof("Opening stream on session: %s", s.uuid)
 		s.wp.Add()
 		ss := NewSessionStream(s.cancel, s.wp, s.schema, s, s.dbo)
@@ -299,6 +311,7 @@ func (s *Session) Do(cmd sessionCmd, arg interface{}) (*SessionStream, error) {
 	return nil, nil
 }
 
+//Close stops the schema manager and the worker pool
 func (s *Session) Close() error {
 	dblogger.Infof("Closing session: %s", s.uuid)
 
@@ -309,6 +322,7 @@ func (s *Session) Close() error {
 	return nil
 }
 
+//GetMaxWorkers returns the maximum amount of workers that the session supports
 func (s *Session) GetMaxWorkers() int {
 	return s.maxWC
 }

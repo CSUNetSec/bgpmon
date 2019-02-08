@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"os/signal"
 	"time"
+
+	"os"
 
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/db"
@@ -15,19 +16,24 @@ import (
 	"github.com/pkg/errors"
 
 	"context"
+
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
 	//"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
 )
 
 const (
-	WRITE_TIMEOUT = 240 * time.Second
+	writeTimeout = 240 * time.Second
 )
 
 var (
-	mainlogger = logrus.WithField("system", "main")
+	mainlogger     = logrus.WithField("system", "main")
+	mkNxSessionErr = func(a string) error {
+		return errors.New(fmt.Sprintf("session ID %s not found", a))
+	}
 )
 
 type server struct {
@@ -36,6 +42,7 @@ type server struct {
 	knownNodes map[string]config.NodeConfig
 }
 
+//SessionHandle is a struct that incorporates a db.session and an associated sessiontype from the netsec-protobufs
 type SessionHandle struct {
 	sessType *pb.SessionType
 	sess     *db.Session
@@ -51,14 +58,27 @@ func newServer(c config.Configer) *server {
 
 //Get Messages from bgpmon
 func (s *server) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
+	mainlogger.Infof("Running Get with request:%v", req)
+	sh, exists := s.sessions[req.SessionId]
+	if !exists {
+		return mkNxSessionErr(req.SessionId)
+	}
+
 	switch req.Type {
-	case pb.GetRequest_BGP_CAPTURE:
-		mainlogger.Infof("Running Get with request:%v", req)
-		return nil
+	case pb.GetRequest_CAPTURE:
+		cchan := db.GetCaptures(sh.sess, req)
+		for capt := range cchan {
+			if serr := rep.Send(&capt); serr != nil {
+				return errors.Wrap(serr, "failed to send capture to client")
+			}
+		}
+	case pb.GetRequest_ASPATH:
+	case pb.GetRequest_PREFIX:
 
 	default:
 		return errors.New("unimplemented Get request type")
 	}
+	return nil
 }
 
 //Session RPC Calls
@@ -66,11 +86,10 @@ func (s *server) CloseSession(ctx context.Context, request *pb.CloseSessionReque
 	mainlogger.Infof("Closing session %s", request.SessionId)
 	sh, exists := s.sessions[request.SessionId]
 	if !exists {
-		return nil, errors.New(fmt.Sprintf("session ID %s not found", request.SessionId))
-	} else {
-		sh.sess.Close()
-		delete(s.sessions, request.SessionId)
+		return nil, mkNxSessionErr(request.SessionId)
 	}
+	sh.sess.Close()
+	delete(s.sessions, request.SessionId)
 
 	mainlogger.Infof("Session %s closed", request.SessionId)
 	return &pb.Empty{}, nil
@@ -78,7 +97,7 @@ func (s *server) CloseSession(ctx context.Context, request *pb.CloseSessionReque
 
 func (s *server) ListOpenSessions(ctx context.Context, request *pb.Empty) (*pb.ListOpenSessionsReply, error) {
 	sessionIDs := []string{}
-	for sessionID, _ := range s.sessions {
+	for sessionID := range s.sessions {
 		sessionIDs = append(sessionIDs, sessionID)
 	}
 
@@ -105,20 +124,20 @@ func (s *server) OpenSession(ctx context.Context, request *pb.OpenSessionRequest
 	if _, exists := s.sessions[request.SessionId]; exists {
 		return nil, errors.New(fmt.Sprintf("Session ID %s already exists", request.SessionId))
 	}
-	if sc, scerr := s.conf.GetSessionConfigWithName(request.SessionName); scerr != nil {
+	sc, scerr := s.conf.GetSessionConfigWithName(request.SessionName)
+	if scerr != nil {
 		return nil, scerr
-	} else {
-		//XXX here we are passing the background context of the server not the one in the argument.
-		//therefore cancellation will be controlled by the server. consider using joincontext here.
-		if sess, nserr := db.NewSession(ctx, sc, request.SessionId, int(request.Workers)); nserr != nil {
-			return nil, errors.Wrap(nserr, "can't create session")
-		} else {
-			s.sessions[request.SessionId] = SessionHandle{sessType: &pb.SessionType{Name: sc.GetName(),
-				Type: sc.GetTypeName(),
-				Desc: fmt.Sprintf("hosts:%v", sc.GetHostNames())}, sess: sess}
-			mainlogger.Infof("Session %s opened", request.SessionId)
-		}
 	}
+	//XXX here we are passing the background context of the server not the one in the argument.
+	//therefore cancellation will be controlled by the server. consider using joincontext here.
+	sess, nserr := db.NewSession(ctx, sc, request.SessionId, int(request.Workers))
+	if nserr != nil {
+		return nil, errors.Wrap(nserr, "can't create session")
+	}
+	s.sessions[request.SessionId] = SessionHandle{sessType: &pb.SessionType{Name: sc.GetName(),
+		Type: sc.GetTypeName(),
+		Desc: fmt.Sprintf("hosts:%v", sc.GetHostNames())}, sess: sess}
+	mainlogger.Infof("Session %s opened", request.SessionId)
 	return &pb.OpenSessionReply{SessionId: request.SessionId}, nil
 }
 
@@ -127,7 +146,7 @@ func (s *server) GetSessionInfo(ctx context.Context, request *pb.SessionInfoRequ
 
 	sh, exists := s.sessions[request.SessionId]
 	if !exists {
-		return nil, errors.New(fmt.Sprintf("Session: %s does not exist", request.SessionId))
+		return nil, mkNxSessionErr(request.SessionId)
 	}
 
 	return &pb.SessionInfoReply{Type: sh.sessType, SessionId: request.SessionId, Workers: uint32(sh.sess.GetMaxWorkers())}, nil
@@ -138,7 +157,8 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 		first    bool
 		dbStream *db.SessionStream
 	)
-	timeoutCtx, _ := context.WithTimeout(context.Background(), WRITE_TIMEOUT)
+	timeoutCtx, cf := context.WithTimeout(context.Background(), writeTimeout)
+	defer cf()
 
 	first = true
 	for {
@@ -161,11 +181,11 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 			sh, exists := s.sessions[writeRequest.SessionId]
 			if !exists {
 				mainlogger.Errorf("session %s does not exist", writeRequest.SessionId)
-				return errors.New(fmt.Sprintf("session %s does not exist", writeRequest.SessionId))
+				return mkNxSessionErr(writeRequest.SessionId)
 			}
 			first = false
 
-			dbStream, err = sh.sess.Do(db.SESSION_OPEN_STREAM, nil)
+			dbStream, err = sh.sess.Do(db.SessionOpenStream, nil)
 			if err != nil {
 				mainlogger.Errorf("Error opening session stream on session: %s", writeRequest.SessionId)
 				return errors.New(fmt.Sprintf("Error opening session stream on session: %s", writeRequest.SessionId))
@@ -173,7 +193,7 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 			defer dbStream.Close()
 		}
 
-		if err := dbStream.Send(db.SESSION_STREAM_WRITE_MRT, writeRequest); err != nil {
+		if err := dbStream.Send(db.SessionStreamWriteMRT, writeRequest); err != nil {
 			mainlogger.Errorf("error writing on session(%s): %s. message:%+v", writeRequest.SessionId, err, writeRequest)
 			dbStream.Cancel()
 			return errors.Wrap(err, "session write")
@@ -186,9 +206,8 @@ func (s *server) Write(stream pb.Bgpmond_WriteServer) error {
 	if err := dbStream.Flush(); err != nil {
 		mainlogger.Errorf("write stream failed to flush")
 		return errors.Wrap(err, "session stream flush")
-	} else {
-		mainlogger.Infof("write stream success")
 	}
+	mainlogger.Infof("write stream success")
 
 	return nil
 }
@@ -200,7 +219,7 @@ func (s *server) getSessions(sessionIDs []string) ([]*db.Session, error) {
 	for _, sessionID := range sessionIDs {
 		sh, exists := s.sessions[sessionID]
 		if !exists {
-			return nil, errors.New(fmt.Sprintf("Session '%s' does not exist", sessionID))
+			return nil, mkNxSessionErr(sessionID)
 		}
 
 		sessions = append(sessions, sh.sess)
