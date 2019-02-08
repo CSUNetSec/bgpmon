@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
 	"time"
@@ -14,11 +15,11 @@ var (
 type schemaCmdOp int
 
 const (
-	INITSCHEMA = schemaCmdOp(iota)
-	CHECKSCHEMA
-	GETNODE
-	SYNCNODES
-	GETTABLE
+	mgrInitSchemaOp = schemaCmdOp(iota)
+	mgrCheckSchemaOp
+	mgrGetNodeOp
+	mgrSyncNodesOp
+	mgrGetTableOp
 )
 
 type schemaCmd struct {
@@ -67,25 +68,25 @@ func (s *schemaMgr) run() {
 			ret := schemaReply{ok: true}
 
 			switch icmd.op {
-			case CHECKSCHEMA:
+			case mgrCheckSchemaOp:
 				slogger.Infof("checking correctness of db schema")
 				ret.rep = checkSchema(s.sex, icmd.msg)
-			case INITSCHEMA:
+			case mgrInitSchemaOp:
 				slogger.Infof("initializing db schema")
 				ret.rep = makeSchema(s.sex, icmd.msg)
-			case SYNCNODES:
+			case mgrSyncNodesOp:
 				slogger.Infof("syncing node configs")
 				ret.rep = syncNodes(s.sex, icmd.msg)
-			case GETNODE:
+			case mgrGetNodeOp:
 				slogger.Infof("getting node name")
 				ret.rep = getNode(s.sex, icmd.msg)
-			case GETTABLE:
+			case mgrGetTableOp:
 				tMsg := icmd.msg.(tableMessage)
-				cd := tMsg.GetColDate()
+				cd := tMsg.getColDate()
 				capTableName, ok := s.checkTableCache(cd.col, cd.dat.UTC())
 				if ok {
 					// Most of these fields have default values, by design
-					ret.rep = NewTableReply(capTableName, time.Now(), time.Now(), nil, nil)
+					ret.rep = newTableReply(capTableName, time.Now(), time.Now(), nil, nil)
 				} else {
 					slogger.Infof("Table cache miss. Creating table for col: %s date: %s", cd.col, cd.dat)
 					ret.rep, err = s.makeCapTable(tMsg)
@@ -113,33 +114,33 @@ func (s *schemaMgr) makeCapTable(msg CommonMessage) (CommonReply, error) {
 		stime, etime     time.Time
 	)
 
-	if res.GetErr() == errNoTable {
+	if err := res.Error(); err == errNoTable {
 		tMsg := msg.(tableMessage)
-		cd := tMsg.GetColDate()
+		cd := tMsg.getColDate()
 		nodeip = cd.col
 		// This name is intentionally left blank
-		nodeRes := getNode(s.sex, NewNodeMessage("", nodeip)).(nodeReply)
+		nodeRes := getNode(s.sex, newNodeMessage("", nodeip)).(nodeReply)
 		//nodesRes, err := s.getNode(sin.dbname, sin.nodetable, "", sin.getColDate.col) //the colname is empty. we don't know it yet.
-		if nodeRes.GetErr() != nil {
-			return nodeRes, fmt.Errorf("makeCapTable: %s", nodeRes.GetErr())
+		if err := nodeRes.Error(); err != nil {
+			return nodeRes, fmt.Errorf("makeCapTable: %s", err)
 		}
 		//we resolved the node, now calling getnodetablenamedates to get the fields for the new tablename
 		tname, stime, etime := util.GetNodeTableNameDates(nodeRes.GetNode().nodeName, cd.dat, nodeRes.GetNode().nodeDuration)
 		nodename = nodeRes.GetNode().nodeName
 
-		cMsg := NewCapTableMessage(tname, nodename, stime, etime)
+		cMsg := newCapTableMessage(tname, nodename, stime, etime)
 		nsout := createCaptureTable(s.sex, cMsg).(capTableReply)
-		if nsout.GetErr() != nil {
-			return nsout, fmt.Errorf("makeCapTable: %s", nsout.GetErr())
+		if err := nsout.Error(); err != nil {
+			return nsout, fmt.Errorf("makeCapTable: %s", err)
 		}
 		s, e := nsout.GetDates()
-		res = NewTableReply(nsout.GetName(), s, e, nodeRes.GetNode(), nil)
-	} else if res.GetErr() == nil {
+		res = newTableReply(nsout.GetName(), s, e, nodeRes.GetNode(), nil)
+	} else if err == nil {
 		// we have a node table already and res contains the correct vaules to be added in the cache
-		stime, etime = res.GetDates()
-		nodename, nodeip = res.GetNode().nodeName, res.GetNode().nodeIP
+		stime, etime = res.getDates()
+		nodename, nodeip = res.getNode().nodeName, res.getNode().nodeIP
 	} else {
-		return NewReply(nil), fmt.Errorf("makeCapTable: %s", res.GetErr())
+		return newReply(nil), fmt.Errorf("makeCapTable: %s", err)
 	}
 	s.AddNodeAndTableInCache(nodename, nodeip, stime, etime)
 	return res, nil
@@ -154,13 +155,13 @@ func (s *schemaMgr) AddNodeAndTableInCache(col string, colip string, sd time.Tim
 }
 
 func (s *schemaMgr) checkTableCache(collectorip string, date time.Time) (string, bool) {
-	if colname, nodeok := s.nodeNames[collectorip]; !nodeok {
+	colname, nodeok := s.nodeNames[collectorip]
+	if !nodeok {
 		return "", false
-	} else {
-		i, ok := s.cols.ColNameDateInSlice(colname, date)
-		if ok {
-			return s.cols[i].GetNameDateStr(), true
-		}
+	}
+	i, ok := s.cols.ColNameDateInSlice(colname, date)
+	if ok {
+		return s.cols[i].GetNameDateStr(), true
 	}
 	return "", false
 }
@@ -174,27 +175,27 @@ func (s *schemaMgr) stop() {
 }
 
 func (s *schemaMgr) checkSchema(dbname, maintable, nodetable string) (bool, error) {
-	cmdin := schemaCmd{op: CHECKSCHEMA, msg: NewCustomMessage(maintable, nodetable)}
+	cmdin := schemaCmd{op: mgrCheckSchemaOp, msg: newCustomMessage(maintable, nodetable)}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
-	return sreply.rep.GetErr() == nil, sreply.rep.GetErr()
+	return sreply.rep.Error() == nil, sreply.rep.Error()
 }
 
 func (s *schemaMgr) makeSchema(dbname, maintable, nodetable string) error {
-	cmdin := schemaCmd{op: INITSCHEMA, msg: NewCustomMessage(maintable, nodetable)}
+	cmdin := schemaCmd{op: mgrInitSchemaOp, msg: newCustomMessage(maintable, nodetable)}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
-	return sreply.rep.GetErr()
+	return sreply.rep.Error()
 }
 
 func (s *schemaMgr) syncNodes(dbname, nodetable string, knownNodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
-	nMsg := NewNodesMessage(knownNodes)
+	nMsg := newNodesMessage(knownNodes)
 	nMsg.SetNodeTable(nodetable)
-	cmdin := schemaCmd{op: SYNCNODES, msg: nMsg}
+	cmdin := schemaCmd{op: mgrSyncNodesOp, msg: nMsg}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
 	nRep := sreply.rep.(nodesReply)
-	return nRep.GetNodes(), nRep.GetErr()
+	return nRep.GetNodes(), nRep.Error()
 }
 
 func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date time.Time) (string, error) {
@@ -202,26 +203,26 @@ func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date ti
 		dat: date,
 		col: ipstr,
 	}
-	tMsg := NewTableMessage(coldate)
+	tMsg := newTableMessage(coldate)
 	tMsg.SetMainTable(maintable)
 	tMsg.SetNodeTable(nodetable)
-	cmdin := schemaCmd{op: GETTABLE, msg: tMsg}
+	cmdin := schemaCmd{op: mgrGetTableOp, msg: tMsg}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
 
 	if !sreply.ok {
-		return "", sreply.rep.GetErr()
+		return "", sreply.rep.Error()
 	}
 	tRep := sreply.rep.(tableReply)
-	return tRep.GetName(), tRep.GetErr()
+	return tRep.getName(), tRep.Error()
 }
 
 func (s *schemaMgr) getNode(dbname, nodetable string, nodeName string, nodeIP string) (*node, error) {
-	nMsg := NewNodeMessage(nodeName, nodeIP)
+	nMsg := newNodeMessage(nodeName, nodeIP)
 	nMsg.SetNodeTable(nodetable)
-	cmdin := schemaCmd{op: GETNODE, msg: nMsg}
+	cmdin := schemaCmd{op: mgrGetNodeOp, msg: nMsg}
 	s.iChan <- cmdin
 	sreply := <-s.oChan
 	nRep := sreply.rep.(nodeReply)
-	return nRep.GetNode(), nRep.GetErr()
+	return nRep.GetNode(), nRep.Error()
 }

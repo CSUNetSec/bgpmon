@@ -4,39 +4,41 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/util"
 	"time"
 )
 
 const (
-	POSTGRES = iota
+	postgres = iota
 )
 
 const (
-	CONNECT_NO_SSL       = "connectNoSSL"
-	CONNECT_SSL          = "connectSSL"
-	CHECK_SCHEMA         = "checkschema"
-	SELECT_NODE          = "selectNodeTmpl"
-	INSERT_NODE          = "insertNodeTmpl"
-	INSERT_MAIN_TABLE    = "insertMainTableTmpl"
-	MAKE_MAIN_TABLE      = "makeMainTableTmpl"
-	SELECT_TABLE         = "selectTableTmpl"
-	MAKE_NODE_TABLE      = "makeNodeTableTmpl"
-	MAKE_CAPTURE_TABLE   = "makeCaptureTableTmpl"
-	INSERT_CAPTURE_TABLE = "insertCaptureTableTmpl"
+	connectNoSSLOp       = "connectNoSSL"
+	connectSSLOp         = "connectSSL"
+	checkSchemaOp        = "checkschema"
+	selectNodeOp         = "selectNodeTmpl"
+	insertNodeOp         = "insertNodeTmpl"
+	insertMainTableOp    = "insertMainTableTmpl"
+	makeMainTableOp      = "makeMainTableTmpl"
+	selectTableOp        = "selectTableTmpl"
+	makeNodeTableOp      = "makeNodeTableTmpl"
+	makeCaptureTableOp   = "makeCaptureTableTmpl"
+	insertCaptureTableOp = "insertCaptureTableTmpl"
+	getCaptureTablesOp   = "getCaptureTablesTmpl"
 )
 
 var dbops = map[string][]string{
-	CONNECT_NO_SSL: []string{
+	connectNoSSLOp: []string{
 		//postgres
 		`user=%s password=%s dbname=%s host=%s sslmode=disable`,
 	},
-	CONNECT_SSL: []string{
+	connectSSLOp: []string{
 		//postgres
 		`user=%s password=%s dbname=%s host=%s`,
 	},
-	CHECK_SCHEMA: []string{
+	checkSchemaOp: []string{
 		//postgres
 		`SELECT EXISTS (
 		   SELECT *
@@ -44,11 +46,11 @@ var dbops = map[string][]string{
 		   WHERE  table_name = $1
 		 );`,
 	},
-	SELECT_NODE: []string{
+	selectNodeOp: []string{
 		//postgres
 		`SELECT name, ip, isCollector, tableDumpDurationMinutes, description, coords, address FROM %s;`,
 	},
-	INSERT_NODE: []string{
+	insertNodeOp: []string{
 		//postgres
 		`INSERT INTO %s (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) 
 		   VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -56,7 +58,7 @@ var dbops = map[string][]string{
 		     tableDumpDurationMinutes=EXCLUDED.tableDumpDurationMinutes,
 		     description=EXCLUDED.description, coords=EXCLUDED.coords, address=EXCLUDED.address;`,
 	},
-	MAKE_MAIN_TABLE: []string{
+	makeMainTableOp: []string{
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   dbname varchar PRIMARY KEY,
@@ -65,11 +67,11 @@ var dbops = map[string][]string{
 	           dateTo timestamp NOT NULL
                  );`,
 	},
-	INSERT_MAIN_TABLE: []string{
+	insertMainTableOp: []string{
 		//postgres
 		`INSERT INTO %s (dbname, collector, dateFrom, dateTo) VALUES ($1, $2, $3, $4);`,
 	},
-	MAKE_CAPTURE_TABLE: []string{
+	makeCaptureTableOp: []string{
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   update_id BIGSERIAL PRIMARY KEY NOT NULL, 
@@ -84,16 +86,16 @@ var dbops = map[string][]string{
 		   protomsg bytea NOT NULL);`,
 	},
 	// This template shouldn't need VALUES, because those will be provided by the buffer
-	INSERT_CAPTURE_TABLE: []string{
+	insertCaptureTableOp: []string{
 		//postgres
 		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes, protomsg) VALUES `,
 	},
-	SELECT_TABLE: []string{
+	selectTableOp: []string{
 		//postgres
 		`SELECT dbname, collector, dateFrom, dateTo, tableDumpDurationMinutes FROM %s,%s 
 		 WHERE dateFrom <= $1 AND dateTo > $1 AND ip = $2;`,
 	},
-	MAKE_NODE_TABLE: []string{
+	makeNodeTableOp: []string{
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   ip varchar PRIMARY KEY,
@@ -105,12 +107,16 @@ var dbops = map[string][]string{
 		   address varchar NOT NULL
 	         );`,
 	},
+	getCaptureTablesOp: []string{
+		`SELECT dbname FROM %s WHERE collector=$1 AND dateFrom>=$2 AND dateTo<$3;`,
+	},
 }
 
 var (
 	dblogger = util.NewLogger("system", "db")
 )
 
+//Dber is an interface that returns a reference to the underlying *sql.DB
 type Dber interface {
 	Db() *sql.DB
 }
@@ -157,10 +163,11 @@ func (d *dbOper) getdbop(a string) (ret string) {
 
 func newPostgressDbOper() *dbOper {
 	return &dbOper{
-		t: POSTGRES,
+		t: postgres,
 	}
 }
 
+//SessionExecutor wraps an util.SqlErrorExecutor with getdboper
 type SessionExecutor interface {
 	util.SqlErrorExecutor
 	getdboper
@@ -197,7 +204,7 @@ func newDbSessionExecutor(db *sql.DB, dbo *dbOper) *dbOperExecutor {
 	}
 }
 
-//creates a new ctxTx for that operation which implements the
+//GetNewExecutor creates a new ctxTx for that operation which implements the
 //sqlExecutor interface. The argument passed instructs it to either
 //do it on a transaction if true, or on the normal DB connection if false.
 //caller must call Done() that releases resources.
@@ -286,16 +293,15 @@ type ctxTx struct {
 }
 
 //either commits the TX or just releases the context through it's cancelfunc.
-func (ptx *ctxTx) Done() error {
-	defer ptx.cf() //release resources if it's done.
-	if ptx.doTx && ptx.tx != nil {
-		if ptx.err == nil {
+func (c *ctxTx) Done() error {
+	defer c.cf() //release resources if it's done.
+	if c.doTx && c.tx != nil {
+		if c.err == nil {
 			dblogger.Infof("tx commit successfull")
-			return ptx.tx.Commit()
-		} else {
-			dblogger.Infof("rolling back the transaction due to error:%s", ptx.err)
-			return ptx.tx.Rollback()
+			return c.tx.Commit()
 		}
+		dblogger.Infof("rolling back the transaction due to error:%s", c.err)
+		return c.tx.Rollback()
 	}
 	return nil
 }
