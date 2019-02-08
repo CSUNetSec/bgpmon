@@ -148,14 +148,20 @@ func (ss *SessionStream) listen(cancel chan bool) {
 
 	for {
 		select {
-		case normal := <-cancel:
-			ss.closed = true
-
-			if !normal {
-				ss.resp <- newReply(fmt.Errorf("Channel closed"))
+		case normal, open := <-cancel:
+			if !open {
+				continue
 			}
-			return
+
+			ss.closed = true
+			if normal {
+				return
+			}
 		case val, ok := <-ss.req:
+			// Between the last message and this one, the channel was closed unexpectedly. Return the error
+			if ss.closed {
+				ss.resp <- NewReply(fmt.Errorf("Session stream channel closed"))
+			}
 			// The ss.req channel might see it's close before the cancel channel.
 			// If that happens, this will add an empty sqlIn to the buffer
 			if ok {
