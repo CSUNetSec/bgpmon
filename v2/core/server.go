@@ -18,10 +18,9 @@ var (
 // BgpmondServer ...
 type BgpmondServer interface {
 	OpenSession(string, string, int) error
-	CloseSession(string) error
-	CloseAllSessions()
 	ListSessionTypes() []*pb.SessionType
 	ListSessions() []SessionHandle
+	CloseSession(string) error
 	OpenWriteStream(string) (*db.SessionStream, error)
 
 	RunModule(string, string, string) error
@@ -32,8 +31,9 @@ type BgpmondServer interface {
 }
 
 type SessionHandle struct {
-	sessType *pb.SessionType
-	session  *db.Session
+	Name     string
+	SessType *pb.SessionType
+	Session  *db.Session
 }
 
 type server struct {
@@ -87,7 +87,7 @@ func (s *server) OpenSession(sType, sID string, workers int) error {
 
 	hosts := fmt.Sprintf("Hosts: %v", sc.GetHostNames())
 	stype := &pb.SessionType{Name: sc.GetName(), Type: sc.GetTypeName(), Desc: hosts}
-	sh := SessionHandle{sessType: stype, session: session}
+	sh := SessionHandle{Name: sID, SessType: stype, Session: session}
 	s.sessions[sID] = sh
 
 	return nil
@@ -102,7 +102,7 @@ func (s *server) CloseSession(sID string) error {
 		return corelogger.Errorf("No session found with ID: %s", sID)
 	}
 
-	sh.session.Close()
+	sh.Session.Close()
 	delete(s.sessions, sID)
 
 	return nil
@@ -113,7 +113,7 @@ func (s *server) CloseAllSessions() {
 	defer s.mux.Unlock()
 
 	for k, v := range s.sessions {
-		v.session.Close()
+		v.Session.Close()
 		delete(s.sessions, k)
 	}
 
@@ -135,6 +135,9 @@ func (s *server) ListSessionTypes() []*pb.SessionType {
 }
 
 func (s *server) ListSessions() []SessionHandle {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
 	sList := []SessionHandle{}
 	for _, sh := range s.sessions {
 		sList = append(sList, sh)
@@ -149,7 +152,7 @@ func (s *server) OpenWriteStream(sID string) (*db.SessionStream, error) {
 		return nil, corelogger.Errorf("Can't open stream on nonexistant session: %s", sID)
 	}
 
-	stream, err := sh.session.Do(db.SessionOpenStream, nil)
+	stream, err := sh.Session.Do(db.SessionOpenStream, nil)
 	if err != nil {
 		return nil, corelogger.Errorf("Failed to open stream on session(%s): %s", sID, err)
 	}
@@ -214,6 +217,18 @@ func (s *server) CloseModule(name string) error {
 	return nil
 }
 
+func (s *server) CloseAllModules() {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	for k, v := range s.modules {
+		v.Stop()
+		delete(s.modules, k)
+	}
+}
+
 func (s *server) Close() error {
+	s.CloseAllModules()
+	s.CloseAllSessions()
 	return nil
 }
