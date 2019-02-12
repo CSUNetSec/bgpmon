@@ -3,50 +3,45 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
+	"os/signal"
 
-	"github.com/CSUNetSec/bgpmon/v2/config"
 	"github.com/CSUNetSec/bgpmon/v2/core"
 	_ "github.com/CSUNetSec/bgpmon/v2/modules"
 	"github.com/CSUNetSec/bgpmon/v2/util"
-
-	"net/http"
-	_ "net/http/pprof"
 )
 
 var mainlogger = util.NewLogger("system", "main")
 
 func main() {
 	if len(os.Args) != 2 {
-		mainlogger.Fatalf("no configuration file provided")
+		mainlogger.Fatalf("No configuration file provided")
 	}
 
-	mainlogger.Infof("Reading config file: %s", os.Args[1])
-	if cfile, ferr := os.Open(os.Args[1]); ferr != nil {
-		mainlogger.Fatalf("error opening configuration file:%s", ferr)
-	} else if bc, cerr := config.NewConfig(cfile); cerr != nil {
-		mainlogger.Fatalf("configuration error:%s", cerr)
-	} else {
-		cfile.Close()
-		daemonConf := bc.GetDaemonConfig()
-		if daemonConf.ProfilerOn {
-			mainlogger.Infof("Starting pprof at address:%s", daemonConf.ProfilerHostPort)
-			go func(addr string, log util.Logger) {
-				log.Fatalf("%v", http.ListenAndServe(addr, nil))
-			}(daemonConf.ProfilerHostPort, util.NewLogger("system", "pprof"))
-		}
-
-		server := core.NewServer(bc)
-		printArray(server.ListModuleTypes())
-		err := server.RunModule("example_daemon", "ID1", "")
-		panicIfNotNil(err)
-		err = server.RunModule("example_task", "ID2", "")
-		time.Sleep(2 * time.Second)
-		printArray(server.ListRunningModules())
-		server.CloseModule("ID1")
-		time.Sleep(2 * time.Second)
-		printArray(server.ListRunningModules())
+	server, err := core.NewServerFromFile(os.Args[1])
+	if err != nil {
+		mainlogger.Fatalf("Error creating server: %s", err)
 	}
+
+	err = server.RunModule("rpc", "rpc", ":12289")
+	if err != nil {
+		mainlogger.Fatalf("Failed to start RPC module: %s", err)
+	}
+
+	err = server.RunModule("pprof", "pprof", "localhost:6969")
+	if err != nil {
+		mainlogger.Errorf("Failed to start pprof module: %s", err)
+	}
+
+	WaitOnInterrupt()
+	mainlogger.Infof("Recieved SIGINT, shutting down")
+	server.Close()
+}
+
+func WaitOnInterrupt() {
+	close := make(chan os.Signal, 1)
+	signal.Notify(close, os.Interrupt)
+	<-close
+	return
 }
 
 func printArray(arr []string) {
