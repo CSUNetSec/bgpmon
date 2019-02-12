@@ -11,7 +11,9 @@ type pprofMod struct {
 	*BaseDaemon
 }
 
-func (p *pprofMod) Run(addr string, _ core.FinishFunc) error {
+func (p *pprofMod) Run(addr string, finish core.FinishFunc) error {
+	defer finish()
+
 	p.logger.Errorf("%s", http.ListenAndServe(addr, nil))
 	return nil
 }

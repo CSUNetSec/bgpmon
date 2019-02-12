@@ -12,8 +12,9 @@ type BaseTask struct {
 }
 
 func (b *BaseTask) Run(launchStr string, finish core.FinishFunc) error {
+	defer finish()
+
 	b.logger.Infof("Example task run with: %s", launchStr)
-	finish()
 	return nil
 }
 
