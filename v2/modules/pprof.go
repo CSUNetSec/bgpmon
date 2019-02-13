@@ -4,7 +4,7 @@ import (
 	"github.com/CSUNetSec/bgpmon/v2/core"
 	"github.com/CSUNetSec/bgpmon/v2/util"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" // Needed so the http ListenAndServe includes the profiler
 )
 
 type pprofMod struct {

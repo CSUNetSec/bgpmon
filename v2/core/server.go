@@ -30,6 +30,7 @@ type BgpmondServer interface {
 	Close() error
 }
 
+// SessionHandle ... Structure to wrap the session and session type information
 type SessionHandle struct {
 	Name     string
 	SessType *pb.SessionType
@@ -43,6 +44,7 @@ type server struct {
 	mux      *sync.Mutex
 }
 
+// NewServer ... Create a new server from a configuration
 func NewServer(conf config.Configer) BgpmondServer {
 	s := &server{}
 	s.sessions = make(map[string]SessionHandle)
@@ -52,6 +54,7 @@ func NewServer(conf config.Configer) BgpmondServer {
 	return s
 }
 
+// NewServerFromFile ... Create a new server, loading the configuration from a file
 func NewServerFromFile(fName string) (BgpmondServer, error) {
 	fd, err := os.Open(fName)
 	if err != nil {
@@ -169,12 +172,12 @@ func (s *server) RunModule(modType, name, launchStr string) error {
 		return corelogger.Errorf("Module with ID: %s is already running", name)
 	}
 
-	maker, ok := GetModuleMaker(modType)
+	maker, ok := getModuleMaker(modType)
 	if !ok {
 		return corelogger.Errorf("No module type: %s found", modType)
 	}
 
-	newMod := maker(s, GetModuleLogger(modType, name))
+	newMod := maker(s, getModuleLogger(modType, name))
 	s.modules[name] = newMod
 	go newMod.Run(launchStr, s.GetFinishFunc(name))
 	return nil
@@ -189,7 +192,7 @@ func (s *server) GetFinishFunc(id string) FinishFunc {
 }
 
 func (s *server) ListModuleTypes() []string {
-	return GetModuleTypes()
+	return getModuleTypes()
 }
 
 func (s *server) ListRunningModules() []string {

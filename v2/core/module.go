@@ -7,16 +7,11 @@ import (
 
 // Types of modules
 const (
-	MODULE_TASK = iota
-	MODULE_DAEMON
+	ModuleTask = iota
+	ModuleDaemon
 )
 
-// Stop Codes
-const (
-	MODULE_STOP_CANCEL = iota
-	MODULE_STOP_FINISHED
-)
-
+// Module ... A common interface all modules must satisfy
 type Module interface {
 	Run(string, FinishFunc) error
 	GetType() int
@@ -24,10 +19,11 @@ type Module interface {
 	Stop() error
 }
 
-// This is called by a module when it is finished to let the server know
+// FinishFunc ... This is called by a module when it is finished to let the server know
 // it can deallocate it
 type FinishFunc func()
 
+// ModuleMaker ...  Describes any function that creates a new module
 type ModuleMaker func(BgpmondServer, util.Logger) Module
 
 var knownModules map[string]ModuleMaker
@@ -36,6 +32,7 @@ func init() {
 	knownModules = make(map[string]ModuleMaker)
 }
 
+// RegisterModule ... Register a module creator with the server
 func RegisterModule(typeName string, makeNew ModuleMaker) error {
 	_, exists := knownModules[typeName]
 	if exists {
@@ -46,18 +43,18 @@ func RegisterModule(typeName string, makeNew ModuleMaker) error {
 	return nil
 }
 
-func GetModuleMaker(typeName string) (ModuleMaker, bool) {
+func getModuleMaker(typeName string) (ModuleMaker, bool) {
 	maker, exists := knownModules[typeName]
 	return maker, exists
 }
 
-func GetModuleLogger(modType, modName string) util.Logger {
+func getModuleLogger(modType, modName string) util.Logger {
 	return util.NewLogger("system", "module", "module type", modType, "ID", modName)
 }
 
-func GetModuleTypes() []string {
+func getModuleTypes() []string {
 	var ret []string
-	for k, _ := range knownModules {
+	for k := range knownModules {
 		ret = append(ret, k)
 	}
 	return ret

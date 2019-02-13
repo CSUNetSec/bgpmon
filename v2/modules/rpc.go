@@ -2,7 +2,6 @@ package modules
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/v2/core"
 	"github.com/CSUNetSec/bgpmon/v2/db"
@@ -20,7 +19,7 @@ const (
 
 var (
 	mkNxSessionErr = func(a string) error {
-		return errors.New(fmt.Sprintf("session ID %s not found", a))
+		return fmt.Errorf("Session ID: %s not found", a)
 	}
 )
 
@@ -171,9 +170,8 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 
 	if err := dbStream.Flush(); err != nil {
 		return r.logger.Errorf("Write stream failed to flush: %s", err)
-	} else {
-		r.logger.Infof("write stream success")
 	}
+	r.logger.Infof("write stream success")
 
 	return nil
 }

@@ -32,12 +32,12 @@ func main() {
 		mainlogger.Errorf("Failed to start pprof module: %s", err)
 	}
 
-	WaitOnInterrupt()
+	waitOnInterrupt()
 	mainlogger.Infof("Recieved SIGINT, shutting down")
 	server.Close()
 }
 
-func WaitOnInterrupt() {
+func waitOnInterrupt() {
 	close := make(chan os.Signal, 1)
 	signal.Notify(close, os.Interrupt)
 	<-close
