@@ -45,13 +45,21 @@ type server struct {
 }
 
 // NewServer ... Create a new server from a configuration
-func NewServer(conf config.Configer) BgpmondServer {
+func NewServer(conf config.Configer) (BgpmondServer, error) {
 	s := &server{}
 	s.sessions = make(map[string]SessionHandle)
 	s.modules = make(map[string]Module)
 	s.mux = &sync.Mutex{}
 	s.conf = conf
-	return s
+
+	for _, mod := range conf.GetModules() {
+		err := s.RunModule(mod.Type, mod.ID, mod.Args)
+		if err != nil {
+			s.Close()
+			return nil, err
+		}
+	}
+	return s, nil
 }
 
 // NewServerFromFile ... Create a new server, loading the configuration from a file
@@ -67,7 +75,7 @@ func NewServerFromFile(fName string) (BgpmondServer, error) {
 		return nil, err
 	}
 
-	return NewServer(bc), nil
+	return NewServer(bc)
 }
 
 func (s *server) OpenSession(sType, sID string, workers int) error {

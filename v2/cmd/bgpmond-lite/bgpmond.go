@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/CSUNetSec/bgpmon/v2/core"
 	_ "github.com/CSUNetSec/bgpmon/v2/modules"
@@ -22,14 +23,20 @@ func main() {
 		mainlogger.Fatalf("Error creating server: %s", err)
 	}
 
-	err = server.RunModule("rpc", "rpc", ":12289")
-	if err != nil {
-		mainlogger.Fatalf("Failed to start RPC module: %s", err)
+	rpcRunning := false
+	for _, v := range server.ListRunningModules() {
+		if strings.Contains(v, "ID: rpc") {
+			rpcRunning = true
+			break
+		}
 	}
 
-	err = server.RunModule("pprof", "pprof", "localhost:6969")
-	if err != nil {
-		mainlogger.Errorf("Failed to start pprof module: %s", err)
+	if !rpcRunning {
+		mainlogger.Infof("Configuration didn't include RPC module, launching default")
+		err = server.RunModule("rpc", "rpc", ":12289")
+		if err != nil {
+			mainlogger.Fatalf("Error starting RPC module: %s", err)
+		}
 	}
 
 	waitOnInterrupt()
