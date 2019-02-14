@@ -32,6 +32,7 @@ type Configer interface {
 	GetSessionConfigWithName(string) (SessionConfiger, error)
 	GetDaemonConfig() BgpmonDaemonConfig
 	GetConfiguredNodes() map[string]NodeConfig
+	GetModules() []ModuleConfig
 }
 
 type BgpmonDaemonConfig struct {
@@ -60,6 +61,7 @@ type bgpmondConfig struct {
 	ProfilerHostPort string
 	Sessions         map[string]sessionConfig //configured sessions
 	Nodes            map[string]NodeConfig    //known nodes. all collectors must be present here
+	Modules          map[string]ModuleConfig
 }
 
 func (b *bgpmondConfig) GetSessionConfigs() []SessionConfiger {
@@ -95,6 +97,14 @@ func (b *bgpmondConfig) GetConfiguredNodes() map[string]NodeConfig {
 	return b.Nodes
 }
 
+func (b *bgpmondConfig) GetModules() []ModuleConfig {
+	var ret []ModuleConfig
+	for _, v := range b.Modules {
+		ret = append(ret, v)
+	}
+	return ret
+}
+
 func PutConfiguredNodes(a map[string]NodeConfig, w io.Writer) error {
 	return toml.NewEncoder(w).Encode(a)
 }
@@ -120,6 +130,12 @@ type NodeConfig struct {
 	Description         string
 	Coords              string
 	Location            string
+}
+
+type ModuleConfig struct {
+	Type string
+	ID   string
+	Args string
 }
 
 func (s sessionConfig) GetName() string {
