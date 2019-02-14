@@ -18,6 +18,7 @@ var (
 	}
 )
 
+// These are the sessions currently supported
 const (
 	CochroachSession = sessionType(iota)
 	PostgresSession
@@ -27,20 +28,15 @@ func (s sessionType) String() string {
 	return sessionTypeNames[s]
 }
 
+// Configer This describes a configuration for a bgpmond server
 type Configer interface {
 	GetSessionConfigs() []SessionConfiger
 	GetSessionConfigWithName(string) (SessionConfiger, error)
-	GetDaemonConfig() BgpmonDaemonConfig
 	GetConfiguredNodes() map[string]NodeConfig
 	GetModules() []ModuleConfig
 }
 
-type BgpmonDaemonConfig struct {
-	Address          string
-	ProfilerOn       bool
-	ProfilerHostPort string
-}
-
+// SessionConfiger This describes a configuration for a bgpmond session
 type SessionConfiger interface {
 	Configer
 	GetHostNames() []string
@@ -85,14 +81,6 @@ func (b *bgpmondConfig) GetSessionConfigWithName(a string) (SessionConfiger, err
 	return ret, nil
 }
 
-func (b *bgpmondConfig) GetDaemonConfig() BgpmonDaemonConfig {
-	return BgpmonDaemonConfig{
-		Address:          b.Address,
-		ProfilerOn:       b.ProfilerOn,
-		ProfilerHostPort: b.ProfilerHostPort,
-	}
-}
-
 func (b *bgpmondConfig) GetConfiguredNodes() map[string]NodeConfig {
 	return b.Nodes
 }
@@ -105,6 +93,7 @@ func (b *bgpmondConfig) GetModules() []ModuleConfig {
 	return ret
 }
 
+// PutConfiguredNodes Writes a node configuration in the TOML format
 func PutConfiguredNodes(a map[string]NodeConfig, w io.Writer) error {
 	return toml.NewEncoder(w).Encode(a)
 }
@@ -121,7 +110,7 @@ type sessionConfig struct {
 	WorkerCt int      // The default worker count for this kind of session
 }
 
-//describes another BGP node, either a collector or a peer.
+// NodeConfig describes another BGP node, either a collector or a peer.
 type NodeConfig struct {
 	IP                  string
 	Name                string
@@ -132,6 +121,7 @@ type NodeConfig struct {
 	Location            string
 }
 
+// ModuleConfig Describes a module configuration
 type ModuleConfig struct {
 	Type string
 	ID   string
@@ -171,28 +161,28 @@ func (s sessionConfig) GetWorkerCt() int {
 }
 
 // helper function to sanity check the config file.
-func (c *bgpmondConfig) checkConfig() error {
+func (b *bgpmondConfig) checkConfig() error {
 	inSlice := false
 	var nip net.IP
-	for si, s := range c.Sessions {
+	for si, s := range b.Sessions {
 		for _, stn := range sessionTypeNames {
 			if s.Type == stn {
 				inSlice = true
 			}
 		}
 		//set the pointer to the parent config to make it satisfy Configer too
-		s.Configer = c
-		c.Sessions[si] = s
+		s.Configer = b
+		b.Sessions[si] = s
 	}
 	if !inSlice {
-		return errors.New(fmt.Sprintf("unknown session type name. Known session types are:%v\n", sessionTypeNames))
+		return fmt.Errorf("unknown session type name. Known session types are: %v", sessionTypeNames)
 	}
-	for k, v := range c.Nodes {
+	for k, v := range b.Nodes {
 		if nip = net.ParseIP(k); nip == nil {
 			return errors.New(fmt.Sprintf("malformed ip in config:%s", k))
 		}
 		v.IP = k
-		c.Nodes[k] = v
+		b.Nodes[k] = v
 	}
 
 	return nil
@@ -201,7 +191,7 @@ func (c *bgpmondConfig) checkConfig() error {
 //NewConfig reads a TOML file with the bgpmon configuration, sanity checks it
 //and returns a bgpmondConfig struct which should satisfy the Configer interface,
 //or an error
-func NewConfig(creader io.Reader) (*bgpmondConfig, error) {
+func NewConfig(creader io.Reader) (Configer, error) {
 	bc := bgpmondConfig{}
 	if _, err := toml.DecodeReader(creader, &bc); err != nil {
 		return nil, err
