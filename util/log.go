@@ -5,6 +5,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Logger is a wrapper on a logrus.FieldLogger, meant to ease use
 type Logger interface {
 	Infof(string, ...interface{})
 	Errorf(string, ...interface{}) error
@@ -29,6 +30,7 @@ func (l logger) Fatalf(tmpl string, args ...interface{}) {
 	l.log.Fatalf(tmpl, args...)
 }
 
+// NewLogger returns a util.Logger, with pairs of strings matched for fields
 func NewLogger(fields ...string) Logger {
 	if len(fields)%2 != 0 {
 		panic(fmt.Errorf("Fields length must be a multiple of two"))

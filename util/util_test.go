@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	WP_SLEEP        = 2 * time.Second
-	WP_MAX_RUNNING  = 10
-	WP_MAX_LAUNCHED = 50
+	WPSleep       = 2 * time.Second
+	WPMaxRunning  = 10
+	WPMaxLaunched = 50
 )
 
 func TestWorkerPool(t *testing.T) {
@@ -17,24 +17,24 @@ func TestWorkerPool(t *testing.T) {
 		t.SkipNow()
 	}
 
-	t.Logf("Testing worker pool with %d goroutines\n", WP_MAX_RUNNING)
-	wp := NewWorkerPool(WP_MAX_RUNNING)
+	t.Logf("Testing worker pool with %d goroutines\n", WPMaxRunning)
+	wp := NewWorkerPool(WPMaxRunning)
 
 	mx := &sync.Mutex{}
 	active := 0
 	finished := 0
 
-	for i := 0; i < WP_MAX_LAUNCHED; i++ {
+	for i := 0; i < WPMaxLaunched; i++ {
 		wp.Add()
 		go func() {
 			mx.Lock()
 			active++
-			if active > WP_MAX_RUNNING {
-				t.Errorf("Max running of %d exceeded\n", WP_MAX_RUNNING)
+			if active > WPMaxRunning {
+				t.Errorf("Max running of %d exceeded\n", WPMaxRunning)
 			}
 			mx.Unlock()
 
-			time.Sleep(WP_SLEEP)
+			time.Sleep(WPSleep)
 
 			mx.Lock()
 			active--
@@ -46,8 +46,8 @@ func TestWorkerPool(t *testing.T) {
 	}
 
 	closed := wp.Close()
-	if finished < WP_MAX_LAUNCHED {
-		t.Errorf("Only %d/%d goroutines allowed to finish\n", finished, WP_MAX_LAUNCHED)
+	if finished < WPMaxLaunched {
+		t.Errorf("Only %d/%d goroutines allowed to finish\n", finished, WPMaxLaunched)
 	}
 
 	if !closed {
@@ -65,7 +65,7 @@ func TestWorkerPoolClose(t *testing.T) {
 	wp.Add()
 	go func() {
 		defer wp.Done()
-		time.Sleep(WP_SLEEP)
+		time.Sleep(WPSleep)
 		finished = true
 	}()
 

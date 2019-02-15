@@ -12,6 +12,7 @@ var (
 	errnoip = errors.New("could not decode IP from protobuf IP wrapper")
 )
 
+// GetIPWrapper returns a net.IP from a pbcomm.IPAddressWrapper
 func GetIPWrapper(pip *pbcomm.IPAddressWrapper) (ret net.IP, err error) {
 	if pip != nil && pip.Ipv4 != nil {
 		ret = net.IP(pip.Ipv4)
@@ -23,6 +24,7 @@ func GetIPWrapper(pip *pbcomm.IPAddressWrapper) (ret net.IP, err error) {
 	return
 }
 
+// GetTimeColIP Returns the time and collector IP from a capture WriteRequest
 func GetTimeColIP(pb *pb.WriteRequest) (time.Time, net.IP, error) {
 	secs := time.Unix(int64(pb.GetBgpCapture().GetTimestamp()), 0)
 	locip := pb.GetBgpCapture().GetLocalIp()
@@ -30,6 +32,7 @@ func GetTimeColIP(pb *pb.WriteRequest) (time.Time, net.IP, error) {
 	return secs, colip, err
 }
 
+// GetPeerIP Returns a PeerIP from a capture WriteRequest
 func GetPeerIP(wr *pb.WriteRequest) (net.IP, error) {
 	capt := wr.GetBgpCapture()
 	pipwrap := capt.GetPeerIp()
@@ -37,6 +40,7 @@ func GetPeerIP(wr *pb.WriteRequest) (net.IP, error) {
 	return pip, err
 }
 
+// GetAsPath returns an AS path from a capture WriteRequest
 func GetAsPath(wr *pb.WriteRequest) []int {
 	segments := wr.GetBgpCapture().GetUpdate().GetAttrs().GetAsPath()
 
@@ -57,41 +61,45 @@ func GetAsPath(wr *pb.WriteRequest) []int {
 	return path
 }
 
+// GetNextHop returns the IP of the next hop from a capture WriteRequest
 func GetNextHop(wr *pb.WriteRequest) (net.IP, error) {
 	nh := wr.GetBgpCapture().GetUpdate().GetAttrs().GetNextHop()
 	nhip, err := GetIPWrapper(nh)
 	return nhip, err
 }
 
+// GetOriginAs Returns the AS at index 0 of the ASPath from a capture WriteRequest
 func GetOriginAs(wr *pb.WriteRequest) int {
 	as := wr.GetBgpCapture().GetUpdate().GetAttrs().GetOrigin()
 	return int(as)
 }
 
+// GetAdvertizedPrefixes returns the advertized routes from a capture WriteRequest
 func GetAdvertizedPrefixes(wr *pb.WriteRequest) ([]*net.IPNet, error) {
 	routes := wr.GetBgpCapture().GetUpdate().GetAdvertizedRoutes()
 	if routes == nil {
 		return nil, errors.New("No advertized prefixes")
 	}
 
-	return GetPrefixListAsIPNet(routes.Prefixes)
+	return getPrefixListAsIPNet(routes.Prefixes)
 }
 
+// GetWithdrawnPrefixes returns the withdrawn routes from a captured WriteRequest
 func GetWithdrawnPrefixes(wr *pb.WriteRequest) ([]*net.IPNet, error) {
 	routes := wr.GetBgpCapture().GetUpdate().GetWithdrawnRoutes()
 	if routes == nil {
 		return nil, errors.New("No withdrawn prefixes")
 	}
-	return GetPrefixListAsIPNet(routes.Prefixes)
+	return getPrefixListAsIPNet(routes.Prefixes)
 }
 
-func GetPrefixListAsIPNet(prefs []*pbcomm.PrefixWrapper) ([]*net.IPNet, error) {
+func getPrefixListAsIPNet(prefs []*pbcomm.PrefixWrapper) ([]*net.IPNet, error) {
 	if prefs == nil {
-		return nil, errors.New("No prefixes provided.")
+		return nil, errors.New("no prefixes provided")
 	}
 	var ret []*net.IPNet
 	for _, pref := range prefs {
-		net, err := GetPrefixAsIPNet(pref)
+		net, err := getPrefixAsIPNet(pref)
 
 		// Should this return an empty set or just ignore this entry?
 		if err != nil {
@@ -104,7 +112,7 @@ func GetPrefixListAsIPNet(prefs []*pbcomm.PrefixWrapper) ([]*net.IPNet, error) {
 	return ret, nil
 }
 
-func GetPrefixAsIPNet(pw *pbcomm.PrefixWrapper) (*net.IPNet, error) {
+func getPrefixAsIPNet(pw *pbcomm.PrefixWrapper) (*net.IPNet, error) {
 	ip, err := GetIPWrapper(pw.Prefix)
 	if err != nil {
 		return nil, err
@@ -120,6 +128,7 @@ func GetPrefixAsIPNet(pw *pbcomm.PrefixWrapper) (*net.IPNet, error) {
 	return &net.IPNet{ip, mask}, nil
 }
 
+//GetProtoMsg Returns a byte array representing the capture from a WritRequest
 func GetProtoMsg(wr *pb.WriteRequest) []byte {
 	return []byte(wr.GetBgpCapture().String())
 }

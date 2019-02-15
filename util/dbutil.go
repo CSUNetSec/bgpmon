@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// SumNodeConfs Combines two maps of NodeConfigs, preferring the first in case of overlap
 func SumNodeConfs(confnodes, dbnodes map[string]config.NodeConfig) map[string]config.NodeConfig {
 	ret := make(map[string]config.NodeConfig)
 	for k1, v1 := range confnodes {
@@ -44,7 +45,7 @@ func (c collectorDateString) GetNameDates() (string, string, time.Time, time.Tim
 	return c.colName, c.GetNameDateStr(), c.startDate, c.endDate
 }
 
-//this function gets the date for a new collector table to be added with the desired duration minutes
+//GetNodeTableNameDates this function gets the date for a new collector table to be added with the desired duration minutes
 //and returns a string that should be the table name, the truncated time, and the end time.
 func GetNodeTableNameDates(name string, stime time.Time, durmin int) (string, time.Time, time.Time) {
 	dur := time.Duration(durmin) * time.Minute
@@ -53,7 +54,7 @@ func GetNodeTableNameDates(name string, stime time.Time, durmin int) (string, ti
 	return tname, trunctime, trunctime.Add(dur)
 }
 
-func NewCollectorDateString(name string, sd time.Time, ed time.Time) *collectorDateString {
+func newCollectorDateString(name string, sd time.Time, ed time.Time) *collectorDateString {
 	return &collectorDateString{
 		colName:   name,
 		startDate: sd,
@@ -61,7 +62,7 @@ func NewCollectorDateString(name string, sd time.Time, ed time.Time) *collectorD
 	}
 }
 
-//collector-date strings ordered by their starting date.
+//CollectorsByNameDate collector-date strings ordered by their starting date.
 type CollectorsByNameDate []collectorDateString
 
 func (c CollectorsByNameDate) String() string {
@@ -93,7 +94,7 @@ func (c CollectorsByNameDate) Less(i, j int) bool {
 	return c[i].startDate.Before(c[j].startDate)
 }
 
-//this will return the index and if the name and date are in the slice. caller has to check existence.
+//ColNameDateInSlice this will return the index and if the name and date are in the slice. caller has to check existence.
 func (c CollectorsByNameDate) ColNameDateInSlice(colname string, date time.Time) (int, bool) {
 	//fmt.Printf("looking for %s , date :%v in slice:%s\n", colname, date, c)
 	//find a possible index
@@ -125,26 +126,27 @@ func (c CollectorsByNameDate) ColNameDateInSlice(colname string, date time.Time)
 //change his collectorsByNameDate reference to the new updated one.
 //there is a helper func in schemamgr for this called AddNodeAndTableInCache
 func (c CollectorsByNameDate) Add(col string, sd time.Time, ed time.Time) (ret CollectorsByNameDate) {
-	newnode := NewCollectorDateString(col, sd, ed)
+	newnode := newCollectorDateString(col, sd, ed)
 	ret = append(c, *newnode)
 	sort.Stable(ret)
 	//fmt.Printf("cols from :%+v --> %+v\n", c, ret)
 	return
 }
 
-// This is a wrapper around sql.Tx, sql.Db, and others we implement
-type SqlExecutor interface {
+// SQLExecutor is a wrapper around sql.Tx, sql.Db, and others we implement
+type SQLExecutor interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
-type SqlErrorExecutor interface {
-	SqlExecutor
+// SQLErrorExecutor is a SQLExecutor with a persistent error, useful in tx
+type SQLErrorExecutor interface {
+	SQLExecutor
 	SetError(error)
 }
 
-//handles a strange case where protobuf deserialize an array element of nil as "<nil>"
+//PrefixesToPQArray handles a strange case where protobuf deserialize an array element of nil as "<nil>"
 //and that kills the db insert statement cause it can't make it into a cidr.
 func PrefixesToPQArray(n []*net.IPNet) interface {
 	driver.Valuer

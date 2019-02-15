@@ -6,17 +6,18 @@ import (
 	"time"
 )
 
-type SqlBuffer interface {
+// SQLBuffer is an interface used to describe anything that can buffer sql values to be flushed later
+type SQLBuffer interface {
 	Add(arg ...interface{}) error
 	Flush() error
 	Clear()
 }
 
-// Represents the VALUES() array for an insert statement
+// InsertBuffer Represents the VALUES() array for an insert statement
 // Helps to optimize the amount of inserted values on a
 // single query
 type InsertBuffer struct {
-	ex         SqlErrorExecutor // Executor to flush to (with the ability to set the internal error)
+	ex         SQLErrorExecutor // Executor to flush to (with the ability to set the internal error)
 	stmt       string           // base stmt
 	addedStmt  string           // generated statement
 	stmtbld    strings.Builder  //to efficiently build the string
@@ -27,10 +28,12 @@ type InsertBuffer struct {
 	usePosArgs bool             // Use $1 style args in the statement instead of ?
 }
 
-func NewInsertBuffer(ex SqlErrorExecutor, stmt string, max int, batchSize int, usePositional bool) *InsertBuffer {
+// NewInsertBuffer Returns a SQLBuffer which buffers values for an insert statement
+func NewInsertBuffer(ex SQLErrorExecutor, stmt string, max int, batchSize int, usePositional bool) SQLBuffer {
 	return &InsertBuffer{max: max, ex: ex, stmt: stmt, addedStmt: "", ct: 0, usePosArgs: usePositional, batchSize: batchSize}
 }
 
+// Add Satisfies the SQLBuffer interface
 func (ib *InsertBuffer) Add(arg ...interface{}) error {
 	if len(arg) != ib.batchSize {
 		return fmt.Errorf("Incorrect number of arguments. Expected: %d, Got %d", ib.batchSize, len(arg))
@@ -61,6 +64,7 @@ func (ib *InsertBuffer) Add(arg ...interface{}) error {
 	return nil
 }
 
+// Flush Satisfies the SQLBuffer interface
 func (ib *InsertBuffer) Flush() error {
 	var convStmt string
 	if ib.ct == 0 {
@@ -93,6 +97,7 @@ func (ib *InsertBuffer) Flush() error {
 	return nil
 }
 
+// Clear Satisfies the SQLBuffer interface
 func (ib *InsertBuffer) Clear() {
 	ib.values = ib.values[:0]
 	ib.ct = 0
@@ -100,23 +105,26 @@ func (ib *InsertBuffer) Clear() {
 	ib.stmtbld.Reset()
 }
 
+// TimedBuffer is a SQLBuffer that wraps another SQLBuffer, flushing it after a certain amount of time
 type TimedBuffer struct {
-	SqlBuffer
+	SQLBuffer
 	lastUpdate time.Time
 	tick       *time.Ticker
 	duration   time.Duration
 	cancel     chan bool
 }
 
-func NewTimedBuffer(parent SqlBuffer, d time.Duration) *TimedBuffer {
+// NewTimedBuffer returns a TimedBuffer
+func NewTimedBuffer(parent SQLBuffer, d time.Duration) *TimedBuffer {
 	cancel := make(chan bool)
-	t := &TimedBuffer{SqlBuffer: parent, lastUpdate: time.Now().UTC(), tick: time.NewTicker(d), duration: d, cancel: cancel}
+	t := &TimedBuffer{SQLBuffer: parent, lastUpdate: time.Now().UTC(), tick: time.NewTicker(d), duration: d, cancel: cancel}
 	go t.wait()
 	return t
 }
 
+// Add Satisfies the SQLBuffer interface
 func (t *TimedBuffer) Add(args ...interface{}) error {
-	err := t.SqlBuffer.Add(args...)
+	err := t.SQLBuffer.Add(args...)
 	if err != nil {
 		return err
 	}
@@ -124,6 +132,7 @@ func (t *TimedBuffer) Add(args ...interface{}) error {
 	return nil
 }
 
+// Stop is unique to the TimedBuffer, it stops the timer and closes the waiting goroutine
 func (t *TimedBuffer) Stop() {
 	t.tick.Stop()
 	close(t.cancel)

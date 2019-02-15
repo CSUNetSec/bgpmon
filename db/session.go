@@ -42,7 +42,7 @@ type SessionStream struct {
 	db      Dber
 	oper    *dbOper
 	ex      *ctxtxOperExecutor
-	buffers map[string]util.SqlBuffer
+	buffers map[string]util.SQLBuffer
 }
 
 //NewSessionStream returns a newly allocated SessionStream
@@ -67,7 +67,7 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 
 	ss.req = make(chan CommonMessage)
 	ss.resp = make(chan CommonReply)
-	ss.buffers = make(map[string]util.SqlBuffer)
+	ss.buffers = make(map[string]util.SQLBuffer)
 	ctxTx, _ := GetNewExecutor(context.Background(), ss.db, true, ctxTimeout)
 	ss.ex = newCtxTxSessionExecutor(ctxTx, ss.oper)
 

@@ -1,11 +1,10 @@
 package util
 
 import (
-	"fmt"
-	"strings"
 	"sync"
 )
 
+//WorkerPool is a struct that manages the amount of goroutines by blocking on and add
 type WorkerPool struct {
 	max      int
 	active   int
@@ -16,6 +15,7 @@ type WorkerPool struct {
 	daemonWg *sync.WaitGroup
 }
 
+// NewWorkerPool returns a worker pool with ct as the maximum number of goroutines
 func NewWorkerPool(ct int) *WorkerPool {
 	wp := &WorkerPool{max: ct, active: 0, workerWg: &sync.WaitGroup{}, daemonWg: &sync.WaitGroup{}}
 	wp.req = make(chan bool)
@@ -27,16 +27,19 @@ func NewWorkerPool(ct int) *WorkerPool {
 	return wp
 }
 
+// Add adds a worker to the pool
 func (wp *WorkerPool) Add() {
 	wp.workerWg.Add(1)
 	<-wp.req
 }
 
+// Done signifies a worker is finished
 func (wp *WorkerPool) Done() {
 	wp.done <- true
 	wp.workerWg.Done()
 }
 
+// Close waits for all workers to be finished and closes the daemon goroutine
 func (wp *WorkerPool) Close() bool {
 	wp.workerWg.Wait()
 	wp.close <- true
@@ -67,17 +70,4 @@ func (wp *WorkerPool) daemon() {
 			}
 		}
 	}
-}
-
-// Takes a stmt with "?" placeholders and replaces
-// them with position "$" placeholders
-func convertSqlStmt(stmt string) string {
-	ret := stmt
-	ct := 1
-	for strings.Index(ret, "?") != -1 {
-		rep := fmt.Sprintf("$%d", ct)
-		ret = strings.Replace(ret, "?", rep, 1)
-		ct++
-	}
-	return ret
 }

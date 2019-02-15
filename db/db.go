@@ -167,9 +167,9 @@ func newPostgressDbOper() *dbOper {
 	}
 }
 
-//SessionExecutor wraps an util.SqlErrorExecutor with getdboper
+//SessionExecutor wraps an util.SQLErrorExecutor with getdboper
 type SessionExecutor interface {
-	util.SqlErrorExecutor
+	util.SQLErrorExecutor
 	getdboper
 }
 
@@ -276,7 +276,7 @@ func (c *ctxTx) QueryRow(query string, args ...interface{}) *sql.Row {
 
 //a wrapper of a sql.Tx that is able to accept multiple
 //db ops and run them in the same tx.
-//it will implement the SqlErrorExectutor interface and choose
+//it will implement the SQLErrorExectutor interface and choose
 //where to apply the sql function depending on how it was constructed.
 //(either apply everything in the transaction and then the last Done()
 //will commit, or straight on the DB and the last Done() is a noop.

@@ -23,7 +23,7 @@ func (te *TestExecutor) checkLast(query string, args ...interface{}) bool {
 		return false
 	}
 
-	for i, _ := range args {
+	for i := range args {
 		if args[i] != te.lastVals[i] {
 			return false
 		}
@@ -39,11 +39,11 @@ func (te *TestExecutor) Exec(query string, args ...interface{}) (sql.Result, err
 	return nil, nil
 }
 
-func (t TestExecutor) Query(query string, args ...interface{}) (*sql.Rows, error) {
+func (te TestExecutor) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	return nil, nil
 }
 
-func (t TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
+func (te TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
 	return nil
 }
 
