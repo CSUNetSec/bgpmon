@@ -50,14 +50,11 @@ type SessionConfiger interface {
 }
 
 type bgpmondConfig struct {
-	Address          string
-	DebugOut         string
-	ErrorOut         string
-	ProfilerOn       bool
-	ProfilerHostPort string
-	Sessions         map[string]sessionConfig //configured sessions
-	Nodes            map[string]NodeConfig    //known nodes. all collectors must be present here
-	Modules          map[string]ModuleConfig
+	DebugOut string
+	ErrorOut string
+	Sessions map[string]sessionConfig //configured sessions
+	Nodes    map[string]NodeConfig    //known nodes. all collectors must be present here
+	Modules  map[string]ModuleConfig
 }
 
 func (b *bgpmondConfig) GetSessionConfigs() []SessionConfiger {
