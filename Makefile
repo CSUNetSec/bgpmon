@@ -1,32 +1,43 @@
-BINOUT=bgpmon
-BINDOUT=bgpmond
+BINDIR=bin
+BGPMON-BIN=bgpmon
+BGPMOND-BIN=bgpmond
+BGPMONSRC=cmd/bgpmon/
+BGPMONDSRC=cmd/bgpmond/
+GO111MODULE=on
 
 all: build
 
-bgpmon: 
-	cd cmd/bgpmon;\
-	go build -o ../../${BINOUT} || (echo "running go get"; go get; go get -u; go build -o ../../${BINOUT});\
-	cd ../../;
 
-bgpmond:
-	cd cmd/bgpmond;\
-	go build -o ../../${BINDOUT} || (echo "running go get"; go get; go get -u; go build -o ../../${BINDOUT});\
-	cd ../../;
+makebindir:
+	mkdir -p ${BINDIR}
 
-bgpmon-linux: 
-	cd cmd/bgpmon;\
-	GOOS="linux" go build -o ../../${BINOUT}-linux || (echo "running go get"; go get; go get -u; go build -o ../../${BINOUT}-linux);\
-	cd ../../;
+${BINDIR}/${BGPMON-BIN}:
+	cd ${BGPMONSRC}; \
+	GO111MODULE=on go build; \
+	mv ${BGPMON-BIN} ../../${BINDIR}; \
+	cd ../..
 
-bgpmond-linux:
-	cd cmd/bgpmond;\
-	GOOS="linux" go build -o ../../${BINDOUT}-linux || (echo "running go get"; go get; go get -u; go build -o ../../${BINDOUT}-linux);\
-	cd ../../;
+${BINDIR}/${BGPMOND-BIN}:
+	cd ${BGPMONDSRC}; \
+	GO111MODULE=on go build; \
+	mv ${BGPMOND-BIN} ../../${BINDIR}; \
+	cd ../..
 
-build: bgpmon bgpmond
+${BINDIR}/${BGPMON-BIN}-linux:
+	cd ${BGPMONSRC}; \
+	GOOS="linux" go build; \
+	mv ${BGPMON-BIN} ../../${BINDIR}/${BGPMON-BIN}-linux; \
+	cd ../..
 
-linux: bgpmon-linux bgpmond-linux
+${BINDIR}/${BGPMOND-BIN}-linux:
+	cd ${BGPMONDSRC}; \
+	GOOS="linux" go build; \
+	mv ${BGPMOND-BIN} ../../${BINDIR}/${BGPMOND-BIN}-linux; \
+	cd ../..
+
+build: makebindir ${BINDIR}/${BGPMON-BIN} ${BINDIR}/${BGPMOND-BIN}
+
+linux: makebindir ${BINDIR}/${BGPMON-BIN}-linux ${BINDIR}/${BGPMOND-BIN}-linux
 
 clean:
-	rm -f bgpmon; \
-	rm -f bgpmond;
+	rm -rf ${BINDIR}
