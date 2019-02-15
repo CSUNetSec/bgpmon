@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/CSUNetSec/bgpmon/v2/config"
-	"github.com/CSUNetSec/bgpmon/v2/util"
+	"github.com/CSUNetSec/bgpmon/config"
+	"github.com/CSUNetSec/bgpmon/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
@@ -28,6 +28,10 @@ const (
 	//SessionStreamWriteMRT is an argument for Send
 	SessionStreamWriteMRT
 )
+
+// ReadStream is an interface to represent the different kinds of reads that can be done on a session
+type ReadStream interface {
+}
 
 //SessionStream accepts CommonMessages and returns CommonReplies.
 //internally it synchronizes with the schema manager and keeps open buffers

@@ -3,9 +3,9 @@ package modules
 import (
 	"context"
 	"fmt"
-	"github.com/CSUNetSec/bgpmon/v2/core"
-	"github.com/CSUNetSec/bgpmon/v2/db"
-	"github.com/CSUNetSec/bgpmon/v2/util"
+	core "github.com/CSUNetSec/bgpmon"
+	"github.com/CSUNetSec/bgpmon/db"
+	"github.com/CSUNetSec/bgpmon/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"google.golang.org/grpc"
 	"io"

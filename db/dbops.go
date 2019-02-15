@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/CSUNetSec/bgpmon/v2/config"
-	"github.com/CSUNetSec/bgpmon/v2/util"
+	"github.com/CSUNetSec/bgpmon/config"
+	"github.com/CSUNetSec/bgpmon/util"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 )

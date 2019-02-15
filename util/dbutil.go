@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/CSUNetSec/bgpmon/v2/config"
+	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/lib/pq"
 	"net"
 	"sort"

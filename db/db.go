@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/CSUNetSec/bgpmon/v2/config"
-	"github.com/CSUNetSec/bgpmon/v2/util"
+	"github.com/CSUNetSec/bgpmon/config"
+	"github.com/CSUNetSec/bgpmon/util"
 	"time"
 )
 

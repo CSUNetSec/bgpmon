@@ -1,8 +1,8 @@
 package modules
 
 import (
-	"github.com/CSUNetSec/bgpmon/v2/core"
-	"github.com/CSUNetSec/bgpmon/v2/util"
+	core "github.com/CSUNetSec/bgpmon"
+	"github.com/CSUNetSec/bgpmon/util"
 	"net/http"
 	_ "net/http/pprof" // Needed so the http ListenAndServe includes the profiler
 )

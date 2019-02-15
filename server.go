@@ -3,9 +3,9 @@ package core
 import (
 	"context" // XXX: Get rid of this when session no longer needs it
 	"fmt"
-	"github.com/CSUNetSec/bgpmon/v2/config"
-	"github.com/CSUNetSec/bgpmon/v2/db"
-	"github.com/CSUNetSec/bgpmon/v2/util"
+	"github.com/CSUNetSec/bgpmon/config"
+	"github.com/CSUNetSec/bgpmon/db"
+	"github.com/CSUNetSec/bgpmon/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"os"
 	"sync"
@@ -22,6 +22,7 @@ type BgpmondServer interface {
 	ListSessions() []SessionHandle
 	CloseSession(string) error
 	OpenWriteStream(string) (*db.SessionStream, error)
+	OpenReadStream(string) (db.ReadStream, error)
 
 	RunModule(string, string, string) error
 	ListModuleTypes() []string
@@ -169,6 +170,11 @@ func (s *server) OpenWriteStream(sID string) (*db.SessionStream, error) {
 	}
 
 	return stream, nil
+}
+
+func (s *server) OpenReadStream(sID string) (db.ReadStream, error) {
+	return nil, nil
+
 }
 
 func (s *server) RunModule(modType, name, launchStr string) error {

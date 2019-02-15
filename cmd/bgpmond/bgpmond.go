@@ -6,9 +6,9 @@ import (
 	"os/signal"
 	"strings"
 
-	"github.com/CSUNetSec/bgpmon/v2/core"
-	_ "github.com/CSUNetSec/bgpmon/v2/modules"
-	"github.com/CSUNetSec/bgpmon/v2/util"
+	core "github.com/CSUNetSec/bgpmon"
+	_ "github.com/CSUNetSec/bgpmon/modules"
+	"github.com/CSUNetSec/bgpmon/util"
 )
 
 var mainlogger = util.NewLogger("system", "main")

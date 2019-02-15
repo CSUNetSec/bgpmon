@@ -2,7 +2,7 @@ package db
 
 import (
 	"database/sql"
-	"github.com/CSUNetSec/bgpmon/v2/config"
+	"github.com/CSUNetSec/bgpmon/config"
 	"os"
 	"testing"
 )

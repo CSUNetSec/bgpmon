@@ -5,7 +5,7 @@ import (
 
 	"encoding"
 
-	"github.com/CSUNetSec/bgpmon/v2/config"
+	"github.com/CSUNetSec/bgpmon/config"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 )
 
