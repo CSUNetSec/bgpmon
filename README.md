@@ -1,32 +1,40 @@
 BGPmon is a client server application to store and analyze large amounts
 of BGP data.
 
-#Installation
+# Installation
+
 Requirements
 1. Golang > 1.11
 2. make
 
 Running make will create two binaries under bin. To run the daemon,
 run:
+
     bgpmond conf-file
 
-#Example client commands
+# Example client commands
+
 The client works over RPC, so the rpc module must be started in order
 for the client to work.
 
 To show configured sessions on the server
+
     bgpmon listAvailable
 
 To open a configured session
+
     bgpmon open LocalPostgres -s sID
 
 To write MRT files
+
     bgpmon write sID mrtFiles...
 
 To close a session
+
     bgpmon close sID
 
-#Example config file
+# Example config file
+
     DebugOut = "stdout"
     ErrorOut = "stderr"
 
