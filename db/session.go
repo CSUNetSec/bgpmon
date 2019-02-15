@@ -68,7 +68,7 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 	ss.req = make(chan CommonMessage)
 	ss.resp = make(chan CommonReply)
 	ss.buffers = make(map[string]util.SQLBuffer)
-	ctxTx, _ := GetNewExecutor(context.Background(), ss.db, true, ctxTimeout)
+	ctxTx, _ := getNewExecutor(context.Background(), ss.db, true, ctxTimeout)
 	ss.ex = newCtxTxSessionExecutor(ctxTx, ss.oper)
 
 	go ss.listen(daemonCancel)

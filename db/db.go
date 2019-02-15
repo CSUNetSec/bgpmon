@@ -208,7 +208,7 @@ func newDbSessionExecutor(db *sql.DB, dbo *dbOper) *dbOperExecutor {
 //sqlExecutor interface. The argument passed instructs it to either
 //do it on a transaction if true, or on the normal DB connection if false.
 //caller must call Done() that releases resources.
-func GetNewExecutor(pc context.Context, s Dber, doTx bool, ctxTimeout time.Duration) (*ctxTx, error) {
+func getNewExecutor(pc context.Context, s Dber, doTx bool, ctxTimeout time.Duration) (*ctxTx, error) {
 	var (
 		tx  *sql.Tx
 		err error

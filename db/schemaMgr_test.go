@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	gex SessionExecutor       // global session executor for tests
-	gdb *sql.DB         = nil // global sql db
+	gex SessionExecutor // global session executor for tests
+	gdb *sql.DB         // global sql db
 )
 
 func getex() (SessionExecutor, *sql.DB) {
