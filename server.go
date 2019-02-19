@@ -1,7 +1,8 @@
-package core
+// Package bgpmon provides the core interfaces for developing bgpmon client programs
+// and modules.
+package bgpmon
 
 import (
-	"context" // XXX: Get rid of this when session no longer needs it
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/db"
@@ -15,9 +16,14 @@ var (
 	corelogger = util.NewLogger("system", "core")
 )
 
-// BgpmondServer ...
+// BgpmondServer is the interface for interacting with a server instance.
+// It provides function to open and close sessions and modules, and get
+// data on the state on the server.
 type BgpmondServer interface {
-	OpenSession(string, string, int) error
+	// Opens a session of type sType, which must come from the config file.
+	// The ID of this session is sID, which is used to interact with this
+	// session, and wc is the worker count, or 0, to use a default wc of 1.
+	OpenSession(sType, sID string, wc int) error
 	ListSessionTypes() []*pb.SessionType
 	ListSessions() []SessionHandle
 	CloseSession(string) error
@@ -31,7 +37,7 @@ type BgpmondServer interface {
 	Close() error
 }
 
-// SessionHandle ... Structure to wrap the session and session type information
+// SessionHandle is used to return information on an open session.
 type SessionHandle struct {
 	Name     string
 	SessType *pb.SessionType
@@ -45,7 +51,10 @@ type server struct {
 	mux      *sync.Mutex
 }
 
-// NewServer ... Create a new server from a configuration
+// NewServer creates a BgpmondServer instance from a configuration. It loads
+// session types from the configuration, and launches any modules specified.
+// It returns an error if a module type is specified that isn't registered
+// with the server.
 func NewServer(conf config.Configer) (BgpmondServer, error) {
 	s := &server{}
 	s.sessions = make(map[string]SessionHandle)
@@ -63,7 +72,9 @@ func NewServer(conf config.Configer) (BgpmondServer, error) {
 	return s, nil
 }
 
-// NewServerFromFile ... Create a new server, loading the configuration from a file
+// NewServerFromFile does the same thing as NewServer, but loads the
+// configuration from a specified file name. Returns an error if the
+// file can't be parsed, or specifies an invalid module.
 func NewServerFromFile(fName string) (BgpmondServer, error) {
 	fd, err := os.Open(fName)
 	if err != nil {
@@ -92,7 +103,7 @@ func (s *server) OpenSession(sType, sID string, workers int) error {
 		return corelogger.Errorf("No session type with session type name: %s found", sType)
 	}
 
-	session, err := db.NewSession(context.Background(), sc, sID, workers)
+	session, err := db.NewSession(nil, sc, sID, workers)
 	if err != nil {
 		return corelogger.Errorf("Create session failed: %v", err)
 	}
@@ -157,12 +168,13 @@ func (s *server) ListSessions() []SessionHandle {
 	return sList
 }
 
-// Does this need to lock the mutex because it reads s.sessions?
 func (s *server) OpenWriteStream(sID string) (*db.SessionStream, error) {
+	s.mux.Lock()
 	sh, ok := s.sessions[sID]
 	if !ok {
 		return nil, corelogger.Errorf("Can't open stream on nonexistant session: %s", sID)
 	}
+	s.mux.Unlock()
 
 	stream, err := sh.Session.Do(db.SessionOpenStream, nil)
 	if err != nil {
@@ -193,11 +205,11 @@ func (s *server) RunModule(modType, name, launchStr string) error {
 
 	newMod := maker(s, getModuleLogger(modType, name))
 	s.modules[name] = newMod
-	go newMod.Run(launchStr, s.GetFinishFunc(name))
+	go newMod.Run(launchStr, s.getFinishFunc(name))
 	return nil
 }
 
-func (s *server) GetFinishFunc(id string) FinishFunc {
+func (s *server) getFinishFunc(id string) FinishFunc {
 	return func() {
 		s.mux.Lock()
 		delete(s.modules, id)
