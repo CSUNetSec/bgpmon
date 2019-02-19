@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/CSUNetSec/bgpmon/v2/util"
+	"github.com/CSUNetSec/bgpmon/util"
 	monpb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/CSUNetSec/protoparse/fileutil"
 	//	"github.com/CSUNetSec/protoparse/filter"
