@@ -74,15 +74,3 @@ func TestWorkerPoolClose(t *testing.T) {
 		t.Errorf("Worker pool closed before individual workers finished")
 	}
 }
-
-func TestConvertSqlStatement(t *testing.T) {
-	if convertSqlStmt("(?,?,?)") != "($1,$2,$3)" {
-		t.Fail()
-	}
-	if convertSqlStmt("?") != "$1" {
-		t.Fail()
-	}
-	if convertSqlStmt("") != "" {
-		t.Fail()
-	}
-}

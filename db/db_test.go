@@ -54,9 +54,9 @@ func TestMakeSchema(t *testing.T) {
 	}
 	defer db.Close()
 	sex := newDbSessionExecutor(db, pdboper)
-	msg := NewCustomMessage("dbs", "nodes")
+	msg := newCustomMessage("dbs", "nodes")
 	t.Log("postgres opened for makeschema test")
-	if err := checkSchema(sex, msg).GetErr(); err != nil && err != errNoTable {
+	if err := checkSchema(sex, msg).Error(); err != nil && err != errNoTable {
 		t.Fatal(err)
 	} else if err == errNoTable {
 		t.Logf("Tables not found")
@@ -64,7 +64,7 @@ func TestMakeSchema(t *testing.T) {
 		t.Logf("Tables found")
 	}
 
-	if err := makeSchema(sex, msg).GetErr(); err != nil {
+	if err := makeSchema(sex, msg).Error(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -89,12 +89,12 @@ func TestSyncNodes(t *testing.T) {
 	}
 	innodes[cn1.IP] = cn1
 	innodes[cn2.IP] = cn2
-	msg := NewNodesMessage(innodes)
+	msg := newNodesMessage(innodes)
 	msg.SetNodeTable("nodes")
 	rep := syncNodes(sex, msg)
 
-	if rep.GetErr() != nil {
-		t.Fatal(rep.GetErr())
+	if rep.Error() != nil {
+		t.Fatal(rep.Error())
 	}
 	nRep := rep.(nodesReply)
 	config.PutConfiguredNodes(nRep.GetNodes(), os.Stdout)

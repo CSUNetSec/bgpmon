@@ -47,6 +47,10 @@ func (te TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
 	return nil
 }
 
+func (te TestExecutor) SetError(e error) {
+	return
+}
+
 func TestInsertBuffer(t *testing.T) {
 	base := "INSERT INTO testTable VALUES"
 	testEx := &TestExecutor{t: t}
@@ -102,14 +106,21 @@ func TestTimedBuffer(t *testing.T) {
 	tbuf.Stop()
 }
 
+type dbWrapper struct {
+	SQLExecutor
+}
+
+func (d dbWrapper) SetError(e error) {}
+
 // This test has no fail condition, but it's success can be observed
 // by selecting on the test table
 func TestBufferOnDb(t *testing.T) {
-	db, err := getDbConnection()
+	dbConn, err := getDbConnection()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer dbConn.Close()
+	db := dbWrapper{SQLExecutor: dbConn}
 
 	baseStmt := "INSERT INTO test VALUES"
 	buf := NewInsertBuffer(db, baseStmt, 2, 3, true)
