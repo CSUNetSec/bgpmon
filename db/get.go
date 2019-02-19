@@ -1,5 +1,6 @@
 package db
 
+/*
 import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"time"
@@ -37,3 +38,4 @@ func GetCaptures(sess *Session, req *pb.GetRequest) chan pb.GetReply {
 	}()
 	return ret
 }
+*/
