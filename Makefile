@@ -1,43 +1,33 @@
 BINDIR=bin
-BGPMON-BIN=bgpmon
-BGPMOND-BIN=bgpmond
-BGPMONSRC=cmd/bgpmon/
-BGPMONDSRC=cmd/bgpmond/
-GO111MODULE=on
+BGPMON-BIN=$(BINDIR)/bgpmon
+BGPMOND-BIN=$(BINDIR)/bgpmond
+BGPMON-SRC=cmd/bgpmon
+BGPMOND-SRC=cmd/bgpmond
+
+ENV=GO111MODULE=on
+LINUX-ENV=GO111MODULE=on GOOS="linux"
+CC=go build
 
 all: build
-
 
 makebindir:
 	mkdir -p ${BINDIR}
 
-${BINDIR}/${BGPMON-BIN}:
-	cd ${BGPMONSRC}; \
-	GO111MODULE=on go build; \
-	mv ${BGPMON-BIN} ../../${BINDIR}; \
-	cd ../..
+bgpmon:
+	$(ENV) $(CC) -o $(BGPMON-BIN) $(BGPMON-SRC)/*.go
 
-${BINDIR}/${BGPMOND-BIN}:
-	cd ${BGPMONDSRC}; \
-	GO111MODULE=on go build; \
-	mv ${BGPMOND-BIN} ../../${BINDIR}; \
-	cd ../..
+bgpmond:
+	$(ENV) $(CC) -o $(BGPMOND-BIN) $(BGPMOND-SRC)/*.go
 
-${BINDIR}/${BGPMON-BIN}-linux:
-	cd ${BGPMONSRC}; \
-	GOOS="linux" go build; \
-	mv ${BGPMON-BIN} ../../${BINDIR}/${BGPMON-BIN}-linux; \
-	cd ../..
+bgpmon-linux:
+	$(LINUX-ENV) $(CC) -o $(BGPMON-BIN)-linux $(BGPMON-SRC)/*.go
 
-${BINDIR}/${BGPMOND-BIN}-linux:
-	cd ${BGPMONDSRC}; \
-	GOOS="linux" go build; \
-	mv ${BGPMOND-BIN} ../../${BINDIR}/${BGPMOND-BIN}-linux; \
-	cd ../..
+bgpmond-linux:
+	$(LINUX-ENV) $(CC) -o $(BGPMOND-BIN)-linux $(BGPMOND-SRC)/*.go
 
-build: makebindir ${BINDIR}/${BGPMON-BIN} ${BINDIR}/${BGPMOND-BIN}
+build: makebindir bgpmon bgpmond
 
-linux: makebindir ${BINDIR}/${BGPMON-BIN}-linux ${BINDIR}/${BGPMOND-BIN}-linux
+linux: makebindir bgpmon-linux bgpmond-linux
 
 clean:
 	rm -rf ${BINDIR}
