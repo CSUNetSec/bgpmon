@@ -25,7 +25,7 @@ type bgpmonCli struct {
 	cli  pb.BgpmondClient
 }
 
-func NewBgpmonCli(host string, port uint32) (*bgpmonCli, error) {
+func newBgpmonCli(host string, port uint32) (*bgpmonCli, error) {
 	ret := &bgpmonCli{}
 	conn, err := grpc.Dial(fmt.Sprintf("%s:%d", host, port), grpc.WithInsecure())
 	if err != nil {

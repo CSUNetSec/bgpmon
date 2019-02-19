@@ -16,21 +16,21 @@ var closeCmd = &cobra.Command{
 }
 
 func closeSess(cmd *cobra.Command, args []string) {
-	sessId := args[0]
+	sessID := args[0]
 
-	if bc, clierr := NewBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
+	if bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
 	} else {
 		defer bc.Close()
 		emsg := &pb.CloseSessionRequest{
-			SessionId: sessId,
+			SessionId: sessID,
 		}
 		ctx, cancel := getCtxWithCancel()
 		defer cancel()
 		if reply, err := bc.cli.CloseSession(ctx, emsg); err != nil {
 			fmt.Printf("Error: %s\n", err)
 		} else {
-			fmt.Println("closed session with ID:", sessId, " server replied: ", reply)
+			fmt.Println("closed session with ID:", sessID, " server replied: ", reply)
 		}
 	}
 

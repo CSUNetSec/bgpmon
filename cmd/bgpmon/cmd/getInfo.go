@@ -17,7 +17,7 @@ var getInfoCmd = &cobra.Command{
 }
 
 func getInfoFunc(cmd *cobra.Command, args []string) {
-	bc, clierr := NewBgpmonCli(bgpmondHost, bgpmondPort)
+	bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
 	if clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
 	}

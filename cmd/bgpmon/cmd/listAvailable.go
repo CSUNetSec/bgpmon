@@ -19,7 +19,7 @@ these names can be used with the open command to open these types of sessions`,
 
 func listAvail(cmd *cobra.Command, args []string) {
 	fmt.Printf("listAvailable called with args:%s\n", args)
-	if bc, clierr := NewBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
+	if bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
 	} else {
 		defer bc.Close()

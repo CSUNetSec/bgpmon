@@ -27,7 +27,7 @@ func openSess(cmd *cobra.Command, args []string) {
 	sessType := args[0]
 
 	fmt.Println("Trying to open a available session named:", sessType, " with ID:", sid)
-	if bc, clierr := NewBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
+	if bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
 	} else {
 		defer bc.Close()

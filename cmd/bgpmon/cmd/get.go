@@ -53,7 +53,7 @@ func get(cmd *cobra.Command, args []string) error {
 	if err1 != nil || err2 != nil {
 		return fmt.Errorf("failed to parse the provided time spec")
 	}
-	moncli, clierr := NewBgpmonCli(bgpmondHost, bgpmondPort)
+	moncli, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
 	if clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
 		return clierr
