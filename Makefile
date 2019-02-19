@@ -25,9 +25,14 @@ bgpmon-linux:
 bgpmond-linux:
 	$(LINUX-ENV) $(CC) -o $(BGPMOND-BIN)-linux $(BGPMOND-SRC)/*.go
 
+%_test: %
+	go test $</*.go
+
 build: makebindir bgpmon bgpmond
 
 linux: makebindir bgpmon-linux bgpmond-linux
 
 clean:
 	rm -rf ${BINDIR}
+
+test: db_test util_test
