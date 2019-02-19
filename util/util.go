@@ -1,10 +1,12 @@
+// Package util defines miscellaneous functions used in multiple parts of bgpmon
+// or other projects
 package util
 
 import (
 	"sync"
 )
 
-//WorkerPool is a struct that manages the amount of goroutines by blocking on and add
+//WorkerPool is a type that limits the number of running goroutines
 type WorkerPool struct {
 	max      int
 	active   int
@@ -39,7 +41,7 @@ func (wp *WorkerPool) Done() {
 	wp.workerWg.Done()
 }
 
-// Close waits for all workers to be finished and closes the daemon goroutine
+// Close waits for all workers to be finished
 func (wp *WorkerPool) Close() bool {
 	wp.workerWg.Wait()
 	wp.close <- true

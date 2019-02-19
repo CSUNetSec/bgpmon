@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// SumNodeConfs Combines two maps of NodeConfigs, preferring the first in case of overlap
+// SumNodeConfs combines two maps of NodeConfigs, preferring the first in case of overlap
 func SumNodeConfs(confnodes, dbnodes map[string]config.NodeConfig) map[string]config.NodeConfig {
 	ret := make(map[string]config.NodeConfig)
 	for k1, v1 := range confnodes {
@@ -45,7 +45,7 @@ func (c collectorDateString) GetNameDates() (string, string, time.Time, time.Tim
 	return c.colName, c.GetNameDateStr(), c.startDate, c.endDate
 }
 
-//GetNodeTableNameDates this function gets the date for a new collector table to be added with the desired duration minutes
+//GetNodeTableNameDates gets the date for a new collector table to be added with the desired duration minutes
 //and returns a string that should be the table name, the truncated time, and the end time.
 func GetNodeTableNameDates(name string, stime time.Time, durmin int) (string, time.Time, time.Time) {
 	dur := time.Duration(durmin) * time.Minute
@@ -133,7 +133,8 @@ func (c CollectorsByNameDate) Add(col string, sd time.Time, ed time.Time) (ret C
 	return
 }
 
-// SQLExecutor is a wrapper around sql.Tx, sql.Db, and others we implement
+// SQLExecutor is a wrapper around sql.Tx, sql.Db, and others we implement. It represents
+// something that can execute queries on a database.
 type SQLExecutor interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)

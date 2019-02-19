@@ -1,3 +1,5 @@
+// Package config defines the constants and functions necessary to parse
+// configuration files for bgpmon
 package config
 
 import (
@@ -18,7 +20,7 @@ var (
 	}
 )
 
-// These are the sessions currently supported
+// These are the session types currently supported
 const (
 	CochroachSession = sessionType(iota)
 	PostgresSession
@@ -28,7 +30,7 @@ func (s sessionType) String() string {
 	return sessionTypeNames[s]
 }
 
-// Configer This describes a configuration for a bgpmond server
+// Configer describes the configuration for a bgpmond server
 type Configer interface {
 	GetSessionConfigs() []SessionConfiger
 	GetSessionConfigWithName(string) (SessionConfiger, error)
@@ -36,7 +38,7 @@ type Configer interface {
 	GetModules() []ModuleConfig
 }
 
-// SessionConfiger This describes a configuration for a bgpmond session
+// SessionConfiger describes the configuration for a bgpmond session
 type SessionConfiger interface {
 	Configer
 	GetHostNames() []string
@@ -90,7 +92,7 @@ func (b *bgpmondConfig) GetModules() []ModuleConfig {
 	return ret
 }
 
-// PutConfiguredNodes Writes a node configuration in the TOML format
+// PutConfiguredNodes writes a node configuration in the TOML format to w
 func PutConfiguredNodes(a map[string]NodeConfig, w io.Writer) error {
 	return toml.NewEncoder(w).Encode(a)
 }
@@ -107,7 +109,7 @@ type sessionConfig struct {
 	WorkerCt int      // The default worker count for this kind of session
 }
 
-// NodeConfig describes another BGP node, either a collector or a peer.
+// NodeConfig describes a BGP node, either a collector or a peer.
 type NodeConfig struct {
 	IP                  string
 	Name                string
@@ -118,7 +120,7 @@ type NodeConfig struct {
 	Location            string
 }
 
-// ModuleConfig Describes a module configuration
+// ModuleConfig describes a module configuration
 type ModuleConfig struct {
 	Type string
 	ID   string

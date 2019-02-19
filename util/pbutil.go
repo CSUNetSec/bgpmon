@@ -24,7 +24,7 @@ func GetIPWrapper(pip *pbcomm.IPAddressWrapper) (ret net.IP, err error) {
 	return
 }
 
-// GetTimeColIP Returns the time and collector IP from a capture WriteRequest
+// GetTimeColIP returns the time and collector IP from a capture WriteRequest
 func GetTimeColIP(pb *pb.WriteRequest) (time.Time, net.IP, error) {
 	secs := time.Unix(int64(pb.GetBgpCapture().GetTimestamp()), 0)
 	locip := pb.GetBgpCapture().GetLocalIp()
@@ -32,7 +32,7 @@ func GetTimeColIP(pb *pb.WriteRequest) (time.Time, net.IP, error) {
 	return secs, colip, err
 }
 
-// GetPeerIP Returns a PeerIP from a capture WriteRequest
+// GetPeerIP returns a PeerIP from a capture WriteRequest
 func GetPeerIP(wr *pb.WriteRequest) (net.IP, error) {
 	capt := wr.GetBgpCapture()
 	pipwrap := capt.GetPeerIp()
@@ -68,7 +68,7 @@ func GetNextHop(wr *pb.WriteRequest) (net.IP, error) {
 	return nhip, err
 }
 
-// GetOriginAs Returns the AS at index 0 of the ASPath from a capture WriteRequest
+// GetOriginAs returns the AS at index 0 of the ASPath from a capture WriteRequest
 func GetOriginAs(wr *pb.WriteRequest) int {
 	as := wr.GetBgpCapture().GetUpdate().GetAttrs().GetOrigin()
 	return int(as)
@@ -128,7 +128,7 @@ func getPrefixAsIPNet(pw *pbcomm.PrefixWrapper) (*net.IPNet, error) {
 	return &net.IPNet{ip, mask}, nil
 }
 
-//GetProtoMsg Returns a byte array representing the capture from a WritRequest
+//GetProtoMsg returns a byte array representing the capture from a WritRequest
 func GetProtoMsg(wr *pb.WriteRequest) []byte {
 	return []byte(wr.GetBgpCapture().String())
 }

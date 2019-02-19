@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// NBContextClosed Returns true if a context has been closed, false otherwise and doesn't block
+// NBContextClosed returns true if a context has been closed, false otherwise and doesn't block
 func NBContextClosed(ctx context.Context) bool {
 	select {
 	case <-ctx.Done():

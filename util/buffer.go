@@ -28,12 +28,19 @@ type InsertBuffer struct {
 	usePosArgs bool             // Use $1 style args in the statement instead of ?
 }
 
-// NewInsertBuffer Returns a SQLBuffer which buffers values for an insert statement
+// NewInsertBuffer returns a SQLBuffer which buffers values for an insert statement.
+// stmt is the original SQL statement which will be appended with VALUES() clauses. ex
+// is the SQLErrorExecutor that the query will be run on when the buffer is full. max is
+// the number of VALUES clauses that can be added to this buffer. Each VALUES() clause must
+// contain exactly batchSize values. If usePositional is true, the resulting insert statement
+// will use this format: ($1, $2, $3). If it is false, it will use: (?,?,?)
 func NewInsertBuffer(ex SQLErrorExecutor, stmt string, max int, batchSize int, usePositional bool) SQLBuffer {
 	return &InsertBuffer{max: max, ex: ex, stmt: stmt, addedStmt: "", ct: 0, usePosArgs: usePositional, batchSize: batchSize}
 }
 
-// Add Satisfies the SQLBuffer interface
+// Add Satisfies the SQLBuffer interface. This can return an error if the buffer
+// is full but fails to flush, or if the length of arg is not equal to the batch
+// size
 func (ib *InsertBuffer) Add(arg ...interface{}) error {
 	if len(arg) != ib.batchSize {
 		return fmt.Errorf("Incorrect number of arguments. Expected: %d, Got %d", ib.batchSize, len(arg))
@@ -79,13 +86,6 @@ func (ib *InsertBuffer) Flush() error {
 	ib.addedStmt = ib.addedStmt[:len(ib.addedStmt)-1]
 	ib.addedStmt += ";"
 
-	/*
-		if ib.usePosArgs {
-			convStmt = convertSqlStmt(fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt))
-		} else {
-			convStmt = fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt)
-		}
-	*/
 	convStmt = fmt.Sprintf("%s %s", ib.stmt, ib.addedStmt)
 
 	_, err := ib.ex.Exec(convStmt, ib.values...)
@@ -114,7 +114,7 @@ type TimedBuffer struct {
 	cancel     chan bool
 }
 
-// NewTimedBuffer returns a TimedBuffer
+// NewTimedBuffer returns a TimedBuffer that expires after duration d
 func NewTimedBuffer(parent SQLBuffer, d time.Duration) *TimedBuffer {
 	cancel := make(chan bool)
 	t := &TimedBuffer{SQLBuffer: parent, lastUpdate: time.Now().UTC(), tick: time.NewTicker(d), duration: d, cancel: cancel}
