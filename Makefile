@@ -8,7 +8,7 @@ ENV=GO111MODULE=on
 LINUX-ENV=GO111MODULE=on GOOS="linux"
 CC=go build
 
-all: build
+all: build test
 
 makebindir:
 	mkdir -p ${BINDIR}
@@ -25,9 +25,6 @@ bgpmon-linux:
 bgpmond-linux:
 	$(LINUX-ENV) $(CC) -o $(BGPMOND-BIN)-linux $(BGPMOND-SRC)/*.go
 
-%_test: %
-	go test $</*.go
-
 build: makebindir bgpmon bgpmond
 
 linux: makebindir bgpmon-linux bgpmond-linux
@@ -35,4 +32,7 @@ linux: makebindir bgpmon-linux bgpmond-linux
 clean:
 	rm -rf ${BINDIR}
 
-test: db_test util_test
+test: FORCE
+	$(ENV) go test ./...
+
+FORCE:
