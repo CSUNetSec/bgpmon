@@ -33,6 +33,6 @@ clean:
 	rm -rf ${BINDIR}
 
 test: FORCE
-	$(ENV) go test ./...
+	$(ENV) go test -short -v ./...
 
 FORCE:

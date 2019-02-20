@@ -76,10 +76,6 @@ func TestInsertBuffer(t *testing.T) {
 }
 
 func TestTimedBuffer(t *testing.T) {
-	// Since this test has a time delay
-	if testing.Short() {
-		t.SkipNow()
-	}
 
 	base := "INSERT INTO timed VALUES"
 	testEx := &TestExecutor{t: t}
@@ -115,6 +111,9 @@ func (d dbWrapper) SetError(e error) {}
 // This test has no fail condition, but it's success can be observed
 // by selecting on the test table
 func TestBufferOnDb(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("Skipping TestBufferOnDb on short tests")
+	}
 	dbConn, err := getDbConnection()
 	if err != nil {
 		t.Fatal(err)

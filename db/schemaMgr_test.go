@@ -29,6 +29,9 @@ func getex() (SessionExecutor, *sql.DB) {
 }
 
 func TestSchemaMgrStartStop(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("Skipping TestSchemaMgr for short tests")
+	}
 	sx, _ := getex()
 	sm := newSchemaMgr(sx)
 	sm.stop()
@@ -38,6 +41,9 @@ func TestSchemaMgrStartStop(t *testing.T) {
 }
 
 func TestSchemaCheckSchema(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("Skipping TestSchemaCheckSchema for short tests")
+	}
 	sx, _ := getex()
 	sm := newSchemaMgr(sx)
 	ok, err := sm.checkSchema("bgpmon", "dbs", "nodes")
@@ -49,6 +55,9 @@ func TestSchemaCheckSchema(t *testing.T) {
 }
 
 func TestXXXClose(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("Skipping TestXXXClose for short tests")
+	}
 	//just a null test to close the db connection
 	gdb.Close()
 }

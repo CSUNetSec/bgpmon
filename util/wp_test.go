@@ -13,9 +13,6 @@ const (
 )
 
 func TestWorkerPool(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
 
 	t.Logf("Testing worker pool with %d goroutines\n", WPMaxRunning)
 	wp := NewWorkerPool(WPMaxRunning)
@@ -56,9 +53,6 @@ func TestWorkerPool(t *testing.T) {
 }
 
 func TestWorkerPoolClose(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
 
 	finished := false
 	wp := NewWorkerPool(1)

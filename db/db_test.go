@@ -34,6 +34,9 @@ var (
 )
 
 func TestConnectPostgres(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("Skipping TestConnectPostgres for short tests")
+	}
 	db, err := sql.Open("postgres", pgconstr)
 	if err != nil {
 		t.Fatal(err)
@@ -48,6 +51,10 @@ func TestConnectPostgres(t *testing.T) {
 }
 
 func TestMakeSchema(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("Skipping TestMakeSchema for short tests")
+	}
+
 	db, err := sql.Open("postgres", pgconstr)
 	if err != nil {
 		t.Fatal(err)
@@ -74,6 +81,10 @@ func TestMakeSchema(t *testing.T) {
 }
 
 func TestSyncNodes(t *testing.T) {
+	if testing.Short() {
+		t.Skipf("Skipping TestSyncNodes for short tests")
+	}
+
 	insCmd := "INSERT INTO nodes (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) VALUES ($1, $2, $3, $4, $5, $6, $7);"
 	db, err := sql.Open("postgres", pgconstr)
 	if err != nil {
