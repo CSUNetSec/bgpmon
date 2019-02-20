@@ -9,11 +9,15 @@ of BGP data.
 Requirements
 1. Golang > 1.11
 2. make
+3. to store message a db backed (Postgresql)
 
 Running make will create two binaries under bin. To run the daemon,
 run:
 
     bgpmond conf-file
+
+To succesfully store messages in a database please have a Postgresql with a user that has access to write
+create tables on a database and reflect that configuration in the config file.
 
 # Example client commands
 
@@ -43,13 +47,14 @@ To close a session
 
     # Sessions represent the possible database backends
     [Sessions]
+    #this will configure an available session named LocalPostgres
     [Sessions.LocalPostgres]
     Type = "postgres"
     Hosts = ["localhost"]
     Database = "bgpmon"
     User = "bgpmon"
     Password = "bgpmon"
-    WorkerCt = 4
+    WorkerCt = 4 #the maximum amount of concurrent workers
 
     # Modules represent modules to run on startup
     # Multiple modules of the same type can be instantiated with
