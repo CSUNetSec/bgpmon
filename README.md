@@ -63,15 +63,13 @@ To close a session
     # RPC exposes the basic bgpmond operation over an RPC interface that
     # consumes and produces protocol buffers defined in the netsec-protobufs
     # repository /bgpmon
-    [Modules.rpc]
+    [Modules.rpc1]
     Type="rpc"
-    ID="rpc"
     Args=":12289"
 
     # pprof enables the http profiler at an address specified by Args
-    [Modules.pprof]
+    [Modules.pprof1]
     Type="pprof"
-    ID="pprof"
     Args="localhost:6969"
 
     # Nodes represent operator provided information for nodes involved in

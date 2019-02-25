@@ -63,7 +63,7 @@ func NewServer(conf config.Configer) (BgpmondServer, error) {
 	s.conf = conf
 
 	for _, mod := range conf.GetModules() {
-		err := s.RunModule(mod.Type, mod.ID, mod.Args)
+		err := s.RunModule(mod.GetType(), mod.GetID(), mod.GetArgs())
 		if err != nil {
 			s.Close()
 			return nil, err

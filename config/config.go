@@ -123,8 +123,23 @@ type NodeConfig struct {
 // ModuleConfig describes a module configuration
 type ModuleConfig struct {
 	Type string
-	ID   string
+	id   string
 	Args string
+}
+
+// GetType returns the type of a module in the config
+func (m ModuleConfig) GetType() string {
+	return m.Type
+}
+
+// GetID returns the ID of the module, specified as the map key
+func (m ModuleConfig) GetID() string {
+	return m.id
+}
+
+// GetArgs returns the arguments passed to the module
+func (m ModuleConfig) GetArgs() string {
+	return m.Args
 }
 
 func (s sessionConfig) GetName() string {
@@ -201,6 +216,10 @@ func NewConfig(creader io.Reader) (Configer, error) {
 	for sname, sval := range bc.Sessions {
 		sval.name = sname
 		bc.Sessions[sname] = sval //update the reference.
+	}
+	for mName, val := range bc.Modules {
+		val.id = mName
+		bc.Modules[mName] = val
 	}
 	if cerr := bc.checkConfig(); cerr != nil {
 		return nil, errors.Wrap(cerr, "config")
