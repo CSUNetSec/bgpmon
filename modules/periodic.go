@@ -33,27 +33,32 @@ func (p *periodicModule) Run(argStr string, f core.FinishFunc) error {
 	modArgs := args[2]
 
 	tick := time.NewTicker(dur)
+	defer tick.Stop()
 	runC := 0
+	errC := 0
 	for {
 		select {
 		case <-p.cancel:
-			tick.Stop()
 			p.logger.Infof("Stopping periodic")
 			return nil
 		case <-tick.C:
-			mID := fmt.Sprintf("periodic-%s%d", args[1], runC)
+			mID := fmt.Sprintf("periodic-%s%d", modName, runC)
 			err = p.server.RunModule(modName, mID, modArgs)
 			if err != nil {
 				p.logger.Errorf("Error running module(%s): %s", modName, err)
+				errC++
+			} else {
+				errC = 0
+			}
+
+			if errC >= 5 {
+				p.logger.Errorf("Failed to run module 5 times, stopping.")
+				f()
+				return nil
 			}
 		}
 		runC++
 	}
-}
-
-// GetName returns the module type name, "periodic"
-func (p *periodicModule) GetName() string {
-	return "periodic"
 }
 
 func newPeriodicModule(s core.BgpmondServer, l util.Logger) core.Module {
