@@ -129,7 +129,7 @@ func (r *rpcServer) GetSessionInfo(ctx context.Context, request *pb.SessionInfoR
 func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 	var (
 		first    bool
-		dbStream *db.SessionStream
+		dbStream db.WriteStream
 	)
 	timeoutCtx, cf := context.WithTimeout(context.Background(), writeTimeout)
 	defer cf()
@@ -137,7 +137,7 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 	first = true
 	for {
 		if util.NBContextClosed(timeoutCtx) {
-			return r.logger.Errorf("Context closed, aborting write")
+			return r.logger.Errorf("context closed, aborting write")
 		}
 
 		writeRequest, err := stream.Recv()
@@ -153,25 +153,25 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 		if first {
 			dbStream, err = r.server.OpenWriteStream(writeRequest.SessionId)
 			if err != nil {
-				return r.logger.Errorf("Error opening stream: %s", err)
+				return r.logger.Errorf("error opening stream: %s", err)
 			}
 			first = false
 			defer dbStream.Close()
 		}
 
-		if err := dbStream.Send(db.SessionStreamWriteMRT, writeRequest); err != nil {
+		if err := dbStream.Write(writeRequest); err != nil {
 			dbStream.Cancel()
-			return r.logger.Errorf("Error writing on session(%s): %s", writeRequest.SessionId, err)
+			return r.logger.Errorf("error writing on session(%s): %s", writeRequest.SessionId, err)
 		}
 	}
 	if dbStream == nil {
-		return r.logger.Errorf("Session stream was never created")
+		return r.logger.Errorf("session stream never created")
 	}
 
 	if err := dbStream.Flush(); err != nil {
-		return r.logger.Errorf("Write stream failed to flush: %s", err)
+		return r.logger.Errorf("write stream failed to flush: %s", err)
 	}
-	r.logger.Infof("write stream success")
+	r.logger.Infof("Write stream success")
 
 	return nil
 }

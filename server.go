@@ -27,7 +27,7 @@ type BgpmondServer interface {
 	ListSessionTypes() []*pb.SessionType
 	ListSessions() []SessionHandle
 	CloseSession(string) error
-	OpenWriteStream(string) (*db.SessionStream, error)
+	OpenWriteStream(string) (db.WriteStream, error)
 	OpenReadStream(string) (db.ReadStream, error)
 
 	RunModule(string, string, string) error
@@ -103,7 +103,7 @@ func (s *server) OpenSession(sType, sID string, workers int) error {
 		return corelogger.Errorf("No session type with session type name: %s found", sType)
 	}
 
-	session, err := db.NewSession(nil, sc, sID, workers)
+	session, err := db.NewSession(sc, sID, workers)
 	if err != nil {
 		return corelogger.Errorf("Create session failed: %v", err)
 	}
@@ -168,7 +168,7 @@ func (s *server) ListSessions() []SessionHandle {
 	return sList
 }
 
-func (s *server) OpenWriteStream(sID string) (*db.SessionStream, error) {
+func (s *server) OpenWriteStream(sID string) (db.WriteStream, error) {
 	s.mux.Lock()
 	sh, ok := s.sessions[sID]
 	if !ok {
@@ -176,7 +176,7 @@ func (s *server) OpenWriteStream(sID string) (*db.SessionStream, error) {
 	}
 	s.mux.Unlock()
 
-	stream, err := sh.Session.Do(db.SessionOpenStream, nil)
+	stream, err := sh.Session.OpenWriteStream(db.SessionWriteCapture)
 	if err != nil {
 		return nil, corelogger.Errorf("Failed to open stream on session(%s): %s", sID, err)
 	}

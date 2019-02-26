@@ -72,7 +72,7 @@ func getModuleMaker(typeName string) (ModuleMaker, bool) {
 }
 
 func getModuleLogger(modType, modName string) util.Logger {
-	return util.NewLogger("system", "module", "module type", modType, "ID", modName)
+	return util.NewLogger("system", "module", "type", modType, "ID", modName)
 }
 
 func getModuleTypes() []string {
