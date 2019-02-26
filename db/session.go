@@ -47,6 +47,7 @@ type SessionStream struct {
 	oper    *dbOper
 	ex      *ctxtxOperExecutor
 	buffers map[string]util.SQLBuffer
+	cols    util.ColIpDateCache //a local cache of tables to reduce chatter to schemamgr
 }
 
 //NewSessionStream returns a newly allocated SessionStream
@@ -83,8 +84,9 @@ func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, d
 //WARNING, sending after a close will cause a panic, and may hang
 func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 	var (
-		table string
-		ok    bool
+		table        string
+		tStart, tEnd time.Time
+		ok           bool
 	)
 	wr := arg.(*pb.WriteRequest)
 	mtime, cip, err := util.GetTimeColIP(wr)
@@ -92,11 +94,16 @@ func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
 		dblogger.Errorf("failed to get Collector IP:%v", err)
 		return err
 	}
-	table, err = ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
-	if err != nil {
-		return err
+	//check our local cache first, otherwise contact schemamgr
+	table, ok = ss.cols.Find(cip.String(), mtime)
+	if !ok {
+		table, tStart, tEnd, err = ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
+		if err != nil {
+			return err
+		}
+		//add the table to our local cache
+		ss.cols = ss.cols.Add(cip.String(), table, tStart, tEnd)
 	}
-
 	ss.req <- newCaptureMessage(table, wr)
 	resp, ok := <-ss.resp
 
