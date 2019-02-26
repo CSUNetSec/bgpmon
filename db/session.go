@@ -1,226 +1,41 @@
 package db
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
-	"net"
-	"os"
-	"time"
-
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
-	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
-	"github.com/lib/pq"
 	"github.com/pkg/errors"
+	"os"
 )
+
+type sessionType int
 
 const (
-	ctxTimeout = time.Duration(120) * time.Second //XXX there is a write timeout in bgpmond too! merge
-	bufferSize = 40
+	// SessionWriteCapture is provided to a Sessioner's OpenWriteStream to open
+	// a capture write stream
+	SessionWriteCapture sessionType = iota
+	//SessionReadCapture is provided to a Sessioner's OpenReadStream to open a
+	// read capture stream
+	SessionReadCapture
 )
 
-type sessionCmd int
-
-const (
-	//SessionOpenStream is an argument for Do
-	SessionOpenStream sessionCmd = iota
-	//SessionStreamWriteMRT is an argument for Send
-	SessionStreamWriteMRT
-)
-
-// ReadStream is an interface to represent the different kinds of reads that can be done on a session
+// ReadStream represents the different kinds of read streams that can be done on a session
 type ReadStream interface {
 }
 
-//SessionStream accepts CommonMessages and returns CommonReplies.
-//internally it synchronizes with the schema manager and keeps open buffers
-//for efficient writes
-type SessionStream struct {
-	req     chan CommonMessage
-	resp    chan CommonReply
-	cancel  chan bool
-	wp      *util.WorkerPool
-	schema  *schemaMgr
-	closed  bool
-	db      Dber
-	oper    *dbOper
-	ex      *ctxtxOperExecutor
-	buffers map[string]util.SQLBuffer
+// WriteStream represents the different kind of write streams that can be done on a session
+type WriteStream interface {
+	Write(interface{}) error
+	Flush() error
+	Cancel()
+	Close()
 }
 
-//NewSessionStream returns a newly allocated SessionStream
-func NewSessionStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, db Dber, oper *dbOper) *SessionStream {
-	ss := &SessionStream{closed: false, wp: wp, schema: smgr, db: db, oper: oper}
-
-	parentCancel := pcancel
-	childCancel := make(chan bool)
-	daemonCancel := make(chan bool)
-	// If the parent requests a close, and the routine isn't already closed,
-	// pass that on to the child.
-	go func(par, child, daemon chan bool) {
-		select {
-		case <-par:
-			daemon <- false
-		case <-child:
-			daemon <- true
-		}
-		close(daemon)
-	}(parentCancel, childCancel, daemonCancel)
-	ss.cancel = childCancel
-
-	ss.req = make(chan CommonMessage)
-	ss.resp = make(chan CommonReply)
-	ss.buffers = make(map[string]util.SQLBuffer)
-	ctxTx, _ := getNewExecutor(context.Background(), ss.db, true, ctxTimeout)
-	ss.ex = newCtxTxSessionExecutor(ctxTx, ss.oper)
-
-	go ss.listen(daemonCancel)
-	return ss
-}
-
-//Send performs a type of send on the sessionstream with an arbitrary argument
-//WARNING, sending after a close will cause a panic, and may hang
-func (ss *SessionStream) Send(cmd sessionCmd, arg interface{}) error {
-	var (
-		table string
-		ok    bool
-	)
-	wr := arg.(*pb.WriteRequest)
-	mtime, cip, err := util.GetTimeColIP(wr)
-	if err != nil {
-		dblogger.Errorf("failed to get Collector IP:%v", err)
-		return err
-	}
-	table, err = ss.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
-	if err != nil {
-		return err
-	}
-
-	ss.req <- newCaptureMessage(table, wr)
-	resp, ok := <-ss.resp
-
-	if !ok {
-		return fmt.Errorf("Response channel closed")
-	}
-	return resp.Error()
-}
-
-//Flush is called when a stream finishes successfully
-//It flushes all remaining buffers
-func (ss *SessionStream) Flush() error {
-	for key := range ss.buffers {
-		ss.buffers[key].Flush()
-	}
-	ss.ex.Done()
-	return nil
-}
-
-//Cancel is used when there is an error on the client-side,
-//called to rollback all executed queries
-func (ss *SessionStream) Cancel() error {
-	ss.ex.SetError(fmt.Errorf("Session stream cancelled"))
-	return nil
-}
-
-//Close is only for a normal close operation. A cancellation
-//can only be done by Closing the parent session while
-//the stream is still running
-//This should be called by the same goroutine as the one calling Send
-func (ss *SessionStream) Close() error {
-	dblogger.Infof("Closing session stream")
-	close(ss.cancel)
-	close(ss.req)
-
-	ss.wp.Done()
-	return nil
-}
-
-// This is the SessionStream goroutine
-// This function is a little bit tricky, because a stream needs to be closable
-// from two different directions.
-// 1. A normal close. This is when a client calls Close on the SessionStream
-//	  after it is done communicating with it.
-//		We can assume that nothing more will come in on the request channel.
-// 2. A session close. This occurs on an unexpected shutdown, such as ctrl-C.
-//		A client may try to send requests to this after it has been closed. It
-//		should return that the stream has been closed before shutting down
-//		completely.
-func (ss *SessionStream) listen(cancel chan bool) {
-	defer dblogger.Infof("Session stream closed successfully")
-	defer close(ss.resp)
-
-	for {
-		select {
-		case normal, open := <-cancel:
-			if !open {
-				continue
-			}
-
-			ss.closed = true
-			if normal {
-				return
-			}
-		case val, ok := <-ss.req:
-			// Between the last message and this one, the channel was closed unexpectedly. Return the error
-			if ss.closed {
-				ss.resp <- newReply(fmt.Errorf("Session stream channel closed"))
-			}
-			// The ss.req channel might see it's close before the cancel channel.
-			// If that happens, this will add an empty sqlIn to the buffer
-			if ok {
-				ss.resp <- newReply(ss.addToBuffer(val))
-			}
-		}
-	}
-}
-
-func (ss *SessionStream) addToBuffer(msg CommonMessage) error {
-	cMsg := msg.(captureMessage)
-
-	tName := cMsg.getTableName()
-	if _, ok := ss.buffers[tName]; !ok {
-		dblogger.Infof("Creating new buffer for table: %s", tName)
-		stmt := fmt.Sprintf(ss.oper.getdbop(insertCaptureTableOp), tName)
-		ss.buffers[tName] = util.NewInsertBuffer(ss.ex, stmt, bufferSize, 9, true)
-	}
-	buf := ss.buffers[tName]
-	// This actually returns a WriteRequest, not a BGPCapture, but all the utility functions were built around
-	// WriteRequests
-	cap := cMsg.getCapture()
-
-	ts, colIP, _ := util.GetTimeColIP(cap)
-	peerIP, err := util.GetPeerIP(cap)
-	if err != nil {
-		dblogger.Infof("Unable to parse peer ip, ignoring message")
-		return nil
-	}
-
-	asPath := util.GetAsPath(cap)
-	nextHop, err := util.GetNextHop(cap)
-	if err != nil {
-		nextHop = net.IPv4(0, 0, 0, 0)
-	}
-	origin := 0
-	if len(asPath) != 0 {
-		origin = asPath[len(asPath)-1]
-	} else {
-		origin = 0
-	}
-	//here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
-	advertized, _ := util.GetAdvertizedPrefixes(cap)
-	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
-	protoMsg := util.GetProtoMsg(cap)
-
-	advArr := util.PrefixesToPQArray(advertized)
-	wdrArr := util.PrefixesToPQArray(withdrawn)
-
-	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
-}
-
-//Sessioner is an interface that wraps Do and Close
+//Sessioner is an interface that wraps the stream open functions and close
 type Sessioner interface {
-	Do(cmd sessionCmd, arg interface{}) (*SessionStream, error)
+	OpenWriteStream(sessionType) (WriteStream, error)
+	OpenReadStream(sessionType) (ReadStream, error)
 	Close() error
 }
 
@@ -236,7 +51,7 @@ type Session struct {
 }
 
 //NewSession returns a newly allocated Session
-func NewSession(parentCtx context.Context, conf config.SessionConfiger, id string, nworkers int) (*Session, error) {
+func NewSession(conf config.SessionConfiger, id string, nworkers int) (*Session, error) {
 	var (
 		err    error
 		constr string
@@ -252,9 +67,11 @@ func NewSession(parentCtx context.Context, conf config.SessionConfiger, id strin
 	// If neither was specified, default to 1
 	if nworkers == 0 && conf.GetWorkerCt() == 0 {
 		wc = 1
-	} else if nworkers == 0 { // If the client didn't request a WC, default to the server one
+	} else if nworkers == 0 {
+		// If the client didn't request a WC, default to the server one
 		wc = conf.GetWorkerCt()
-	} else { // The user specified a worker count, go with that
+	} else {
+		// The user specified a worker count, go with that
 		wc = nworkers
 	}
 
@@ -307,18 +124,28 @@ func (s *Session) Db() *sql.DB {
 	return s.db
 }
 
-//Do returns a SessionStream that will provide the output from the Do command
-//Maybe this should return a channel that the calling function
-//could read from to get the reply
-func (s *Session) Do(cmd sessionCmd, arg interface{}) (*SessionStream, error) {
-	switch cmd {
-	case SessionOpenStream:
-		dblogger.Infof("Opening stream on session: %s", s.uuid)
+// OpenWriteStream opens and returns a WriteStream with the given type, or an
+// error if no such type exists
+func (s *Session) OpenWriteStream(sType sessionType) (WriteStream, error) {
+	switch sType {
+	case SessionWriteCapture:
 		s.wp.Add()
-		ss := NewSessionStream(s.cancel, s.wp, s.schema, s, s.dbo)
-		return ss, nil
+		ws := newWriteCapStream(s.cancel, s.wp, s.schema, s, s.dbo)
+		return ws, nil
+	default:
+		return nil, fmt.Errorf("unsupported write stream type")
 	}
-	return nil, nil
+}
+
+// OpenReadStream opens and returns a ReadStream with the given type, or an
+// error if no such type exists
+func (s *Session) OpenReadStream(sType sessionType) (ReadStream, error) {
+	switch sType {
+	case SessionReadCapture:
+		return nil, fmt.Errorf("ReadCapture not yet supported")
+	default:
+		return nil, fmt.Errorf("unsupported read stream type")
+	}
 }
 
 //Close stops the schema manager and the worker pool
