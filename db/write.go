@@ -26,6 +26,7 @@ type writeCapStream struct {
 	cancel  chan bool
 	closed  bool
 	buffers map[string]util.SQLBuffer
+	cols    util.ColIpDateCache
 }
 
 //NewwriteCapStream returns a newly allocated writeCapStream
@@ -62,8 +63,9 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStr
 //WARNING, sending after a close will cause a panic, and may hang
 func (w *writeCapStream) Write(arg interface{}) error {
 	var (
-		table string
-		ok    bool
+		table        string
+		tStart, tEnd time.Time
+		ok           bool
 	)
 	wr := arg.(*pb.WriteRequest)
 	mtime, cip, err := util.GetTimeColIP(wr)
@@ -71,11 +73,16 @@ func (w *writeCapStream) Write(arg interface{}) error {
 		dblogger.Errorf("failed to get Collector IP:%v", err)
 		return err
 	}
-	table, err = w.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
-	if err != nil {
-		return err
+	//check our local cache first, otherwise contact schemamgr
+	table, ok = w.cols.Find(cip.String(), mtime)
+	if !ok {
+		table, tStart, tEnd, err = w.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
+		if err != nil {
+			return err
+		}
+		//add the table to our local cache
+		w.cols = w.cols.Add(cip.String(), table, tStart, tEnd)
 	}
-
 	w.req <- newCaptureMessage(table, wr)
 	resp, ok := <-w.resp
 
@@ -83,6 +90,7 @@ func (w *writeCapStream) Write(arg interface{}) error {
 		return fmt.Errorf("Response channel closed")
 	}
 	return resp.Error()
+
 }
 
 //Flush is called when a stream finishes successfully

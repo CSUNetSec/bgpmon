@@ -83,10 +83,10 @@ func (s *schemaMgr) run() {
 			case mgrGetTableOp:
 				tMsg := icmd.msg.(tableMessage)
 				cd := tMsg.getColDate()
-				capTableName, ok := s.checkTableCache(cd.col, cd.dat.UTC())
+				capTableName, sTime, eTime, ok := s.checkTableCache(cd.col, cd.dat.UTC())
 				if ok {
 					// Most of these fields have default values, by design
-					ret.rep = newTableReply(capTableName, time.Now(), time.Now(), nil, nil)
+					ret.rep = newTableReply(capTableName, sTime, eTime, nil, nil)
 				} else {
 					slogger.Infof("Table cache miss. Creating table for col: %s date: %s", cd.col, cd.dat)
 					ret.rep, err = s.makeCapTable(tMsg)
@@ -154,16 +154,17 @@ func (s *schemaMgr) AddNodeAndTableInCache(col string, colip string, sd time.Tim
 	s.cols = newcols
 }
 
-func (s *schemaMgr) checkTableCache(collectorip string, date time.Time) (string, bool) {
+func (s *schemaMgr) checkTableCache(collectorip string, date time.Time) (string, time.Time, time.Time, bool) {
 	colname, nodeok := s.nodeNames[collectorip]
 	if !nodeok {
-		return "", false
+		return "", time.Time{}, time.Time{}, false
 	}
 	i, ok := s.cols.ColNameDateInSlice(colname, date)
 	if ok {
-		return s.cols[i].GetNameDateStr(), true
+		_, nameDateStr, sTime, eTime := s.cols[i].GetNameDates()
+		return nameDateStr, sTime, eTime, true
 	}
-	return "", false
+	return "", time.Time{}, time.Time{}, false
 }
 
 // Below this are the interface methods, called by the session streams
@@ -198,7 +199,7 @@ func (s *schemaMgr) syncNodes(dbname, nodetable string, knownNodes map[string]co
 	return nRep.GetNodes(), nRep.Error()
 }
 
-func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date time.Time) (string, error) {
+func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date time.Time) (string, time.Time, time.Time, error) {
 	coldate := collectorDate{
 		dat: date,
 		col: ipstr,
@@ -211,10 +212,12 @@ func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date ti
 	sreply := <-s.oChan
 
 	if !sreply.ok {
-		return "", sreply.rep.Error()
+		return "", time.Time{}, time.Time{}, sreply.rep.Error()
 	}
 	tRep := sreply.rep.(tableReply)
-	return tRep.getName(), tRep.Error()
+	tName := tRep.getName()
+	tStart, tEnd := tRep.getDates()
+	return tName, tStart, tEnd, tRep.Error()
 }
 
 func (s *schemaMgr) getNode(dbname, nodetable string, nodeName string, nodeIP string) (*node, error) {
