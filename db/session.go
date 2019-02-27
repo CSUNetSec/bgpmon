@@ -20,6 +20,18 @@ const (
 	SessionReadCapture
 )
 
+type sessionStream struct {
+	db     Dber
+	oper   *dbOper
+	ex     *ctxtxOperExecutor
+	schema *schemaMgr
+	wp     *util.WorkerPool
+}
+
+func newSessionStream(db Dber, oper *dbOper, s *schemaMgr, wp *util.WorkerPool) *sessionStream {
+	return &sessionStream{db: db, oper: oper, schema: s, wp: wp, ex: nil}
+}
+
 // ReadStream represents the different kinds of read streams that can be done on a session
 type ReadStream interface {
 }
@@ -130,7 +142,8 @@ func (s *Session) OpenWriteStream(sType sessionType) (WriteStream, error) {
 	switch sType {
 	case SessionWriteCapture:
 		s.wp.Add()
-		ws := newWriteCapStream(s.cancel, s.wp, s.schema, s, s.dbo)
+		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
+		ws := newWriteCapStream(parStream, s.cancel)
 		return ws, nil
 	default:
 		return nil, fmt.Errorf("unsupported write stream type")

@@ -20,21 +20,17 @@ const (
 //internally it synchronizes with the schema manager and keeps open buffers
 //for efficient writes
 type writeCapStream struct {
+	*sessionStream
 	req     chan CommonMessage
 	resp    chan CommonReply
 	cancel  chan bool
-	wp      *util.WorkerPool
-	schema  *schemaMgr
 	closed  bool
-	db      Dber
-	oper    *dbOper
-	ex      *ctxtxOperExecutor
 	buffers map[string]util.SQLBuffer
 }
 
 //NewwriteCapStream returns a newly allocated writeCapStream
-func newWriteCapStream(pcancel chan bool, wp *util.WorkerPool, smgr *schemaMgr, db Dber, oper *dbOper) *writeCapStream {
-	w := &writeCapStream{closed: false, wp: wp, schema: smgr, db: db, oper: oper}
+func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStream {
+	w := &writeCapStream{sessionStream: parStream, closed: false}
 
 	parentCancel := pcancel
 	childCancel := make(chan bool)
