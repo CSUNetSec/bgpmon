@@ -139,8 +139,11 @@ func (c CollectorsByNameDate) ColNameDateInSlice(colname string, date time.Time)
 	ind := sort.Search(c.Len(), func(i int) bool {
 		return (c[i].colName == colname && c[i].startDate.After(date)) || (c[i].colName == colname && c[i].startDate.Equal(date))
 	}) - 1 //XXX observe: This was the bug that Will found in the cache cause if you don't subtract 1 it gives you the pos where it would add the next item.
-	if ind >= len(c) { //it's not there
+	if ind >= len(c) || len(c) == 0 { //it's not there or slice is empty
 		return 0, false
+	}
+	if ind < 0 { //the only element that it can be would be the first one. we will check it by reassigning ind
+		ind = 0 //he have already checked that slice can't be empty so this is safe.
 	}
 	//validate that the name is the same
 	if c[ind].colName != colname {
