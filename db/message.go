@@ -125,6 +125,23 @@ func (c captureMessage) getCapture() *pb.WriteRequest {
 	return c.capture
 }
 
+type schemaMessage struct {
+	CommonMessage
+	cmdType int
+}
+
+func newSchemaMessage(par CommonMessage, cmd int) schemaMessage {
+	return schemaMessage{CommonMessage: par, cmdType: cmd}
+}
+
+func (s schemaMessage) GetMessage() CommonMessage {
+	return s.CommonMessage
+}
+
+func (s schemaMessage) GetType() int {
+	return s.cmdType
+}
+
 //CommonReply is an interface that provides the Error interface
 type CommonReply interface {
 	Error() error
