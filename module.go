@@ -25,7 +25,7 @@ type Module interface {
 	// goroutine. Args can be used to pass any information the module
 	// needs. A module can call its FinishFunc at any time to be deallocated
 	// by the server
-	Run(args string, f FinishFunc) error
+	Run(args map[string]string, f FinishFunc) error
 
 	// GetType should return one of ModuleTask, or ModuleDaemon
 	GetType() int

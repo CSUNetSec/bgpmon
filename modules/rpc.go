@@ -10,11 +10,8 @@ import (
 	"google.golang.org/grpc"
 	"io"
 	"net"
+	"strconv"
 	"time"
-)
-
-const (
-	writeTimeout = 240 * time.Second
 )
 
 var (
@@ -25,11 +22,24 @@ var (
 
 type rpcServer struct {
 	*BaseDaemon
-	grpcServer *grpc.Server
+	grpcServer  *grpc.Server
+	timeoutSecs int
 }
 
-func (r *rpcServer) Run(addr string, finish core.FinishFunc) error {
+// Run on the rpc server expects two options named "address" and "timeoutsecs"
+func (r *rpcServer) Run(opts map[string]string, finish core.FinishFunc) error {
 	defer finish()
+	if !util.CheckForKeys(opts, "address", "timeoutsecs") {
+		return r.logger.Errorf("options address and timeoutsecs not present")
+	}
+	addr := opts["address"]
+	tsecs := opts["timeoutsecs"]
+	ts, err := strconv.ParseInt(tsecs, 10, 32)
+	if err != nil {
+		return r.logger.Errorf("Error parsing timeoutsecs :%s", err)
+	}
+
+	r.timeoutSecs = int(ts)
 	if r.grpcServer != nil {
 		return r.logger.Errorf("Server is already running")
 	}
@@ -47,6 +57,11 @@ func (r *rpcServer) Run(addr string, finish core.FinishFunc) error {
 func (r *rpcServer) Stop() error {
 	r.grpcServer.GracefulStop()
 	return nil
+}
+
+// GetTimeout implements the util.GetTimeouter interface for RPC requests
+func (r *rpcServer) GetTimeout() time.Duration {
+	return time.Duration(r.timeoutSecs) * time.Second
 }
 
 func newRPCServer(s core.BgpmondServer, l util.Logger) core.Module {
@@ -131,7 +146,7 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 		first    bool
 		dbStream db.WriteStream
 	)
-	timeoutCtx, cf := context.WithTimeout(context.Background(), writeTimeout)
+	timeoutCtx, cf := context.WithTimeout(context.Background(), r.GetTimeout())
 	defer cf()
 
 	first = true

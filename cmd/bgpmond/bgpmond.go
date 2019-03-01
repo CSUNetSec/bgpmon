@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	core "github.com/CSUNetSec/bgpmon"
+	"github.com/CSUNetSec/bgpmon/config"
 	_ "github.com/CSUNetSec/bgpmon/modules"
 	"github.com/CSUNetSec/bgpmon/util"
 )
@@ -33,7 +34,11 @@ func main() {
 
 	if !rpcRunning {
 		mainlogger.Infof("Configuration didn't include RPC module, launching default")
-		err = server.RunModule("rpc", "rpc", ":12289")
+		rpcopts, err := util.StringToOptMap(fmt.Sprintf("-address %s -timeoutsecs %d", config.DefaultRPCAddress, config.DefaultRPCTimeoutSecs))
+		if err != nil {
+			mainlogger.Fatalf("Error starting RPC module: %s", err)
+		}
+		err = server.RunModule("rpc", "rpc", rpcopts)
 		if err != nil {
 			mainlogger.Fatalf("Error starting RPC module: %s", err)
 		}

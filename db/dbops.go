@@ -68,7 +68,7 @@ func syncNodes(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 		dbNodes[hereNewNodeConf.IP] = hereNewNodeConf
 	}
 	dblogger.Infof("calling sumnodes. known:%v, db:%v", nodesMsg.getNodes(), dbNodes)
-	allNodes := util.SumNodeConfs(nodesMsg.getNodes(), dbNodes)
+	allNodes := config.SumNodeConfs(nodesMsg.getNodes(), dbNodes)
 	for _, v := range allNodes {
 		_, err := ex.Exec(fmt.Sprintf(insertNodeTmpl, nodesMsg.GetNodeTable()),
 			v.Name,

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	core "github.com/CSUNetSec/bgpmon"
 	"github.com/CSUNetSec/bgpmon/util"
-	"strings"
 	"time"
 )
 
@@ -13,24 +12,29 @@ type periodicModule struct {
 	*BaseDaemon
 }
 
-// Run will launch the periodic daemon. Args should specify the duration first,
-// then the module to run with any arguments needed to pass to that module
-func (p *periodicModule) Run(argStr string, f core.FinishFunc) error {
-	args := strings.SplitN(argStr, " ", 3)
-	if len(args) != 3 {
-		p.logger.Errorf("Expected 3 arguments, got %d", len(args))
+// Run will launch the periodic daemon. Args should specify the duration,
+// module to run and any arguments needed to pass to that module
+// Optkeys should be: duration , module, args
+// Optval args should be a proper OptString (-key val ...)
+func (p *periodicModule) Run(args map[string]string, f core.FinishFunc) error {
+	if !util.CheckForKeys(args, "duration", "module", "args") {
+		p.logger.Errorf("Expected option keys: duration, module, args. Got %v", args)
 		f()
 		return nil
 	}
-
-	dur, err := time.ParseDuration(args[0])
+	dval, modval, argval := args["duration"], args["module"], args["args"]
+	dur, err := time.ParseDuration(dval)
 	if err != nil {
-		p.logger.Errorf("Error parsing duration: %s", args[0])
+		p.logger.Errorf("Error parsing duration: %s", dval)
 		f()
 		return nil
 	}
-	modName := args[1]
-	modArgs := args[2]
+	argmap, err := util.StringToOptMap(argval)
+	if err != nil {
+		p.logger.Errorf("Error %s parsing argument string: %s", err, argmap)
+		f()
+		return nil
+	}
 
 	tick := time.NewTicker(dur)
 	defer tick.Stop()
@@ -42,10 +46,10 @@ func (p *periodicModule) Run(argStr string, f core.FinishFunc) error {
 			p.logger.Infof("Stopping periodic")
 			return nil
 		case <-tick.C:
-			mID := fmt.Sprintf("periodic-%s%d", modName, runC)
-			err = p.server.RunModule(modName, mID, modArgs)
+			mID := fmt.Sprintf("periodic-%s%d", modval, runC)
+			err = p.server.RunModule(modval, mID, argmap)
 			if err != nil {
-				p.logger.Errorf("Error running module(%s): %s", modName, err)
+				p.logger.Errorf("Error running module(%s): %s", modval, err)
 				errC++
 			} else {
 				errC = 0

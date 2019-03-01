@@ -7,6 +7,7 @@ import (
 	"github.com/CSUNetSec/bgpmon/util"
 	"github.com/pkg/errors"
 	"os"
+	"time"
 )
 
 type sessionType int
@@ -21,14 +22,14 @@ const (
 )
 
 type sessionStream struct {
-	db     Dber
+	db     TimeoutDber
 	oper   *dbOper
 	ex     *ctxtxOperExecutor
 	schema *schemaMgr
 	wp     *util.WorkerPool
 }
 
-func newSessionStream(db Dber, oper *dbOper, s *schemaMgr, wp *util.WorkerPool) *sessionStream {
+func newSessionStream(db TimeoutDber, oper *dbOper, s *schemaMgr, wp *util.WorkerPool) *sessionStream {
 	return &sessionStream{db: db, oper: oper, schema: s, wp: wp, ex: nil}
 }
 
@@ -53,13 +54,14 @@ type Sessioner interface {
 
 //Session represents a session to the underlying db. It holds references to the schema manager and workerpool.
 type Session struct {
-	uuid   string
-	cancel chan bool
-	wp     *util.WorkerPool
-	dbo    *dbOper //this struct provides the strings for the sql ops.
-	db     *sql.DB
-	schema *schemaMgr
-	maxWC  int
+	uuid          string
+	cancel        chan bool
+	wp            *util.WorkerPool
+	dbo           *dbOper //this struct provides the strings for the sql ops.
+	db            *sql.DB
+	schema        *schemaMgr
+	maxWC         int
+	dbTimeoutSecs int
 }
 
 //NewSession returns a newly allocated Session
@@ -88,7 +90,8 @@ func NewSession(conf config.SessionConfiger, id string, nworkers int) (*Session,
 	}
 
 	wp := util.NewWorkerPool(wc)
-	s := &Session{uuid: id, cancel: cancel, wp: wp, maxWC: wc}
+	dt := conf.GetDBTimeoutSecs()
+	s := &Session{uuid: id, cancel: cancel, wp: wp, maxWC: wc, dbTimeoutSecs: dt}
 	u := conf.GetUser()
 	p := conf.GetPassword()
 	d := conf.GetDatabaseName()
@@ -134,6 +137,11 @@ func NewSession(conf config.SessionConfiger, id string, nworkers int) (*Session,
 //Db satisfies the Dber interface on a Session
 func (s *Session) Db() *sql.DB {
 	return s.db
+}
+
+//GetTimeout satisifes the GetTimeouter interface on a Session so it can be a TimeoutDber
+func (s *Session) GetTimeout() time.Duration {
+	return time.Duration(s.dbTimeoutSecs) * time.Second
 }
 
 // OpenWriteStream opens and returns a WriteStream with the given type, or an

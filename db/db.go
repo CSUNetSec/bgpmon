@@ -121,6 +121,12 @@ type Dber interface {
 	Db() *sql.DB
 }
 
+//TimeoutDber composes Dber and GetTimeouter to return timeout duration for dbops
+type TimeoutDber interface {
+	Dber
+	util.GetTimeouter
+}
+
 //a struct for issuing queries about the existance of a ready collector table
 //for a specific time. Typically on the return we will return the starting
 //time for that table as a string so that the caller can just concat and create

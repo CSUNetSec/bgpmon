@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	ctxTimeout = time.Duration(120) * time.Second //XXX there is a write timeout in bgpmond too! merge
 	bufferSize = 40
 )
 
@@ -52,7 +51,7 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStr
 	w.req = make(chan CommonMessage)
 	w.resp = make(chan CommonReply)
 	w.buffers = make(map[string]util.SQLBuffer)
-	ctxTx, _ := getNewExecutor(context.Background(), w.db, true, ctxTimeout)
+	ctxTx, _ := getNewExecutor(context.Background(), w.db, true, parStream.db.GetTimeout())
 	w.ex = newCtxTxSessionExecutor(ctxTx, w.oper)
 
 	go w.listen(daemonCancel)
