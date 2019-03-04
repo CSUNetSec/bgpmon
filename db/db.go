@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
 
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
@@ -119,23 +120,6 @@ var (
 //Dber is an interface that returns a reference to the underlying *sql.DB
 type Dber interface {
 	Db() *sql.DB
-}
-
-//a struct for issuing queries about the existance of a ready collector table
-//for a specific time. Typically on the return we will return the starting
-//time for that table as a string so that the caller can just concat and create
-//the destination table names
-type collectorDate struct {
-	col    string    //the collector we are querying for
-	dat    time.Time //the time we are interested
-	datstr string    //the time string returned that will create the table name
-}
-
-func newCollectorDate(col string, t time.Time) collectorDate {
-	return collectorDate{
-		col: col,
-		dat: t,
-	}
 }
 
 type getdboper interface {
@@ -336,4 +320,133 @@ func (a *node) nodeConfigFromNode() config.NodeConfig {
 		Coords:              a.nodeCoords,
 		Location:            a.nodeAddress,
 	}
+}
+
+type tableCache interface {
+	LookupTable(net.IP, time.Time) (string, error)
+	LookupNode(net.IP) (*node, error)
+}
+
+type dbCache struct {
+	nodes  map[string]*node
+	tables map[string][]string
+}
+
+func newDBCache() *dbCache {
+	n := make(map[string]*node)
+	t := make(map[string][]string)
+	return &dbCache{nodes: n, tables: t}
+}
+
+func (dc *dbCache) LookupTable(nodeIP net.IP, t time.Time) (string, error) {
+	ipStr := nodeIP.String()
+	node, ok := dc.nodes[ipStr]
+	if !ok {
+		return "", errNoNode
+	}
+
+	tName := genTableName(node.nodeName, t, node.nodeDuration)
+	nodeTables := dc.tables[node.nodeName]
+	for _, name := range nodeTables {
+		if name == tName {
+			return name, nil
+		}
+	}
+
+	return "", errNoTable
+}
+
+func (dc *dbCache) LookupNode(nodeIP net.IP) (*node, error) {
+	ipStr := nodeIP.String()
+	n, ok := dc.nodes[ipStr]
+	if !ok {
+		return &node{}, errNoNode
+	}
+	return n, nil
+}
+
+func (dc *dbCache) addTable(nodeIP net.IP, t time.Time) {
+	n, err := dc.LookupNode(nodeIP)
+	if err != nil {
+		fmt.Printf("------SHOULD NOT HAPPEN")
+		return
+	}
+	tName := genTableName(n.nodeName, t, n.nodeDuration)
+	nodeTables := dc.tables[n.nodeName]
+	nodeTables = append(nodeTables, tName)
+	dc.tables[n.nodeName] = nodeTables
+}
+
+func (dc *dbCache) addNode(n *node) {
+	dc.nodes[n.nodeIP] = n
+}
+
+type nestedTableCache struct {
+	par    tableCache
+	nodes  map[string]*node
+	tables map[string][]string
+}
+
+func newNestedTableCache(par tableCache) *nestedTableCache {
+	n := make(map[string]*node)
+	t := make(map[string][]string)
+	return &nestedTableCache{par: par, nodes: n, tables: t}
+}
+
+func (ntc *nestedTableCache) LookupTable(nodeIP net.IP, t time.Time) (string, error) {
+	var node *node
+	var err error
+	node, ok := ntc.nodes[nodeIP.String()]
+
+	if !ok {
+		node, err = ntc.par.LookupNode(nodeIP)
+		if err != nil {
+			return "", err
+		}
+		ntc.addNode(node)
+	}
+
+	tName := genTableName(node.nodeName, t, node.nodeDuration)
+	nodeTables := ntc.tables[node.nodeName]
+	ok = false
+	for _, name := range nodeTables {
+		if name == tName {
+			ok = true
+			break
+		}
+	}
+
+	if ok {
+		return tName, nil
+	}
+
+	tName, err = ntc.par.LookupTable(nodeIP, t)
+	if err != nil {
+		return "", err
+	}
+	ntc.addTable(node.nodeName, tName)
+	return tName, nil
+}
+
+func (ntc *nestedTableCache) LookupNode(nodeIP net.IP) (*node, error) {
+	n, ok := ntc.nodes[nodeIP.String()]
+	if !ok {
+		return &node{}, fmt.Errorf("No such node")
+	}
+	return n, nil
+}
+
+func (ntc *nestedTableCache) addTable(nodeName, table string) {
+	nodeTables := ntc.tables[nodeName]
+	nodeTables = append(nodeTables, table)
+}
+
+func (ntc *nestedTableCache) addNode(n *node) {
+	ntc.nodes[n.nodeIP] = n
+}
+
+func genTableName(colName string, date time.Time, ddm int) string {
+	dur := time.Duration(ddm) * time.Minute
+	trunctime := date.Truncate(dur).UTC()
+	return fmt.Sprintf("%s_%s", colName, trunctime.Format("2006_01_02_15_04_05"))
 }

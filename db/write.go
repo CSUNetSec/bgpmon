@@ -26,7 +26,7 @@ type writeCapStream struct {
 	cancel  chan bool
 	closed  bool
 	buffers map[string]util.SQLBuffer
-	cols    util.ColIpDateCache
+	cache   tableCache
 }
 
 //NewwriteCapStream returns a newly allocated writeCapStream
@@ -52,6 +52,7 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStr
 	w.req = make(chan CommonMessage)
 	w.resp = make(chan CommonReply)
 	w.buffers = make(map[string]util.SQLBuffer)
+	w.cache = newNestedTableCache(parStream.schema)
 	ctxTx, _ := getNewExecutor(context.Background(), w.db, true, ctxTimeout)
 	w.ex = newCtxTxSessionExecutor(ctxTx, w.oper)
 
@@ -63,9 +64,8 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStr
 //WARNING, sending after a close will cause a panic, and may hang
 func (w *writeCapStream) Write(arg interface{}) error {
 	var (
-		table        string
-		tStart, tEnd time.Time
-		ok           bool
+		table string
+		ok    bool
 	)
 	wr := arg.(*pb.WriteRequest)
 	mtime, cip, err := util.GetTimeColIP(wr)
@@ -74,14 +74,9 @@ func (w *writeCapStream) Write(arg interface{}) error {
 		return err
 	}
 	//check our local cache first, otherwise contact schemamgr
-	table, ok = w.cols.Find(cip.String(), mtime)
-	if !ok {
-		table, tStart, tEnd, err = w.schema.getTable("bgpmon", "dbs", "nodes", cip.String(), mtime)
-		if err != nil {
-			return err
-		}
-		//add the table to our local cache
-		w.cols = w.cols.Add(cip.String(), table, tStart, tEnd)
+	table, err = w.cache.LookupTable(cip, mtime)
+	if err != nil {
+		return dblogger.Errorf("Failed to get table from cache: %s", err)
 	}
 	w.req <- newCaptureMessage(table, wr)
 	resp, ok := <-w.resp

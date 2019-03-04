@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
@@ -21,20 +22,19 @@ const (
 )
 
 type schemaMgr struct {
-	iChan     chan schemaMessage
-	oChan     chan CommonReply
-	sex       SessionExecutor           //this executor should be a dbSessionExecutor, not at tx.
-	cols      util.CollectorsByNameDate //collector name dates sorted by date and name for quick lookup.
-	nodeNames map[string]string
+	iChan chan schemaMessage
+	oChan chan CommonReply
+	sex   SessionExecutor //this executor should be a dbSessionExecutor, not at tx.
+	cache *dbCache
 }
 
 // This function launches the run method in a separate goroutine
 func newSchemaMgr(sex SessionExecutor) *schemaMgr {
 	sm := &schemaMgr{
-		iChan:     make(chan schemaMessage),
-		oChan:     make(chan CommonReply),
-		sex:       sex,
-		nodeNames: make(map[string]string),
+		iChan: make(chan schemaMessage),
+		oChan: make(chan CommonReply),
+		sex:   sex,
+		cache: newDBCache(),
 	}
 	go sm.run()
 	return sm
@@ -56,29 +56,44 @@ func (s *schemaMgr) run() {
 			switch icmd.GetType() {
 			case mgrCheckSchemaOp:
 				slogger.Infof("checking correctness of db schema")
-				ret = checkSchema(s.sex, icmd)
+				ret = checkSchema(s.sex, icmd.GetMessage())
 			case mgrInitSchemaOp:
 				slogger.Infof("initializing db schema")
-				ret = makeSchema(s.sex, icmd)
+				ret = makeSchema(s.sex, icmd.GetMessage())
 			case mgrSyncNodesOp:
 				slogger.Infof("syncing node configs")
-				ret = syncNodes(s.sex, icmd)
+				ret = syncNodes(s.sex, icmd.GetMessage())
 			case mgrGetNodeOp:
 				slogger.Infof("getting node name")
-				ret = getNode(s.sex, icmd)
+				nMsg := icmd.GetMessage().(nodeMessage)
+				nodeIP := net.ParseIP(nMsg.getNodeIP())
+				node, err := s.cache.LookupNode(nodeIP)
+				if err == errNoNode {
+					slogger.Infof("Node cache miss. Looking up node for IP: %s", nMsg.getNodeIP())
+					ret = getNode(s.sex, icmd.GetMessage())
+					if ret.Error() == nil {
+						s.cache.addNode(ret.(nodeReply).GetNode())
+					} else {
+						slogger.Errorf("Error getting node: %s", ret.Error())
+					}
+				} else {
+					ret = newNodeReply(node, nil)
+				}
 			case mgrGetTableOp:
 				tMsg := icmd.GetMessage().(tableMessage)
-				cd := tMsg.getColDate()
-				capTableName, sTime, eTime, ok := s.checkTableCache(cd.col, cd.dat.UTC())
-				if ok {
-					// Most of these fields have default values, by design
-					ret = newTableReply(capTableName, sTime, eTime, nil, nil)
-				} else {
-					slogger.Infof("Table cache miss. Creating table for col: %s date: %s", cd.col, cd.dat)
+				colIP := tMsg.GetColIP()
+				date := tMsg.GetDate()
+				tName, err := s.cache.LookupTable(net.ParseIP(colIP), date)
+				if err == errNoTable {
+					slogger.Infof("Table cache miss. Creating table for col: %s date: %s", colIP, date)
 					ret = s.makeCapTable(tMsg)
 					if ret.Error() != nil {
 						slogger.Errorf("schemaMgr: %s", ret.Error())
+					} else {
+						s.cache.addTable(net.ParseIP(colIP), date)
 					}
+				} else {
+					ret = newTableReply(tName, time.Now(), time.Now(), nil, nil)
 				}
 			default:
 				ret = newReply(fmt.Errorf("unhandled schema manager command:%+v", icmd))
@@ -93,61 +108,37 @@ func (s *schemaMgr) run() {
 func (s *schemaMgr) makeCapTable(msg CommonMessage) CommonReply {
 	res := getTable(s.sex, msg).(tableReply)
 	var (
-		nodename, nodeip string
-		stime, etime     time.Time
+		node *node
 	)
 
 	if err := res.Error(); err == errNoTable {
 		tMsg := msg.(tableMessage)
-		cd := tMsg.getColDate()
-		nodeip = cd.col
-		// This name is intentionally left blank
-		nodeRes := getNode(s.sex, newNodeMessage("", nodeip)).(nodeReply)
-		//nodesRes, err := s.getNode(sin.dbname, sin.nodetable, "", sin.getColDate.col) //the colname is empty. we don't know it yet.
-		if err := nodeRes.Error(); err != nil {
-			return newReply(fmt.Errorf("makeCapTable: %s", err))
-		}
-		//we resolved the node, now calling getnodetablenamedates to get the fields for the new tablename
-		tname, stime, etime := util.GetNodeTableNameDates(nodeRes.GetNode().nodeName, cd.dat, nodeRes.GetNode().nodeDuration)
-		nodename = nodeRes.GetNode().nodeName
+		nodeip := tMsg.GetColIP()
+		date := tMsg.GetDate()
 
-		cMsg := newCapTableMessage(tname, nodename, stime, etime)
+		node, err := s.cache.LookupNode(net.ParseIP(nodeip))
+		if err != nil {
+			return newReply(err)
+		}
+		ddm := time.Duration(node.nodeDuration) * time.Minute
+		start := date.Truncate(ddm)
+
+		tName := genTableName(node.nodeName, date, node.nodeDuration)
+		cMsg := newCapTableMessage(tName, node.nodeName, start, start.Add(ddm))
 		nsout := createCaptureTable(s.sex, cMsg).(capTableReply)
 		if err := nsout.Error(); err != nil {
 			return newReply(fmt.Errorf("makeCapTable: %s", err))
 		}
 		s, e := nsout.GetDates()
-		res = newTableReply(nsout.GetName(), s, e, nodeRes.GetNode(), nil)
+		res = newTableReply(nsout.GetName(), s, e, node, nil)
 	} else if err == nil {
 		// we have a node table already and res contains the correct vaules to be added in the cache
-		stime, etime = res.getDates()
-		nodename, nodeip = res.getNode().nodeName, res.getNode().nodeIP
+		node = res.getNode()
+		s.cache.addNode(node)
 	} else {
 		return newReply(fmt.Errorf("makeCapTable: %s", err))
 	}
-	s.AddNodeAndTableInCache(nodename, nodeip, stime, etime)
 	return res
-}
-
-//this helper function sets the name-ip association in the nodemap of the schema mgr , and adds the
-//collectordate in the schemamgr's collectorsbydate array correctly by resetting the reference
-func (s *schemaMgr) AddNodeAndTableInCache(col string, colip string, sd time.Time, ed time.Time) {
-	s.nodeNames[colip] = col
-	newcols := s.cols.Add(col, sd, ed)
-	s.cols = newcols
-}
-
-func (s *schemaMgr) checkTableCache(collectorip string, date time.Time) (string, time.Time, time.Time, bool) {
-	colname, nodeok := s.nodeNames[collectorip]
-	if !nodeok {
-		return "", time.Time{}, time.Time{}, false
-	}
-	i, ok := s.cols.ColNameDateInSlice(colname, date)
-	if ok {
-		_, nameDateStr, sTime, eTime := s.cols[i].GetNameDates()
-		return nameDateStr, sTime, eTime, true
-	}
-	return "", time.Time{}, time.Time{}, false
 }
 
 // Below this are the interface methods, called by the session streams
@@ -183,11 +174,7 @@ func (s *schemaMgr) syncNodes(dbname, nodetable string, knownNodes map[string]co
 }
 
 func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date time.Time) (string, time.Time, time.Time, error) {
-	coldate := collectorDate{
-		dat: date,
-		col: ipstr,
-	}
-	tMsg := newTableMessage(coldate)
+	tMsg := newTableMessage(ipstr, date)
 	tMsg.SetMainTable(maintable)
 	tMsg.SetNodeTable(nodetable)
 	cmdin := newSchemaMessage(tMsg, mgrGetTableOp)
@@ -211,4 +198,14 @@ func (s *schemaMgr) getNode(dbname, nodetable string, nodeName string, nodeIP st
 	sreply := <-s.oChan
 	nRep := sreply.(nodeReply)
 	return nRep.GetNode(), nRep.Error()
+}
+
+func (s *schemaMgr) LookupTable(nodeIP net.IP, t time.Time) (string, error) {
+	tName, _, _, err := s.getTable("bgpmon", "dbs", "nodes", nodeIP.String(), t)
+	return tName, err
+}
+
+func (s *schemaMgr) LookupNode(nodeIP net.IP) (*node, error) {
+	n, err := s.getNode("bgpmon", "nodes", "", nodeIP.String())
+	return n, err
 }
