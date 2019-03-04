@@ -9,7 +9,7 @@ of BGP data.
 Requirements
 1. Golang > 1.11
 2. make
-3. to store message a db backed (Postgresql)
+3. to store message a db backend (Postgresql >= 9.5)
 
 Running make will create two binaries under bin. To run the daemon,
 run:
@@ -55,6 +55,7 @@ To close a session
     User = "bgpmon"
     Password = "bgpmon"
     WorkerCt = 4 #the maximum amount of concurrent workers
+    DBTimeoutSecs = 120 #maximum lifetime seconds for a DB operation
 
     # Modules represent modules to run on startup
     # Multiple modules of the same type can be instantiated with
@@ -65,12 +66,12 @@ To close a session
     # repository /bgpmon
     [Modules.rpc1]
     Type="rpc"
-    Args=":12289"
+    Args="-address :12289 -timeoutsecs 240"
 
     # pprof enables the http profiler at an address specified by Args
     [Modules.pprof1]
     Type="pprof"
-    Args="localhost:6969"
+    Args="-address localhost:6969"
 
     # Nodes represent operator provided information for nodes involved in
     # BGP transactions

@@ -30,7 +30,7 @@ type BgpmondServer interface {
 	OpenWriteStream(string) (db.WriteStream, error)
 	OpenReadStream(string) (db.ReadStream, error)
 
-	RunModule(string, string, string) error
+	RunModule(string, string, map[string]string) error
 	ListModuleTypes() []string
 	ListRunningModules() []string
 	CloseModule(string) error
@@ -189,7 +189,7 @@ func (s *server) OpenReadStream(sID string) (db.ReadStream, error) {
 
 }
 
-func (s *server) RunModule(modType, name, launchStr string) error {
+func (s *server) RunModule(modType, name string, modargs map[string]string) error {
 	corelogger.Infof("Running module %s with ID %s", modType, name)
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -205,7 +205,7 @@ func (s *server) RunModule(modType, name, launchStr string) error {
 
 	newMod := maker(s, getModuleLogger(modType, name))
 	s.modules[name] = newMod
-	go newMod.Run(launchStr, s.getFinishFunc(name))
+	go newMod.Run(modargs, s.getFinishFunc(name))
 	return nil
 }
 

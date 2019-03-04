@@ -3,16 +3,13 @@ package db
 import (
 	"context"
 	"fmt"
-	"net"
-	"time"
-
 	"github.com/CSUNetSec/bgpmon/util"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/lib/pq"
+	"net"
 )
 
 const (
-	ctxTimeout = time.Duration(120) * time.Second //XXX there is a write timeout in bgpmond too! merge
 	bufferSize = 40
 )
 
@@ -53,7 +50,7 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStr
 	w.resp = make(chan CommonReply)
 	w.buffers = make(map[string]util.SQLBuffer)
 	w.cache = newNestedTableCache(parStream.schema)
-	ctxTx, _ := getNewExecutor(context.Background(), w.db, true, ctxTimeout)
+	ctxTx, _ := getNewExecutor(context.Background(), w.db, true, parStream.db.GetTimeout())
 	w.ex = newCtxTxSessionExecutor(ctxTx, w.oper)
 
 	go w.listen(daemonCancel)

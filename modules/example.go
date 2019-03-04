@@ -16,10 +16,10 @@ type BaseTask struct {
 }
 
 // Run satisfies the module interface
-func (b *BaseTask) Run(launchStr string, finish core.FinishFunc) error {
+func (b *BaseTask) Run(launchOpts map[string]string, finish core.FinishFunc) error {
 	defer finish()
 
-	b.logger.Infof("Example task run with: %s", launchStr)
+	b.logger.Infof("Example task run with opts:%v", launchOpts)
 	return nil
 }
 
@@ -50,8 +50,8 @@ type BaseDaemon struct {
 }
 
 // Run satisfies the module interface
-func (b *BaseDaemon) Run(launchStr string, _ core.FinishFunc) error {
-	b.logger.Infof("Example daemon run with: %s", launchStr)
+func (b *BaseDaemon) Run(launchOpts map[string]string, _ core.FinishFunc) error {
+	b.logger.Infof("Example daemon run with: %v", launchOpts)
 	<-b.cancel
 	b.logger.Infof("Example daemon closed")
 	return nil

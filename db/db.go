@@ -122,6 +122,12 @@ type Dber interface {
 	Db() *sql.DB
 }
 
+//TimeoutDber composes Dber and GetTimeouter to return timeout duration for dbops
+type TimeoutDber interface {
+	Dber
+	util.GetTimeouter
+}
+
 type getdboper interface {
 	getdbop(string) string
 }

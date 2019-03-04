@@ -5,6 +5,7 @@ package config
 import (
 	"fmt"
 	"github.com/BurntSushi/toml"
+	"github.com/CSUNetSec/bgpmon/util"
 	"github.com/pkg/errors"
 	"io"
 	"net"
@@ -24,6 +25,15 @@ var (
 const (
 	CochroachSession = sessionType(iota)
 	PostgresSession
+)
+
+const (
+	// DefaultRPCTimeoutSecs is the maximum lifetime for an RPC call defaults to 4 minutes
+	DefaultRPCTimeoutSecs = 240
+	// DefaultRPCAddress is the default address:port for the RPC server
+	DefaultRPCAddress = ":12289"
+	// DefaultDBTimeoutSecs is the maximum lifetime for a DB operation defaults to 4 minutes
+	DefaultDBTimeoutSecs = 240
 )
 
 func (s sessionType) String() string {
@@ -49,6 +59,7 @@ type SessionConfiger interface {
 	GetPassword() string
 	GetCertDir() string
 	GetWorkerCt() int
+	GetDBTimeoutSecs() int
 }
 
 type bgpmondConfig struct {
@@ -99,14 +110,15 @@ func PutConfiguredNodes(a map[string]NodeConfig, w io.Writer) error {
 
 type sessionConfig struct {
 	Configer
-	name     string   // will be the key of the dictionary, populated after the toml parsing.
-	Type     string   // cockroachdb, postgres, etc
-	CertDir  string   // directory on the bgpmond host containing the certs
-	User     string   // user in the DB to run bgpmond as
-	Password string   // user's password
-	Hosts    []string // list of hosts for that cluster
-	Database string   // the database under which the bgpmond relations live
-	WorkerCt int      // The default worker count for this kind of session
+	name          string   // will be the key of the dictionary, populated after the toml parsing.
+	Type          string   // cockroachdb, postgres, etc
+	CertDir       string   // directory on the bgpmond host containing the certs
+	User          string   // user in the DB to run bgpmond as
+	Password      string   // user's password
+	Hosts         []string // list of hosts for that cluster
+	Database      string   // the database under which the bgpmond relations live
+	WorkerCt      int      // The default worker count for this kind of session
+	DBTimeoutSecs int      // Max number of seconds that a DB operation (TX or Exec) should run
 }
 
 // NodeConfig describes a BGP node, either a collector or a peer.
@@ -122,9 +134,10 @@ type NodeConfig struct {
 
 // ModuleConfig describes a module configuration
 type ModuleConfig struct {
-	Type string
-	id   string
-	Args string
+	Type   string
+	id     string
+	Args   string
+	optmap map[string]string //this will be populated by the Args string
 }
 
 // GetType returns the type of a module in the config
@@ -138,8 +151,8 @@ func (m ModuleConfig) GetID() string {
 }
 
 // GetArgs returns the arguments passed to the module
-func (m ModuleConfig) GetArgs() string {
-	return m.Args
+func (m ModuleConfig) GetArgs() map[string]string {
+	return m.optmap
 }
 
 func (s sessionConfig) GetName() string {
@@ -174,6 +187,10 @@ func (s sessionConfig) GetWorkerCt() int {
 	return s.WorkerCt
 }
 
+func (s sessionConfig) GetDBTimeoutSecs() int {
+	return s.DBTimeoutSecs
+}
+
 // helper function to sanity check the config file.
 func (b *bgpmondConfig) checkConfig() error {
 	inSlice := false
@@ -191,6 +208,15 @@ func (b *bgpmondConfig) checkConfig() error {
 	if !inSlice {
 		return fmt.Errorf("unknown session type name. Known session types are: %v", sessionTypeNames)
 	}
+	//make sure the args optstring parses well
+	for k, v := range b.Modules {
+		opts, err := util.StringToOptMap(v.Args)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("malformed optstring:%s", v.Args))
+		}
+		v.optmap = opts
+		b.Modules[k] = v
+	}
 	for k, v := range b.Nodes {
 		if nip = net.ParseIP(k); nip == nil {
 			return errors.New(fmt.Sprintf("malformed ip in config:%s", k))
@@ -200,6 +226,31 @@ func (b *bgpmondConfig) checkConfig() error {
 	}
 
 	return nil
+}
+
+// helper function that can visit the config and replace needed values that might have not
+// been provided by the user to sane defaults
+func (b *bgpmondConfig) populateDefaults() {
+	for si, s := range b.Sessions {
+		if s.DBTimeoutSecs == 0 {
+			s.DBTimeoutSecs = DefaultDBTimeoutSecs
+			b.Sessions[si] = s
+		}
+	}
+	for mi, m := range b.Modules {
+		if m.Type == "rpc" {
+			//if the user hasn't specified an rpc timeout
+			if _, ok := m.optmap["timeoutsecs"]; !ok {
+				m.optmap["timeoutsecs"] = fmt.Sprintf("%d", DefaultRPCTimeoutSecs)
+				b.Modules[mi] = m
+			}
+			//or the RPC server address
+			if _, ok := m.optmap["address"]; !ok {
+				m.optmap["address"] = DefaultRPCAddress
+				b.Modules[mi] = m
+			}
+		}
+	}
 }
 
 //NewConfig reads a TOML file with the bgpmon configuration, sanity checks it
@@ -224,5 +275,22 @@ func NewConfig(creader io.Reader) (Configer, error) {
 	if cerr := bc.checkConfig(); cerr != nil {
 		return nil, errors.Wrap(cerr, "config")
 	}
+	bc.populateDefaults()
 	return &bc, nil
+}
+
+// SumNodeConfs combines two maps of NodeConfigs, preferring the first in case of overlap
+func SumNodeConfs(confnodes, dbnodes map[string]NodeConfig) map[string]NodeConfig {
+	ret := make(map[string]NodeConfig)
+	for k1, v1 := range confnodes {
+		ret[k1] = v1 //if it exists in config, prefer config
+	}
+	for k2, v2 := range dbnodes {
+		if _, ok := confnodes[k2]; ok { // exists in config, so ignore it
+			continue
+		}
+		//does not exist in config, so add it in ret as it is in the db
+		ret[k2] = v2
+	}
+	return ret
 }

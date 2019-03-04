@@ -3,27 +3,10 @@ package util
 import (
 	"database/sql"
 	"database/sql/driver"
-	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/lib/pq"
 	"net"
 	"time"
 )
-
-// SumNodeConfs combines two maps of NodeConfigs, preferring the first in case of overlap
-func SumNodeConfs(confnodes, dbnodes map[string]config.NodeConfig) map[string]config.NodeConfig {
-	ret := make(map[string]config.NodeConfig)
-	for k1, v1 := range confnodes {
-		ret[k1] = v1 //if it exists in config, prefer config
-	}
-	for k2, v2 := range dbnodes {
-		if _, ok := confnodes[k2]; ok { // exists in config, so ignore it
-			continue
-		}
-		//does not exist in config, so add it in ret as it is in the db
-		ret[k2] = v2
-	}
-	return ret
-}
 
 //helper function that checks if t is in the [t1,t2) range
 func inTimeRange(t, t1, t2 time.Time) bool {
