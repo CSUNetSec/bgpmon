@@ -445,6 +445,7 @@ func (ntc *nestedTableCache) LookupNode(nodeIP net.IP) (*node, error) {
 func (ntc *nestedTableCache) addTable(nodeName, table string) {
 	nodeTables := ntc.tables[nodeName]
 	nodeTables = append(nodeTables, table)
+	ntc.tables[nodeName] = nodeTables
 }
 
 func (ntc *nestedTableCache) addNode(n *node) {
