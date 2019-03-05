@@ -96,14 +96,19 @@ func (c capTableMessage) getDates() (time.Time, time.Time) {
 
 type tableMessage struct {
 	CommonMessage
-	colDate collectorDate
+	colIP   string
+	colDate time.Time
 }
 
-func newTableMessage(colDate collectorDate) tableMessage {
-	return tableMessage{CommonMessage: newMessage(), colDate: colDate}
+func newTableMessage(ip string, date time.Time) tableMessage {
+	return tableMessage{CommonMessage: newMessage(), colIP: ip, colDate: date}
 }
 
-func (t tableMessage) getColDate() collectorDate {
+func (t tableMessage) GetColIP() string {
+	return t.colIP
+}
+
+func (t tableMessage) GetDate() time.Time {
 	return t.colDate
 }
 

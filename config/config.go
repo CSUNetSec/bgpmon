@@ -28,9 +28,12 @@ const (
 )
 
 const (
-	DefaultRPCTimeoutSecs = 240      // Maximum lifetime for an RPC call defaults to 4 minutes
-	DefaultRPCAddress     = ":12289" // Default address:port for the RPC server
-	DefaultDBTimeoutSecs  = 240      // Maximum lifetime for a DB operation defaults to 4 minutes
+	// DefaultRPCTimeoutSecs is the maximum lifetime for an RPC call defaults to 4 minutes
+	DefaultRPCTimeoutSecs = 240
+	// DefaultRPCAddress is the default address:port for the RPC server
+	DefaultRPCAddress = ":12289"
+	// DefaultDBTimeoutSecs is the maximum lifetime for a DB operation defaults to 4 minutes
+	DefaultDBTimeoutSecs = 240
 )
 
 func (s sessionType) String() string {

@@ -11,6 +11,7 @@ import (
 )
 
 var (
+	// ErrOpt is returned by StringToOptMap on failure
 	ErrOpt = errors.New("Error parsing options")
 )
 

@@ -155,9 +155,9 @@ func getTable(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 		resdur       int
 	)
 	selectTableTmpl := ex.getdbop(selectTableOp)
-	cd := tMsg.getColDate()
-	qdate := cd.dat.UTC() //XXX this cast to utc is important. the db is dumb and doesn't figure it out. we need a better approach.
-	rows, err := ex.Query(fmt.Sprintf(selectTableTmpl, tMsg.GetMainTable(), tMsg.GetNodeTable()), qdate, cd.col)
+	colIP := tMsg.GetColIP()
+	qdate := tMsg.GetDate().UTC() //XXX this cast to utc is important. the db is dumb and doesn't figure it out. we need a better approach.
+	rows, err := ex.Query(fmt.Sprintf(selectTableTmpl, tMsg.GetMainTable(), tMsg.GetNodeTable()), qdate, colIP)
 	if err != nil {
 		dblogger.Errorf("getTable query error:%s", err)
 		return newTableReply("", time.Now(), time.Now(), nil, err)
@@ -170,7 +170,7 @@ func getTable(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 			return newTableReply("", time.Now(), time.Now(), nil, err)
 		}
 		//we found a table for that range.
-		n := &node{nodeIP: cd.col, nodeName: rescollector, nodeDuration: resdur}
+		n := &node{nodeIP: colIP, nodeName: rescollector, nodeDuration: resdur}
 		return newTableReply(resdbname, restStart, restEnd, n, nil)
 	}
 
