@@ -1,5 +1,6 @@
 [![GoDoc](https://godoc.org/github.com/CSUNetSec/bgpmon?status.svg)](https://godoc.org/github.com/CSUNetSec/bgpmon)
 [![Build Status](https://travis-ci.org/CSUNetSec/bgpmon.svg?branch=master)](https://travis-ci.org/CSUNetSec/bgpmon)
+[![Go Report Card](https://goreportcard.com/badge/github.com/CSUNetSec/bgpmon)](https://goreportcard.com/report/github.com/CSUNetSec/bgpmon)
 
 BGPmon is a client server application to store and analyze large amounts
 of BGP data.

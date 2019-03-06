@@ -125,7 +125,7 @@ func getPrefixAsIPNet(pw *pbcomm.PrefixWrapper) (*net.IPNet, error) {
 		mask = net.CIDRMask(int(pw.Mask), 128)
 	}
 
-	return &net.IPNet{ip, mask}, nil
+	return &net.IPNet{IP: ip, Mask: mask}, nil
 }
 
 //GetProtoMsg returns a byte array representing the capture from a WritRequest

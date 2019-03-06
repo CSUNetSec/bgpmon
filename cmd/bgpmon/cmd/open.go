@@ -18,7 +18,7 @@ var openCmd = &cobra.Command{
 	Use:   "open SESSION_TYPE",
 	Short: "opens a new database session from the bgpmond and returns its ID",
 	Long: `Tries to open a available session with a specific type from the bgpmond,
-and if succesful returns the newly allocated ID for that session`,
+and if successful returns the newly allocated ID for that session`,
 	Args: cobra.ExactArgs(1),
 	Run:  openSess,
 }

@@ -34,10 +34,12 @@ func get(cmd *cobra.Command, args []string) error {
 	}
 	sessID := args[0]
 	//populate Filters
-	filts := []pb.Filter{}
-	if cmd.Flags().Changed("originAs") {
-		filts = append(filts, pb.Filter{Type: pb.Filter_ORIGIN_AS, OriginAs: oas})
-	}
+	/*
+		filts := []pb.Filter{}
+		if cmd.Flags().Changed("originAs") {
+			filts = append(filts, pb.Filter{Type: pb.Filter_ORIGIN_AS, OriginAs: oas})
+		}
+	*/
 
 	ac := cmd.Flags().Changed("startTime")
 	bc := cmd.Flags().Changed("endTime")

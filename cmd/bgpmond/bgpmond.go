@@ -45,7 +45,7 @@ func main() {
 	}
 
 	waitOnInterrupt()
-	mainlogger.Infof("Recieved SIGINT, shutting down")
+	mainlogger.Infof("Received SIGINT, shutting down")
 	server.Close()
 }
 

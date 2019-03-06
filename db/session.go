@@ -139,7 +139,7 @@ func (s *Session) Db() *sql.DB {
 	return s.db
 }
 
-//GetTimeout satisifes the GetTimeouter interface on a Session so it can be a TimeoutDber
+//GetTimeout satisfies the GetTimeouter interface on a Session so it can be a TimeoutDber
 func (s *Session) GetTimeout() time.Duration {
 	return time.Duration(s.dbTimeoutSecs) * time.Second
 }

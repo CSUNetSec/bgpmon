@@ -31,15 +31,15 @@ const (
 )
 
 var dbops = map[string][]string{
-	connectNoSSLOp: []string{
+	connectNoSSLOp: {
 		//postgres
 		`user=%s password=%s dbname=%s host=%s sslmode=disable`,
 	},
-	connectSSLOp: []string{
+	connectSSLOp: {
 		//postgres
 		`user=%s password=%s dbname=%s host=%s`,
 	},
-	checkSchemaOp: []string{
+	checkSchemaOp: {
 		//postgres
 		`SELECT EXISTS (
 		   SELECT *
@@ -47,11 +47,11 @@ var dbops = map[string][]string{
 		   WHERE  table_name = $1
 		 );`,
 	},
-	selectNodeOp: []string{
+	selectNodeOp: {
 		//postgres
 		`SELECT name, ip, isCollector, tableDumpDurationMinutes, description, coords, address FROM %s;`,
 	},
-	insertNodeOp: []string{
+	insertNodeOp: {
 		//postgres
 		`INSERT INTO %s (name, ip, isCollector, tableDumpDurationMinutes, description, coords, address) 
 		   VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -59,7 +59,7 @@ var dbops = map[string][]string{
 		     tableDumpDurationMinutes=EXCLUDED.tableDumpDurationMinutes,
 		     description=EXCLUDED.description, coords=EXCLUDED.coords, address=EXCLUDED.address;`,
 	},
-	makeMainTableOp: []string{
+	makeMainTableOp: {
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   dbname varchar PRIMARY KEY,
@@ -68,11 +68,11 @@ var dbops = map[string][]string{
 	           dateTo timestamp NOT NULL
                  );`,
 	},
-	insertMainTableOp: []string{
+	insertMainTableOp: {
 		//postgres
 		`INSERT INTO %s (dbname, collector, dateFrom, dateTo) VALUES ($1, $2, $3, $4);`,
 	},
-	makeCaptureTableOp: []string{
+	makeCaptureTableOp: {
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   update_id BIGSERIAL PRIMARY KEY NOT NULL, 
@@ -87,16 +87,16 @@ var dbops = map[string][]string{
 		   protomsg bytea NOT NULL);`,
 	},
 	// This template shouldn't need VALUES, because those will be provided by the buffer
-	insertCaptureTableOp: []string{
+	insertCaptureTableOp: {
 		//postgres
 		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes, protomsg) VALUES `,
 	},
-	selectTableOp: []string{
+	selectTableOp: {
 		//postgres
 		`SELECT dbname, collector, dateFrom, dateTo, tableDumpDurationMinutes FROM %s,%s 
 		 WHERE dateFrom <= $1 AND dateTo > $1 AND ip = $2;`,
 	},
-	makeNodeTableOp: []string{
+	makeNodeTableOp: {
 		//postgres
 		`CREATE TABLE IF NOT EXISTS %s (
 		   ip varchar PRIMARY KEY,
@@ -108,7 +108,7 @@ var dbops = map[string][]string{
 		   address varchar NOT NULL
 	         );`,
 	},
-	getCaptureTablesOp: []string{
+	getCaptureTablesOp: {
 		`SELECT dbname FROM %s WHERE collector=$1 AND dateFrom>=$2 AND dateTo<$3;`,
 	},
 }
@@ -287,7 +287,7 @@ func (c *ctxTx) Done() error {
 	defer c.cf() //release resources if it's done.
 	if c.doTx && c.tx != nil {
 		if c.err == nil {
-			dblogger.Infof("tx commit successfull")
+			dblogger.Infof("tx commit successful")
 			return c.tx.Commit()
 		}
 		dblogger.Infof("rolling back the transaction due to error:%s", c.err)

@@ -86,7 +86,7 @@ func (b *bgpmondConfig) GetSessionConfigWithName(a string) (SessionConfiger, err
 		exists bool
 	)
 	if ret, exists = b.Sessions[a]; !exists {
-		return ret, errors.New(fmt.Sprintf("Session config with name %s does not exist", a))
+		return ret, fmt.Errorf("Session config with name %s does not exist", a)
 	}
 	return ret, nil
 }
@@ -219,7 +219,7 @@ func (b *bgpmondConfig) checkConfig() error {
 	}
 	for k, v := range b.Nodes {
 		if nip = net.ParseIP(k); nip == nil {
-			return errors.New(fmt.Sprintf("malformed ip in config:%s", k))
+			return fmt.Errorf("malformed ip in config:%s", k)
 		}
 		v.IP = k
 		b.Nodes[k] = v

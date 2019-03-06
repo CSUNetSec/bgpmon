@@ -44,7 +44,7 @@ func TestConnectPostgres(t *testing.T) {
 	if err := db.Ping(); err != nil {
 		t.Fatal(err)
 	}
-	t.Log("postgres pinged succesfully")
+	t.Log("postgres pinged successfully")
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
