@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/CSUNetSec/bgpmon/config"
-	"github.com/CSUNetSec/bgpmon/util"
 	"github.com/pkg/errors"
+	swg "github.com/remeh/sizedwaitgroup"
 	"os"
 	"time"
 )
@@ -26,10 +26,10 @@ type sessionStream struct {
 	oper   *dbOper
 	ex     *ctxtxOperExecutor
 	schema *schemaMgr
-	wp     *util.WorkerPool
+	wp     *swg.SizedWaitGroup
 }
 
-func newSessionStream(db TimeoutDber, oper *dbOper, s *schemaMgr, wp *util.WorkerPool) *sessionStream {
+func newSessionStream(db TimeoutDber, oper *dbOper, s *schemaMgr, wp *swg.SizedWaitGroup) *sessionStream {
 	return &sessionStream{db: db, oper: oper, schema: s, wp: wp, ex: nil}
 }
 
@@ -56,7 +56,7 @@ type Sessioner interface {
 type Session struct {
 	uuid          string
 	cancel        chan bool
-	wp            *util.WorkerPool
+	wp            *swg.SizedWaitGroup
 	dbo           *dbOper //this struct provides the strings for the sql ops.
 	db            *sql.DB
 	schema        *schemaMgr
@@ -89,9 +89,9 @@ func NewSession(conf config.SessionConfiger, id string, nworkers int) (*Session,
 		wc = nworkers
 	}
 
-	wp := util.NewWorkerPool(wc)
+	wp := swg.New(wc)
 	dt := conf.GetDBTimeoutSecs()
-	s := &Session{uuid: id, cancel: cancel, wp: wp, maxWC: wc, dbTimeoutSecs: dt}
+	s := &Session{uuid: id, cancel: cancel, wp: &wp, maxWC: wc, dbTimeoutSecs: dt}
 	u := conf.GetUser()
 	p := conf.GetPassword()
 	d := conf.GetDatabaseName()
@@ -174,7 +174,7 @@ func (s *Session) Close() error {
 	dblogger.Infof("Closing session: %s", s.uuid)
 
 	close(s.cancel)
-	s.wp.Close()
+	s.wp.Wait()
 	s.schema.stop()
 
 	return nil

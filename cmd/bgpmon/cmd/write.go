@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/CSUNetSec/bgpmon/util"
 	monpb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/CSUNetSec/protoparse/fileutil"
 	"github.com/CSUNetSec/protoparse/filter"
+	swg "github.com/remeh/sizedwaitgroup"
 	"io"
 	"sync"
 
@@ -72,7 +72,7 @@ func writeFunc(cmd *cobra.Command, args []string) {
 	go summarizeResults(results, wg)
 
 	// This should be a number received from the daemon
-	wp := util.NewWorkerPool(wc)
+	wp := swg.New(wc)
 	for _, fname := range args[1:] {
 		wp.Add()
 		fmt.Printf("Writing %s\n", fname)
@@ -85,7 +85,7 @@ func writeFunc(cmd *cobra.Command, args []string) {
 			wp.Done()
 		}(fname)
 	}
-	wp.Close()
+	wp.Wait()
 	close(results)
 	wg.Wait()
 }
