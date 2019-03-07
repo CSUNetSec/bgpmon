@@ -2,6 +2,8 @@ package util
 
 import (
 	"fmt"
+	"io/ioutil"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -43,4 +45,9 @@ func NewLogger(fields ...string) Logger {
 	}
 
 	return logger{log: logrus.WithFields(fieldsMap)}
+}
+
+// DisableLogging reroutes all created loggers to a nil output
+func DisableLogging() {
+	logrus.SetOutput(ioutil.Discard)
 }

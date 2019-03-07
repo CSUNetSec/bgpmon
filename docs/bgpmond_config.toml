@@ -1,0 +1,47 @@
+# DO NOT EDIT
+# This file is used by our test suite.
+# Editing the values inside this file may cause tests to fail.
+# If this file must be edited, the tests may also need to be
+# edited.
+DebugOut = "stdout"
+ErrorOut = "stderr"
+
+# Sessions represent the possible database backends
+[Sessions.LocalPostgres]
+Type = "postgres"
+Hosts = ["localhost"]
+Database = "bgpmon"
+User = "bgpmon"
+Password = "bgpmon"
+WorkerCt = 4
+
+# Modules represent modules to run on startup
+# Multiple modules of the same type can be instantiated with
+# different IDs
+[Modules]
+# RPC exposes the basic bgpmond operation over an RPC interface that
+# consumes and produces protocol buffers defined in the netsec-protobufs
+# repository /bgpmon
+[Modules.rpc1]
+Type="rpc"
+Args="-address :12289 -timeoutsecs 240"
+
+# pprof enables the http profiler at an address specified by Args
+[Modules.pprof1]
+Type="pprof"
+Args="-address localhost:6969"
+
+#[Modules.periodic1]
+#Type="periodic"
+#Args="1s example_tsk Hello"
+
+# Nodes represent operator provided information for nodes involved in
+# BGP transactions
+# If there are already saved nodes in the database that conflict with the
+# configuration, the configuration is preferred
+[Nodes]
+[Nodes."128.223.51.102"]
+Name="routeviews2"
+IsCollector=true
+DumpDurationMinutes=1440
+Descritption="routeviews.org routeviews2 collector"
