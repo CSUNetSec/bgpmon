@@ -108,6 +108,8 @@ type dbWrapper struct {
 
 func (d dbWrapper) SetError(e error) {}
 
+var wrapper dbWrapper
+
 // This test has no fail condition, but it's success can be observed
 // by selecting on the test table
 func TestBufferOnDb(t *testing.T) {
@@ -119,11 +121,39 @@ func TestBufferOnDb(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dbConn.Close()
-	db := dbWrapper{SQLExecutor: dbConn}
+	wrapper = dbWrapper{SQLExecutor: dbConn}
 
+	err = setupTestTable()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("", dbBufferTest)
+
+	err = teardownTestTable()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func setupTestTable() error {
+	stmt := "CREATE TABLE IF NOT EXISTS test (a int, b int, c int);"
+	_, err := wrapper.Exec(stmt)
+	return err
+}
+
+func teardownTestTable() error {
+	stmt := "DROP TABLE test;"
+	_, err := wrapper.Exec(stmt)
+	return err
+}
+
+func dbBufferTest(t *testing.T) {
 	baseStmt := "INSERT INTO test VALUES"
-	buf := NewInsertBuffer(db, baseStmt, 2, 3, true)
-	err = buf.Add(21, 22, 23)
+	queryStmt := "SELECT * FROM test;"
+	buf := NewInsertBuffer(wrapper, baseStmt, 2, 3, true)
+
+	err := buf.Add(21, 22, 23)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,8 +167,27 @@ func TestBufferOnDb(t *testing.T) {
 	}
 	err = buf.Flush()
 	if err != nil {
-		t.Fatalf("Second error: %v", err)
+		t.Fatal(err)
 	}
+
+	rows, err := wrapper.Query(queryStmt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	sum := 0
+	for rows.Next() {
+		a, b, c := 0, 0, 0
+		rows.Scan(&a, &b, &c)
+		sum += a + b + c
+	}
+	expected := 66 + 105 + 144
+
+	if sum != expected {
+		t.Errorf("Expected %d, Got %d", expected, sum)
+	}
+
 }
 
 func getDbConnection() (*sql.DB, error) {
