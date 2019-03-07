@@ -3,10 +3,13 @@ package db
 import (
 	"context"
 	"fmt"
+	"net"
+	"sync"
+
 	"github.com/CSUNetSec/bgpmon/util"
+
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/lib/pq"
-	"net"
 )
 
 const (
@@ -18,23 +21,23 @@ const (
 //for efficient writes
 type writeCapStream struct {
 	*sessionStream
-	req     chan CommonMessage
-	resp    chan CommonReply
-	cancel  chan bool
-	closed  bool
-	buffers map[string]util.SQLBuffer
-	cache   tableCache
+	req      chan CommonMessage
+	resp     chan CommonReply
+	cancel   chan bool
+	buffers  map[string]util.SQLBuffer
+	cache    tableCache
+	daemonWG sync.WaitGroup
 }
 
 //NewwriteCapStream returns a newly allocated writeCapStream
 func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStream {
-	w := &writeCapStream{sessionStream: parStream, closed: false}
+	w := &writeCapStream{sessionStream: parStream, daemonWG: sync.WaitGroup{}}
 
 	parentCancel := pcancel
 	childCancel := make(chan bool)
 	daemonCancel := make(chan bool)
 	// If the parent requests a close, and the routine isn't already closed,
-	// paw that on to the child.
+	// pass that on to the child.
 	go func(par, child, daemon chan bool) {
 		select {
 		case <-par:
@@ -47,12 +50,15 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStr
 	w.cancel = childCancel
 
 	w.req = make(chan CommonMessage)
-	w.resp = make(chan CommonReply)
+	// This needs to have a buffer of 1 so the daemon can send back a response
+	// when it's cancelled, and doesn't have to wait for the next request.
+	w.resp = make(chan CommonReply, 1)
 	w.buffers = make(map[string]util.SQLBuffer)
 	w.cache = newNestedTableCache(parStream.schema)
 	ctxTx, _ := getNewExecutor(context.Background(), w.db, true, parStream.db.GetTimeout())
 	w.ex = newCtxTxSessionExecutor(ctxTx, w.oper)
 
+	w.daemonWG.Add(1)
 	go w.listen(daemonCancel)
 	return w
 }
@@ -110,7 +116,7 @@ func (w *writeCapStream) Close() {
 	dblogger.Infof("Closing session stream")
 	close(w.cancel)
 	close(w.req)
-
+	w.daemonWG.Wait()
 	w.wp.Done()
 	return
 }
@@ -128,27 +134,34 @@ func (w *writeCapStream) Close() {
 func (w *writeCapStream) listen(cancel chan bool) {
 	defer dblogger.Infof("Session stream closed successfully")
 	defer close(w.resp)
+	defer w.daemonWG.Done()
 
 	for {
 		select {
 		case normal, open := <-cancel:
+			// If this is closed, it can spam this select case. Just ignore it
+			// if it happens. It will always recieve a real value before it's
+			// closed.
 			if !open {
 				continue
 			}
 
-			w.closed = true
-			if normal {
-				return
+			// If it was an abnormal closing, the client may, or may not, expect
+			// another value from a call to Send(). This channel has a buffer of
+			// 1 so this won't block, and the value can be recieved soon.
+			if !normal {
+				w.resp <- newReply(fmt.Errorf("writeCapStream cancelled"))
 			}
+			return
 		case val, ok := <-w.req:
-			// Between the last message and this one, the channel was closed unexpectedly. Return the error
-			if w.closed {
-				w.resp <- newReply(fmt.Errorf("Session stream channel closed"))
-			}
 			// The w.req channel might see it's close before the cancel channel.
-			// If that happens, this will add an empty sqlIn to the buffer
+			// If that happens, this will add an empty sqlIn to the buffer. If
+			// it has been closed, that's the same as a normal closure, and this
+			// can just return
 			if ok {
 				w.resp <- newReply(w.addToBuffer(val))
+			} else {
+				return
 			}
 		}
 	}

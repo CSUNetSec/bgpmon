@@ -3,10 +3,11 @@ package db
 import (
 	"fmt"
 	"net"
+	"sync"
+	"time"
 
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
-	"time"
 )
 
 var (
@@ -22,20 +23,23 @@ const (
 )
 
 type schemaMgr struct {
-	iChan chan schemaMessage
-	oChan chan CommonReply
-	sex   SessionExecutor //this executor should be a dbSessionExecutor, not at tx.
-	cache *dbCache
+	iChan    chan schemaMessage
+	oChan    chan CommonReply
+	sex      SessionExecutor //this executor should be a dbSessionExecutor, not at tx.
+	cache    *dbCache
+	daemonWG sync.WaitGroup
 }
 
 // This function launches the run method in a separate goroutine
 func newSchemaMgr(sex SessionExecutor) *schemaMgr {
 	sm := &schemaMgr{
-		iChan: make(chan schemaMessage),
-		oChan: make(chan CommonReply),
-		sex:   sex,
-		cache: newDBCache(),
+		iChan:    make(chan schemaMessage),
+		oChan:    make(chan CommonReply),
+		sex:      sex,
+		cache:    newDBCache(),
+		daemonWG: sync.WaitGroup{},
 	}
+	sm.daemonWG.Add(1)
 	go sm.run()
 	return sm
 }
@@ -44,6 +48,7 @@ func newSchemaMgr(sex SessionExecutor) *schemaMgr {
 func (s *schemaMgr) run() {
 	defer slogger.Infof("Schema manager closed successfully")
 	defer close(s.oChan)
+	defer s.daemonWG.Done()
 
 	for {
 		select {
@@ -147,6 +152,7 @@ func (s *schemaMgr) makeCapTable(msg CommonMessage) CommonReply {
 // none of the other interface methods will be called after close is called.
 func (s *schemaMgr) stop() {
 	close(s.iChan)
+	//s.daemonWG.Wait()
 }
 
 func (s *schemaMgr) checkSchema(dbname, maintable, nodetable string) (bool, error) {
