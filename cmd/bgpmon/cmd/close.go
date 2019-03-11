@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +21,7 @@ func closeSess(cmd *cobra.Command, args []string) {
 	if bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
 	} else {
-		defer bc.close()
+		defer bc.Close()
 		emsg := &pb.CloseSessionRequest{
 			SessionId: sessID,
 		}

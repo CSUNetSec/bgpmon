@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 
 	"github.com/spf13/cobra"
@@ -23,7 +22,7 @@ func getInfoFunc(cmd *cobra.Command, args []string) {
 		fmt.Printf("Error: %s\n", clierr)
 	}
 
-	defer bc.close()
+	defer bc.Close()
 	msg := &pb.SessionInfoRequest{SessionId: args[0]}
 	ctx, cancel := getCtxWithCancel()
 	defer cancel()
