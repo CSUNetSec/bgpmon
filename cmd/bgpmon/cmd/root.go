@@ -1,16 +1,20 @@
+// Package cmd is the package that provides implementations for the bgpmon client
+// commands. It utilizes the cobra and viper configuration frameworks which
+// make it possible for commands to either be specified by command line options
+// or configuration files.
 package cmd
 
 import (
 	"context"
 	"fmt"
-	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
-	"google.golang.org/grpc"
 	"os"
 	"time"
 
-	homedir "github.com/mitchellh/go-homedir"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
+	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -20,6 +24,8 @@ var (
 	rpcTimeoutSecs uint32
 )
 
+// bgpmonCli is a structure that unifies a grpc connection with the bgpmond
+// client protobuf specification from the netsec-protobufs repository.
 type bgpmonCli struct {
 	conn *grpc.ClientConn
 	cli  pb.BgpmondClient
@@ -36,15 +42,18 @@ func newBgpmonCli(host string, port uint32) (*bgpmonCli, error) {
 	return ret, nil
 }
 
-func (b *bgpmonCli) Close() {
-	b.conn.Close()
+func (b *bgpmonCli) close() error {
+	return b.conn.Close()
 }
 
-// helper func to return a context with a cancelfunc with timeout
+// helper func to return a context with a cancelfunc with timeout.
 func getCtxWithCancel() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), time.Duration(rpcTimeoutSecs)*time.Second)
 }
 
+// getBackgroundCtxWithCancel derives a new context for the background one, alongside with a cancel function
+// that can be invoked by a holder. The purpose of this context is to pass cancellation request from the RPC
+// client events to the server components that can be running on another host.
 func getBackgroundCtxWithCancel() (context.Context, context.CancelFunc) {
 	return context.WithCancel(context.Background())
 }
@@ -67,10 +76,10 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.bgpmon.yaml)")
-	rootCmd.PersistentFlags().StringVarP(&bgpmondHost, "host", "H", "127.0.0.1", "bgpmond host to connect to (default is 127.0.0.1)")
-	rootCmd.PersistentFlags().Uint32VarP(&bgpmondPort, "port", "P", 12289, "bgpmond port to connect to (default is 6060)")
-	rootCmd.PersistentFlags().Uint32VarP(&rpcTimeoutSecs, "rpcTimeout", "t", 5, "seconds in which an RPC request should timeout")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "$HOME/.bgpmon.yaml", "config file (default is $HOME/.bgpmon.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&bgpmondHost, "host", "h", "127.0.0.1", "bgpmond host to connect to (default is 127.0.0.1)")
+	rootCmd.PersistentFlags().Uint32VarP(&bgpmondPort, "port", "p", 6060, "bgpmond port to connect to (default is 6060)")
+	rootCmd.PersistentFlags().Uint32VarP(&rpcTimeoutSecs, "rpcTimeout", "t", 5, "seconds in which an RPC request should timeout (default is 5)")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -91,10 +100,13 @@ func initConfig() {
 		viper.SetConfigName(".bgpmon")
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
+	viper.AutomaticEnv() // Read in environment variables that match.
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
+	} else if !os.IsNotExist(err) { // The config file exists but it errored in parsing.
+		fmt.Printf("Error:%s in parsing config file:%s\n", viper.ConfigFileUsed(), err)
+		os.Exit(1)
 	}
 }

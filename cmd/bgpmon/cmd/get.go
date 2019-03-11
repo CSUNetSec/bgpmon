@@ -60,7 +60,7 @@ func get(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Error: %s\n", clierr)
 		return clierr
 	}
-	defer moncli.Close()
+	defer moncli.close()
 	ctx, cancel := getBackgroundCtxWithCancel()
 	// First get the session info
 	pbr := &pb.GetRequest{Type: pb.GetRequest_CAPTURE, SessionId: sessID,
