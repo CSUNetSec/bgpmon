@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"sync"
+
 	monpb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/CSUNetSec/protoparse/fileutil"
 	"github.com/CSUNetSec/protoparse/filter"
 	swg "github.com/remeh/sizedwaitgroup"
-	"io"
-	"sync"
 
 	"github.com/spf13/cobra"
 )
@@ -39,7 +40,7 @@ func writeFunc(cmd *cobra.Command, args []string) {
 		fmt.Printf("Error: %s\n", clierr)
 		return
 	}
-	defer bc.Close()
+	defer bc.close()
 
 	ctx, cancel := getBackgroundCtxWithCancel()
 	// First get the session info
