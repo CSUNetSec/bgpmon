@@ -3,17 +3,15 @@ package modules
 import (
 	"context"
 	"fmt"
+	core "github.com/CSUNetSec/bgpmon"
+	"github.com/CSUNetSec/bgpmon/db"
+	"github.com/CSUNetSec/bgpmon/util"
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
+	"google.golang.org/grpc"
 	"io"
 	"net"
 	"strconv"
 	"time"
-
-	core "github.com/CSUNetSec/bgpmon"
-	"github.com/CSUNetSec/bgpmon/db"
-	"github.com/CSUNetSec/bgpmon/util"
-
-	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
-	"google.golang.org/grpc"
 )
 
 var (

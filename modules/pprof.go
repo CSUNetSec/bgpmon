@@ -1,11 +1,10 @@
 package modules
 
 import (
-	"net/http"
-	_ "net/http/pprof" // Needed so the http ListenAndServe includes the profiler
-
 	core "github.com/CSUNetSec/bgpmon"
 	"github.com/CSUNetSec/bgpmon/util"
+	"net/http"
+	_ "net/http/pprof" // Needed so the http ListenAndServe includes the profiler
 )
 
 type pprofMod struct {

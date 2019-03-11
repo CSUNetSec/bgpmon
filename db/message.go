@@ -1,11 +1,11 @@
 package db
 
 import (
-	"encoding"
 	"time"
 
-	"github.com/CSUNetSec/bgpmon/config"
+	"encoding"
 
+	"github.com/CSUNetSec/bgpmon/config"
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 )
 

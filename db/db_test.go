@@ -2,9 +2,9 @@ package db
 
 import (
 	"database/sql"
-	"testing"
-
 	"github.com/CSUNetSec/bgpmon/config"
+	"os"
+	"testing"
 )
 
 const (
@@ -107,4 +107,6 @@ func TestSyncNodes(t *testing.T) {
 	if rep.Error() != nil {
 		t.Fatal(rep.Error())
 	}
+	nRep := rep.(nodesReply)
+	config.PutConfiguredNodes(nRep.GetNodes(), os.Stdout)
 }

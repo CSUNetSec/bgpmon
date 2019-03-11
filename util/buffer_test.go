@@ -3,10 +3,9 @@ package util
 import (
 	"database/sql"
 	"fmt"
+	_ "github.com/lib/pq"
 	"testing"
 	"time"
-
-	_ "github.com/lib/pq"
 )
 
 type TestExecutor struct {

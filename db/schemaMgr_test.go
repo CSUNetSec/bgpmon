@@ -2,10 +2,9 @@ package db
 
 import (
 	"database/sql"
+	_ "github.com/lib/pq"
 	"testing"
 	"time"
-
-	_ "github.com/lib/pq"
 )
 
 var (

@@ -4,14 +4,11 @@ package config
 
 import (
 	"fmt"
+	"github.com/BurntSushi/toml"
+	"github.com/CSUNetSec/bgpmon/util"
+	"github.com/pkg/errors"
 	"io"
 	"net"
-	"os"
-
-	"github.com/CSUNetSec/bgpmon/util"
-
-	"github.com/BurntSushi/toml"
-	"github.com/pkg/errors"
 )
 
 type sessionType int
@@ -37,8 +34,6 @@ const (
 	DefaultRPCAddress = ":12289"
 	// DefaultDBTimeoutSecs is the maximum lifetime for a DB operation defaults to 4 minutes
 	DefaultDBTimeoutSecs = 240
-	// DefaultSuggestedNodeFile is the file created by PutConfiguredNodes
-	DefaultSuggestedNodeFile = "suggested_nodes.toml"
 )
 
 func (s sessionType) String() string {
@@ -109,14 +104,8 @@ func (b *bgpmondConfig) GetModules() []ModuleConfig {
 }
 
 // PutConfiguredNodes writes a node configuration in the TOML format to w
-func PutConfiguredNodes(a map[string]NodeConfig) error {
-	fd, err := os.Create(DefaultSuggestedNodeFile)
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-
-	return toml.NewEncoder(fd).Encode(a)
+func PutConfiguredNodes(a map[string]NodeConfig, w io.Writer) error {
+	return toml.NewEncoder(w).Encode(a)
 }
 
 type sessionConfig struct {

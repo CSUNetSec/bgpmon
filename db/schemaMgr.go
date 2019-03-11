@@ -152,7 +152,7 @@ func (s *schemaMgr) makeCapTable(msg CommonMessage) CommonReply {
 // none of the other interface methods will be called after close is called.
 func (s *schemaMgr) stop() {
 	close(s.iChan)
-	s.daemonWG.Wait()
+	//s.daemonWG.Wait()
 }
 
 func (s *schemaMgr) checkSchema(dbname, maintable, nodetable string) (bool, error) {

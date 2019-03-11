@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
+	"time"
 )
 
 const (

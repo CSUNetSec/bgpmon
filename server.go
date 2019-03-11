@@ -4,14 +4,12 @@ package bgpmon
 
 import (
 	"fmt"
-	"os"
-	"sync"
-
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/db"
 	"github.com/CSUNetSec/bgpmon/util"
-
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
+	"os"
+	"sync"
 )
 
 var (

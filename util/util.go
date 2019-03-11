@@ -4,10 +4,9 @@ package util
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
 	"strings"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 var (
