@@ -17,24 +17,24 @@ type SQLBuffer interface {
 // Helps to optimize the amount of inserted values on a
 // single query
 type InsertBuffer struct {
-	ex         SQLErrorExecutor // Executor to flush to (with the ability to set the internal error)
-	stmt       string           // base stmt
-	addedStmt  string           // generated statement
-	stmtbld    strings.Builder  //to efficiently build the string
-	max        int              // Depending on the database, might be limited
-	ct         int              // Current number of entries
-	batchSize  int              // Number of arguments expected of an add
-	values     []interface{}    // Buffered values
-	usePosArgs bool             // Use $1 style args in the statement instead of ?
+	ex         SQLExecutor     // Executor to flush to (with the ability to set the internal error)
+	stmt       string          // base stmt
+	addedStmt  string          // generated statement
+	stmtbld    strings.Builder //to efficiently build the string
+	max        int             // Depending on the database, might be limited
+	ct         int             // Current number of entries
+	batchSize  int             // Number of arguments expected of an add
+	values     []interface{}   // Buffered values
+	usePosArgs bool            // Use $1 style args in the statement instead of ?
 }
 
 // NewInsertBuffer returns a SQLBuffer which buffers values for an insert statement.
 // stmt is the original SQL statement which will be appended with VALUES() clauses. ex
-// is the SQLErrorExecutor that the query will be run on when the buffer is full. max is
+// is the SQLExecutor that the query will be run on when the buffer is full. max is
 // the number of VALUES clauses that can be added to this buffer. Each VALUES() clause must
 // contain exactly batchSize values. If usePositional is true, the resulting insert statement
 // will use this format: ($1, $2, $3). If it is false, it will use: (?,?,?)
-func NewInsertBuffer(ex SQLErrorExecutor, stmt string, max int, batchSize int, usePositional bool) SQLBuffer {
+func NewInsertBuffer(ex SQLExecutor, stmt string, max int, batchSize int, usePositional bool) SQLBuffer {
 	return &InsertBuffer{max: max, ex: ex, stmt: stmt, addedStmt: "", ct: 0, usePosArgs: usePositional, batchSize: batchSize}
 }
 
@@ -90,7 +90,6 @@ func (ib *InsertBuffer) Flush() error {
 
 	_, err := ib.ex.Exec(convStmt, ib.values...)
 	if err != nil {
-		ib.ex.SetError(err)
 		return err
 	}
 	ib.Clear()

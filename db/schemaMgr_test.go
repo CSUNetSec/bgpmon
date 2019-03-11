@@ -24,7 +24,7 @@ func getex() (SessionExecutor, *sql.DB) {
 	}
 	gdb = db
 	dbo := newPostgressDbOper()
-	sex := newDbSessionExecutor(db, dbo)
+	sex := newSessionExecutor(db, dbo)
 	gex = sex
 	return sex, db
 }

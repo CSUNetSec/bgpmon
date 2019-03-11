@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -30,7 +29,7 @@ type writeCapStream struct {
 }
 
 //NewwriteCapStream returns a newly allocated writeCapStream
-func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStream {
+func newWriteCapStream(parStream *sessionStream, pcancel chan bool) (*writeCapStream, error) {
 	w := &writeCapStream{sessionStream: parStream, daemonWG: sync.WaitGroup{}}
 
 	parentCancel := pcancel
@@ -55,12 +54,17 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) *writeCapStr
 	w.resp = make(chan CommonReply, 1)
 	w.buffers = make(map[string]util.SQLBuffer)
 	w.cache = newNestedTableCache(parStream.schema)
-	ctxTx, _ := getNewExecutor(context.Background(), w.db, true, parStream.db.GetTimeout())
-	w.ex = newCtxTxSessionExecutor(ctxTx, w.oper)
+
+	ctxTx, err := newCtxExecutor(w.db, true)
+	if err != nil {
+		dblogger.Errorf("Error opening ctxTx executor: %s", err)
+		return nil, err
+	}
+	w.ex = newSessionExecutor(ctxTx, w.oper)
 
 	w.daemonWG.Add(1)
 	go w.listen(daemonCancel)
-	return w
+	return w, nil
 }
 
 //Send performs a type of send on the sessionstream with an arbitrary argument
@@ -94,17 +98,26 @@ func (w *writeCapStream) Write(arg interface{}) error {
 //Flush is called when a stream finishes successfully
 //It flushes all remaining buffers
 func (w *writeCapStream) Flush() error {
+	dblogger.Infof("Flushing stream")
 	for key := range w.buffers {
 		w.buffers[key].Flush()
 	}
-	w.ex.Done()
-	return nil
+	atomicEx := w.ex.getExecutor().(*ctxTx)
+	return atomicEx.Commit()
 }
 
 //Cancel is used when there is an error on the client-side,
 //called to rollback all executed queries
 func (w *writeCapStream) Cancel() {
-	w.ex.SetError(fmt.Errorf("Session stream cancelled"))
+	dblogger.Infof("Cancelling stream")
+	for key := range w.buffers {
+		w.buffers[key].Clear()
+	}
+
+	atomicEx := w.ex.getExecutor().(*ctxTx)
+	if err := atomicEx.Rollback(); err != nil {
+		dblogger.Errorf("Error rolling back stream: %s", err)
+	}
 	return
 }
 
@@ -132,7 +145,7 @@ func (w *writeCapStream) Close() {
 //		should return that the stream has been closed before shutting down
 //		completely.
 func (w *writeCapStream) listen(cancel chan bool) {
-	defer dblogger.Infof("Session stream closed successfully")
+	defer dblogger.Infof("WriteCapStream closed successfully")
 	defer close(w.resp)
 	defer w.daemonWG.Done()
 

@@ -154,6 +154,9 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 	first = true
 	for {
 		if util.NBContextClosed(timeoutCtx) {
+			if dbStream != nil {
+				dbStream.Cancel()
+			}
 			return r.logger.Errorf("context closed, aborting write")
 		}
 
@@ -188,7 +191,7 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 	if err := dbStream.Flush(); err != nil {
 		return r.logger.Errorf("write stream failed to flush: %s", err)
 	}
-	r.logger.Infof("Write stream success")
 
+	r.logger.Infof("Write stream success")
 	return nil
 }
