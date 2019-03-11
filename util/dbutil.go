@@ -3,9 +3,10 @@ package util
 import (
 	"database/sql"
 	"database/sql/driver"
-	"github.com/lib/pq"
 	"net"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 //helper function that checks if t is in the [t1,t2) range

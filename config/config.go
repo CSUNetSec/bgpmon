@@ -4,11 +4,13 @@ package config
 
 import (
 	"fmt"
-	"github.com/BurntSushi/toml"
-	"github.com/CSUNetSec/bgpmon/util"
-	"github.com/pkg/errors"
 	"io"
 	"net"
+
+	"github.com/CSUNetSec/bgpmon/util"
+
+	"github.com/BurntSushi/toml"
+	"github.com/pkg/errors"
 )
 
 type sessionType int
