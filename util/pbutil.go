@@ -2,10 +2,11 @@ package util
 
 import (
 	"errors"
-	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
-	pbcomm "github.com/CSUNetSec/netsec-protobufs/common"
 	"net"
 	"time"
+
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
+	pbcomm "github.com/CSUNetSec/netsec-protobufs/common"
 )
 
 var (

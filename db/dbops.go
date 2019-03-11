@@ -6,6 +6,7 @@ import (
 
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
+
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 )

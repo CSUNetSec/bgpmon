@@ -3,11 +3,12 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/CSUNetSec/bgpmon/config"
+
 	"github.com/pkg/errors"
 	swg "github.com/remeh/sizedwaitgroup"
-	"os"
-	"time"
 )
 
 type sessionType int
@@ -127,10 +128,14 @@ func NewSession(conf config.SessionConfiger, id string, nworkers int) (*Session,
 		return nil, err
 	}
 	//calling syncnodes on the new schema manager
-	nMsg := newNodesMessage(cn)
-	nRep := syncNodes(sex, nMsg).(nodesReply)
-	fmt.Print("merged nodes, from the config file and the db are:")
-	config.PutConfiguredNodes(nRep.GetNodes(), os.Stdout)
+	nodes, err := s.schema.syncNodes("bgpmon", "nodes", cn)
+	if err != nil {
+		dblogger.Errorf("Error syncing nodes: %s", err)
+	} else {
+		dblogger.Infof("Synced nodes, creating suggested nodes file")
+		config.PutConfiguredNodes(nodes)
+	}
+
 	return s, nil
 }
 

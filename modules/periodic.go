@@ -2,9 +2,10 @@ package modules
 
 import (
 	"fmt"
+	"time"
+
 	core "github.com/CSUNetSec/bgpmon"
 	"github.com/CSUNetSec/bgpmon/util"
-	"time"
 )
 
 // PeriodicModule will run another module repeatedly until it is cancelled.
