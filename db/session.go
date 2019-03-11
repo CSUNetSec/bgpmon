@@ -3,11 +3,13 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"github.com/CSUNetSec/bgpmon/config"
-	"github.com/pkg/errors"
-	swg "github.com/remeh/sizedwaitgroup"
 	"os"
 	"time"
+
+	"github.com/CSUNetSec/bgpmon/config"
+
+	"github.com/pkg/errors"
+	swg "github.com/remeh/sizedwaitgroup"
 )
 
 type sessionType int

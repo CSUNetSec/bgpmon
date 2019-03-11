@@ -2,6 +2,7 @@ package bgpmon
 
 import (
 	"fmt"
+
 	"github.com/CSUNetSec/bgpmon/util"
 )
 
