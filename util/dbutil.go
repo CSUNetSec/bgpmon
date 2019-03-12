@@ -28,10 +28,12 @@ type SQLExecutor interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
-// SQLErrorExecutor is a SQLExecutor with a persistent error, useful in tx
-type SQLErrorExecutor interface {
+// AtomicSQLExecutor is a SQLExecutor that can be committed or rolled back. This
+// wraps sql.Tx and others we implement
+type AtomicSQLExecutor interface {
 	SQLExecutor
-	SetError(error)
+	Commit() error
+	Rollback() error
 }
 
 //PrefixesToPQArray handles a strange case where protobuf deserialize an array element of nil as "<nil>"

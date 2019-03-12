@@ -157,85 +157,37 @@ func newPostgressDbOper() *dbOper {
 	}
 }
 
-//SessionExecutor wraps an util.SQLErrorExecutor with getdboper
-type SessionExecutor interface {
-	util.SQLErrorExecutor
+//SessionExecutor wraps an util.SQLExecutor with getdboper
+type SessionExecutor struct {
+	util.SQLExecutor
 	getdboper
 }
 
-type ctxtxOperExecutor struct {
-	*ctxTx
-	*dbOper
+func (s SessionExecutor) getExecutor() util.SQLExecutor {
+	return s.SQLExecutor
 }
 
-func newCtxTxSessionExecutor(cex *ctxTx, dbo *dbOper) *ctxtxOperExecutor {
-	return &ctxtxOperExecutor{
-		cex,
-		dbo,
-	}
+func (s SessionExecutor) getOper() getdboper {
+	return s.getdboper
 }
 
-type dbOperExecutor struct {
-	*sql.DB
-	*dbOper
-	err error
+func newSessionExecutor(ex util.SQLExecutor, oper getdboper) SessionExecutor {
+	return SessionExecutor{SQLExecutor: ex, getdboper: oper}
 }
 
-func (d *dbOperExecutor) SetError(e error) {
-	dblogger.Infof("setting the dbOperExecutor error to:%s. It will not have an effect since we are not in a tx.", e)
-	d.err = e
-}
-
-func newDbSessionExecutor(db *sql.DB, dbo *dbOper) *dbOperExecutor {
-	return &dbOperExecutor{
-		db,
-		dbo,
-		nil,
-	}
-}
-
-//GetNewExecutor creates a new ctxTx for that operation which implements the
-//sqlExecutor interface. The argument passed instructs it to either
-//do it on a transaction if true, or on the normal DB connection if false.
-//caller must call Done() that releases resources.
-func getNewExecutor(pc context.Context, s Dber, doTx bool, ctxTimeout time.Duration) (*ctxTx, error) {
-	var (
-		tx  *sql.Tx
-		err error
-		db  *sql.DB
-	)
-	db = s.Db()
-	ctx, cf := context.WithTimeout(pc, ctxTimeout)
-	if doTx {
-		if tx, err = db.BeginTx(ctx, nil); err != nil {
-			cf()
-			return nil, err
-		}
-	} else {
-		tx = nil
-	}
-	return &ctxTx{
-		doTx: doTx,
-		tx:   tx,
-		cf:   cf,
-		ctx:  ctx,
-		db:   db,
-		err:  nil,
-	}, nil
-}
-
-//it will set the internal error state of the ctxtx and cause the rest of the functions to become noops.
-//if a transaction is involved, it will be rolled back
-func (c *ctxTx) SetError(e error) {
-	c.err = e
-	c.Done()
+//a wrapper of a sql.Tx that is able to accept multiple
+//db ops and run them in the same tx.
+//it will implement the SQLAtomicExectutor interface and choose
+//where to apply the sql function depending on how it was constructed.
+type ctxTx struct {
+	doTx bool
+	tx   *sql.Tx
+	db   *sql.DB
+	cf   context.CancelFunc
+	ctx  context.Context
 }
 
 func (c *ctxTx) Exec(query string, args ...interface{}) (sql.Result, error) {
-	if c.err != nil {
-		dblogger.Infof("Exec called in ctxTx but err has been set:%s", c.err)
-		return nil, c.err
-	}
 	if c.doTx && c.tx != nil {
 		return c.tx.ExecContext(c.ctx, query, args...)
 	}
@@ -243,10 +195,6 @@ func (c *ctxTx) Exec(query string, args ...interface{}) (sql.Result, error) {
 }
 
 func (c *ctxTx) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	if c.err != nil {
-		dblogger.Infof("Query called in ctxTx but err has been set:%s", c.err)
-		return nil, c.err
-	}
 	if c.doTx && c.tx != nil {
 		return c.tx.QueryContext(c.ctx, query, args...)
 	}
@@ -254,46 +202,57 @@ func (c *ctxTx) Query(query string, args ...interface{}) (*sql.Rows, error) {
 }
 
 func (c *ctxTx) QueryRow(query string, args ...interface{}) *sql.Row {
-	if c.err != nil {
-		dblogger.Infof("QueryRow called in ctxTx but err has been set:%s", c.err)
-		return nil
-	}
 	if c.doTx && c.tx != nil {
 		return c.tx.QueryRowContext(c.ctx, query, args...)
 	}
 	return c.db.QueryRowContext(c.ctx, query, args...)
 }
 
-//a wrapper of a sql.Tx that is able to accept multiple
-//db ops and run them in the same tx.
-//it will implement the SQLErrorExectutor interface and choose
-//where to apply the sql function depending on how it was constructed.
-//(either apply everything in the transaction and then the last Done()
-//will commit, or straight on the DB and the last Done() is a noop.
-//the ctxTx structs are created by the specific sessions.
-//if there was an error that was set though, and it has a transaction , it
-//will be rolled back
-type ctxTx struct {
-	doTx bool
-	tx   *sql.Tx
-	db   *sql.DB
-	err  error
-	cf   context.CancelFunc
-	ctx  context.Context
+func (c *ctxTx) Commit() error {
+	defer c.cf()
+	if !c.doTx || c.tx == nil {
+		return fmt.Errorf("ctxTx can't be committed when not using a transaction")
+	}
+
+	return c.tx.Commit()
 }
 
-//either commits the TX or just releases the context through it's cancelfunc.
-func (c *ctxTx) Done() error {
-	defer c.cf() //release resources if it's done.
-	if c.doTx && c.tx != nil {
-		if c.err == nil {
-			dblogger.Infof("tx commit successful")
-			return c.tx.Commit()
-		}
-		dblogger.Infof("rolling back the transaction due to error:%s", c.err)
-		return c.tx.Rollback()
+func (c *ctxTx) Rollback() error {
+	defer c.cf()
+	if !c.doTx || c.tx == nil {
+		return fmt.Errorf("ctxTx can't be rolled back when not using a transaction")
 	}
-	return nil
+
+	return c.tx.Rollback()
+}
+
+//newCtxExecutor creates a new ctxTx for that operation which implements the
+//SQLAtomicExecutor interface. The argument passed instructs it to either
+//do it on a transaction if true, or on the normal DB connection if false.
+func newCtxExecutor(tdb TimeoutDber, doTx bool) (*ctxTx, error) {
+	var (
+		tx  *sql.Tx
+		err error
+		db  *sql.DB
+	)
+
+	db = tdb.Db()
+	ctx, cf := context.WithTimeout(context.Background(), tdb.GetTimeout())
+	if doTx {
+		tx, err = db.BeginTx(ctx, nil)
+		if err != nil {
+			cf()
+			return nil, err
+		}
+	}
+
+	return &ctxTx{
+		doTx: doTx,
+		tx:   tx,
+		cf:   cf,
+		ctx:  ctx,
+		db:   db,
+	}, nil
 }
 
 //This is a representation of a node that is stored in the database using this fields.

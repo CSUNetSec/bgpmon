@@ -48,10 +48,6 @@ func (te TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
 	return nil
 }
 
-func (te TestExecutor) SetError(e error) {
-	return
-}
-
 func TestInsertBuffer(t *testing.T) {
 	base := "INSERT INTO testTable VALUES"
 	testEx := &TestExecutor{t: t}
@@ -103,13 +99,7 @@ func TestTimedBuffer(t *testing.T) {
 	tbuf.Stop()
 }
 
-type dbWrapper struct {
-	SQLExecutor
-}
-
-func (d dbWrapper) SetError(e error) {}
-
-var wrapper dbWrapper
+var db *sql.DB
 
 // This test has no fail condition, but it's success can be observed
 // by selecting on the test table
@@ -122,7 +112,7 @@ func TestBufferOnDb(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dbConn.Close()
-	wrapper = dbWrapper{SQLExecutor: dbConn}
+	db = dbConn
 
 	err = setupTestTable()
 	if err != nil {
@@ -139,20 +129,20 @@ func TestBufferOnDb(t *testing.T) {
 
 func setupTestTable() error {
 	stmt := "CREATE TABLE IF NOT EXISTS test (a int, b int, c int);"
-	_, err := wrapper.Exec(stmt)
+	_, err := db.Exec(stmt)
 	return err
 }
 
 func teardownTestTable() error {
 	stmt := "DROP TABLE test;"
-	_, err := wrapper.Exec(stmt)
+	_, err := db.Exec(stmt)
 	return err
 }
 
 func dbBufferTest(t *testing.T) {
 	baseStmt := "INSERT INTO test VALUES"
 	queryStmt := "SELECT * FROM test;"
-	buf := NewInsertBuffer(wrapper, baseStmt, 2, 3, true)
+	buf := NewInsertBuffer(db, baseStmt, 2, 3, true)
 
 	err := buf.Add(21, 22, 23)
 	if err != nil {
@@ -171,7 +161,7 @@ func dbBufferTest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rows, err := wrapper.Query(queryStmt)
+	rows, err := db.Query(queryStmt)
 	if err != nil {
 		t.Fatal(err)
 	}

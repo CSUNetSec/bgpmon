@@ -25,13 +25,12 @@ const (
 type sessionStream struct {
 	db     TimeoutDber
 	oper   *dbOper
-	ex     *ctxtxOperExecutor
 	schema *schemaMgr
 	wp     *swg.SizedWaitGroup
 }
 
 func newSessionStream(db TimeoutDber, oper *dbOper, s *schemaMgr, wp *swg.SizedWaitGroup) *sessionStream {
-	return &sessionStream{db: db, oper: oper, schema: s, wp: wp, ex: nil}
+	return &sessionStream{db: db, oper: oper, schema: s, wp: wp}
 }
 
 // ReadStream represents the different kinds of read streams that can be done on a session
@@ -121,7 +120,7 @@ func NewSession(conf config.SessionConfiger, id string, nworkers int) (*Session,
 		return nil, errors.New("Unknown session type")
 	}
 	s.db = db
-	sex := newDbSessionExecutor(s.db, s.dbo)
+	sex := newSessionExecutor(s.db, s.dbo)
 
 	s.schema = newSchemaMgr(sex)
 	if err := s.schema.makeSchema(d, "dbs", "nodes"); err != nil {
@@ -156,8 +155,8 @@ func (s *Session) OpenWriteStream(sType sessionType) (WriteStream, error) {
 	case SessionWriteCapture:
 		s.wp.Add()
 		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
-		ws := newWriteCapStream(parStream, s.cancel)
-		return ws, nil
+		ws, err := newWriteCapStream(parStream, s.cancel)
+		return ws, err
 	default:
 		return nil, fmt.Errorf("unsupported write stream type")
 	}
