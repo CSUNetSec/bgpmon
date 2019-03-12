@@ -9,49 +9,56 @@ import (
 )
 
 var (
-	sid string //id for for the open session request
-	nw  uint32 //number of maximum database workers
+	sID string // sID is the ID  for the open session request.
+	nw  uint32 // nw is the number of maximum database workers.
 )
 
-// openCmd represents the open command
+// openCmd issues an OpenSession request to the bgpmond RPC server. That sessions
+// should be of an available type that the server supports and it can be named however
+// the client wishes. Once a session is opened it should be closed by the client.
 var openCmd = &cobra.Command{
 	Use:   "open SESSION_TYPE",
-	Short: "opens a new database session from the bgpmond and returns its ID",
+	Short: "Opens a new database session from the bgpmond to an available database and returns its ID.",
 	Long: `Tries to open a available session with a specific type from the bgpmond,
-and if successful returns the newly allocated ID for that session`,
+and if successful returns the newly allocated ID for that session.`,
 	Args: cobra.ExactArgs(1),
-	Run:  openSess,
+	Run:  openSession,
 }
 
-func openSess(cmd *cobra.Command, args []string) {
+// openSession isues a request to the bgpmond server to start a new sessions from the ones it has available.
+// it ignores the first argument but needs to have that prototype as it's passed as a cobra.Command.Run function.
+func openSession(_ *cobra.Command, args []string) {
 	sessType := args[0]
 
-	fmt.Println("Trying to open a available session named:", sessType, " with ID:", sid)
-	if bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
+	fmt.Println("Trying to open a available session named:", sessType, " with ID:", sID)
+	bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
+	if clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
-	} else {
-		defer bc.Close()
-		emsg := &pb.OpenSessionRequest{
-			SessionName: sessType,
-			SessionId:   sid,
-			Workers:     nw,
-		}
-		ctx, cancel := getCtxWithCancel()
-		defer cancel()
-		if reply, err := bc.cli.OpenSession(ctx, emsg); err != nil {
-			fmt.Printf("Error: %s\n", err)
-		} else {
-			fmt.Printf("Opened Session:%s\n", reply.SessionId)
-		}
+		return
 	}
+	defer bc.close()
+	emsg := &pb.OpenSessionRequest{
+		SessionName: sessType,
+		SessionId:   sID,
+		Workers:     nw,
+	}
+	ctx, cancel := getCtxWithCancel()
+	defer cancel()
+	reply, err := bc.cli.OpenSession(ctx, emsg)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		return
+	}
+	fmt.Printf("Opened Session:%s\n", reply.SessionId)
 }
 
 func init() {
 	rootCmd.AddCommand(openCmd)
-	openCmd.Flags().StringVarP(&sid, "sessionId", "s", genuuid(), "UUID for the session")
-	openCmd.Flags().Uint32VarP(&nw, "workers", "w", 0, "number of maximum concurrent workers")
+	openCmd.Flags().StringVarP(&sID, "sessionId", "s", genUUID(), "UUID for the session")
+	openCmd.Flags().Uint32VarP(&nw, "workers", "w", 0, "Number of maximum concurrent workers (default uses the server provided value)")
 }
 
-func genuuid() string {
+// genUUID cretes a new UUID that will be the name of the new session.
+func genUUID() string {
 	return uuid.New().String()
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 
 	"github.com/spf13/cobra"
@@ -21,7 +22,7 @@ func listOpen(cmd *cobra.Command, args []string) {
 	if bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
 	} else {
-		defer bc.Close()
+		defer bc.close()
 		emsg := &pb.Empty{}
 		ctx, cancel := getCtxWithCancel()
 		defer cancel()
