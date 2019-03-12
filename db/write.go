@@ -153,7 +153,7 @@ func (w *writeCapStream) listen(cancel chan bool) {
 		select {
 		case normal, open := <-cancel:
 			// If this is closed, it can spam this select case. Just ignore it
-			// if it happens. It will always recieve a real value before it's
+			// if it happens. It will always receive a real value before it's
 			// closed.
 			if !open {
 				continue
@@ -161,7 +161,7 @@ func (w *writeCapStream) listen(cancel chan bool) {
 
 			// If it was an abnormal closing, the client may, or may not, expect
 			// another value from a call to Send(). This channel has a buffer of
-			// 1 so this won't block, and the value can be recieved soon.
+			// 1 so this won't block, and the value can be received soon.
 			if !normal {
 				w.resp <- newReply(fmt.Errorf("writeCapStream cancelled"))
 			}

@@ -34,10 +34,11 @@ func writeFileToStream(fName string, ws WriteStream) (int, error) {
 			}
 		}
 	}
+
+	err = ws.Flush()
 	if err != nil {
 		return parsed, err
 	}
-	err = ws.Flush()
 	return parsed, nil
 }
 
