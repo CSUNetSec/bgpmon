@@ -20,9 +20,11 @@ const (
 //for efficient writes
 type writeCapStream struct {
 	*sessionStream
-	req      chan CommonMessage
-	resp     chan CommonReply
-	cancel   chan bool
+	req    chan CommonMessage
+	resp   chan CommonReply
+	cancel chan bool
+
+	ex       util.AtomicSQLExecutor
 	buffers  map[string]util.SQLBuffer
 	cache    tableCache
 	daemonWG sync.WaitGroup
@@ -60,7 +62,7 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) (*writeCapSt
 		dblogger.Errorf("Error opening ctxTx executor: %s", err)
 		return nil, err
 	}
-	w.ex = newSessionExecutor(ctxTx, w.oper)
+	w.ex = ctxTx
 
 	w.daemonWG.Add(1)
 	go w.listen(daemonCancel)
@@ -102,8 +104,7 @@ func (w *writeCapStream) Flush() error {
 	for key := range w.buffers {
 		w.buffers[key].Flush()
 	}
-	atomicEx := w.ex.getExecutor().(*ctxTx)
-	return atomicEx.Commit()
+	return w.ex.Commit()
 }
 
 //Cancel is used when there is an error on the client-side,
@@ -114,8 +115,7 @@ func (w *writeCapStream) Cancel() {
 		w.buffers[key].Clear()
 	}
 
-	atomicEx := w.ex.getExecutor().(*ctxTx)
-	if err := atomicEx.Rollback(); err != nil {
+	if err := w.ex.Rollback(); err != nil {
 		dblogger.Errorf("Error rolling back stream: %s", err)
 	}
 	return

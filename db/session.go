@@ -25,7 +25,6 @@ const (
 type sessionStream struct {
 	db     TimeoutDber
 	oper   *dbOper
-	ex     SessionExecutor
 	schema *schemaMgr
 	wp     *swg.SizedWaitGroup
 }
