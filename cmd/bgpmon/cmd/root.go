@@ -79,7 +79,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "$HOME/.bgpmon.yaml", "Config file")
-	rootCmd.PersistentFlags().StringVarP(&bgpmondHost, "host", "h", "127.0.0.1", "bgpmond host to connect to")
+	rootCmd.PersistentFlags().StringVarP(&bgpmondHost, "host", "H", "127.0.0.1", "bgpmond host to connect to")
 	rootCmd.PersistentFlags().Uint32VarP(&bgpmondPort, "port", "p", 6060, "bgpmond port to connect to")
 	rootCmd.PersistentFlags().Uint32VarP(&rpcTimeoutSecs, "rpcTimeout", "t", 5, "Seconds in which an RPC request should timeout")
 }
