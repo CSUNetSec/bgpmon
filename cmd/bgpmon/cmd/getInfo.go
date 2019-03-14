@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
-
 	"github.com/spf13/cobra"
 )
 

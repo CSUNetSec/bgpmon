@@ -9,7 +9,6 @@ import (
 	"github.com/CSUNetSec/protoparse/fileutil"
 	"github.com/CSUNetSec/protoparse/filter"
 	swg "github.com/remeh/sizedwaitgroup"
-
 	"github.com/spf13/cobra"
 )
 
