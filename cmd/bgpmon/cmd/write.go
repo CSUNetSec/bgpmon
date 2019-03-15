@@ -57,6 +57,8 @@ func writeFunc(_ *cobra.Command, args []string) {
 		return
 	}
 
+	// If the user specifies a negative amount, or doesn't specify anything,
+	// let the server dictate the worker count.
 	if workerCt <= 0 {
 		workerCt = int(reply.Workers)
 		fmt.Printf("Using server worker count: %d\n", workerCt)
@@ -79,17 +81,19 @@ func writeFunc(_ *cobra.Command, args []string) {
 	go summarizeResults(results, &wg)
 
 	// This is the worker pool for the writers
-	wp := swg.New(workerCt)
+	workerPool := swg.New(workerCt)
 	for _, fileName := range args[1:] {
-		wp.Add()
+		workerPool.Add()
 		fmt.Printf("Writing %s\n", fileName)
-		go func(f string) {
+
+		go func(f string, wp *swg.SizedWaitGroup) {
 			ct, err := writeMRTFile(bc, f, sessID, filts)
 			results <- writeMRTResult{fileName: f, msgCt: ct, err: err}
 			wp.Done()
-		}(fileName)
+		}(fileName, &workerPool)
 	}
-	wp.Wait()
+
+	workerPool.Wait()
 	close(results)
 	wg.Wait()
 }
@@ -136,22 +140,21 @@ func writeMRTFile(bc *bgpmonCli, fileName, sessID string, filts []filter.Filter)
 	parsed := 0
 	for mf.Scan() {
 		cap, err := mf.GetCapture()
-		if err != nil {
+		if err != nil || cap == nil {
 			fmt.Printf("Parse error: %s\n", err)
 			continue
 		}
 
-		if cap != nil {
-			parsed++
+		parsed++
 
-			writeRequest := &pb.WriteRequest{
-				Type:       pb.WriteRequest_BGP_CAPTURE,
-				SessionId:  sessID,
-				BgpCapture: cap,
-			}
-			if err := stream.Send(writeRequest); err != nil {
-				return 0, err
-			}
+		writeRequest := &pb.WriteRequest{
+			Type:       pb.WriteRequest_BGP_CAPTURE,
+			SessionId:  sessID,
+			BgpCapture: cap,
+		}
+
+		if err := stream.Send(writeRequest); err != nil {
+			return 0, err
 		}
 	}
 
