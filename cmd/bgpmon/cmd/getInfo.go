@@ -7,19 +7,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// listAvailableCmd represents the listAvailable command
 var getInfoCmd = &cobra.Command{
-	Use:   "getInfo <ID>",
-	Short: "Returns the info of session with id <ID>",
-	Long:  `Prints the session type (Type, Name, Description), ID, and worker count of a session`,
+	Use:   "getInfo SESS_ID",
+	Short: "Returns the info of an open session named SESS_ID.",
+	Long:  `Prints the type, name, description, ID, and worker count of an open session named SESS_ID.`,
 	Args:  cobra.ExactArgs(1),
 	Run:   getInfoFunc,
 }
 
-func getInfoFunc(cmd *cobra.Command, args []string) {
+// the first argument is required by cobra but not used.
+func getInfoFunc(_ *cobra.Command, args []string) {
 	bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
 	if clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
+		return
 	}
 
 	defer bc.close()
@@ -30,6 +31,7 @@ func getInfoFunc(cmd *cobra.Command, args []string) {
 	reply, err := bc.cli.GetSessionInfo(ctx, msg)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
+		return
 	}
 
 	fmt.Printf("ID: %s\n", reply.SessionId)
@@ -37,7 +39,6 @@ func getInfoFunc(cmd *cobra.Command, args []string) {
 	fmt.Printf("Name: %s\n", reply.Type.Name)
 	fmt.Printf("Type: %s\n", reply.Type.Type)
 	fmt.Printf("Description: %s\n", reply.Type.Desc)
-
 }
 
 func init() {
