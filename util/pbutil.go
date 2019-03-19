@@ -10,40 +10,56 @@ import (
 )
 
 var (
-	errnoip = errors.New("could not decode IP from protobuf IP wrapper")
+	errnoip   = errors.New("could not decode IP from protobuf IP wrapper")
+	errnilcap = errors.New("nil BGP capture provided")
 )
 
 // GetIPWrapper returns a net.IP from a pbcomm.IPAddressWrapper
-func GetIPWrapper(pip *pbcomm.IPAddressWrapper) (ret net.IP, err error) {
-	if pip != nil && pip.Ipv4 != nil {
-		ret = net.IP(pip.Ipv4)
-	} else if pip != nil && pip.Ipv6 != nil {
-		ret = net.IP(pip.Ipv6)
-	} else {
-		err = errnoip
+func GetIPWrapper(pip *pbcomm.IPAddressWrapper) (net.IP, error) {
+	if pip == nil || (pip.Ipv4 == nil && pip.Ipv6 == nil) {
+		return nil, errnoip
 	}
-	return
+
+	var ret net.IP
+	if pip.Ipv4 != nil {
+		ret = net.IP(pip.Ipv4)
+	} else if pip.Ipv6 != nil {
+		ret = net.IP(pip.Ipv6)
+	}
+
+	return ret, nil
 }
 
 // GetTimeColIP returns the time and collector IP from a capture WriteRequest
-func GetTimeColIP(pb *pb.WriteRequest) (time.Time, net.IP, error) {
-	secs := time.Unix(int64(pb.GetBgpCapture().GetTimestamp()), 0)
-	locip := pb.GetBgpCapture().GetLocalIp()
+func GetTimeColIP(cap *pb.BGPCapture) (time.Time, net.IP, error) {
+	if cap == nil {
+		return time.Now(), nil, errnilcap
+	}
+	secs := time.Unix(int64(cap.GetTimestamp()), 0)
+
+	locip := cap.GetLocalIp()
 	colip, err := GetIPWrapper(locip)
 	return secs, colip, err
 }
 
 // GetPeerIP returns a PeerIP from a capture WriteRequest
-func GetPeerIP(wr *pb.WriteRequest) (net.IP, error) {
-	capt := wr.GetBgpCapture()
-	pipwrap := capt.GetPeerIp()
-	pip, err := GetIPWrapper(pipwrap)
+func GetPeerIP(cap *pb.BGPCapture) (net.IP, error) {
+	if cap == nil {
+		return nil, errnilcap
+	}
+
+	pip, err := GetIPWrapper(cap.GetPeerIp())
 	return pip, err
 }
 
 // GetAsPath returns an AS path from a capture WriteRequest
-func GetAsPath(wr *pb.WriteRequest) []int {
-	segments := wr.GetBgpCapture().GetUpdate().GetAttrs().GetAsPath()
+// XXX: consider returning an error
+func GetAsPath(cap *pb.BGPCapture) []int {
+	if cap == nil {
+		return nil
+	}
+
+	segments := cap.GetUpdate().GetAttrs().GetAsPath()
 
 	path := []int{}
 	for _, s := range segments {
@@ -63,21 +79,32 @@ func GetAsPath(wr *pb.WriteRequest) []int {
 }
 
 // GetNextHop returns the IP of the next hop from a capture WriteRequest
-func GetNextHop(wr *pb.WriteRequest) (net.IP, error) {
-	nh := wr.GetBgpCapture().GetUpdate().GetAttrs().GetNextHop()
+func GetNextHop(cap *pb.BGPCapture) (net.IP, error) {
+	if cap == nil {
+		return nil, errnilcap
+	}
+
+	nh := cap.GetUpdate().GetAttrs().GetNextHop()
 	nhip, err := GetIPWrapper(nh)
 	return nhip, err
 }
 
 // GetOriginAs returns the AS at index 0 of the ASPath from a capture WriteRequest
-func GetOriginAs(wr *pb.WriteRequest) int {
-	as := wr.GetBgpCapture().GetUpdate().GetAttrs().GetOrigin()
-	return int(as)
+func GetOriginAs(cap *pb.BGPCapture) int {
+	path := GetAsPath(cap)
+	if path == nil {
+		return 0
+	}
+	return path[0]
 }
 
 // GetAdvertizedPrefixes returns the advertized routes from a capture WriteRequest
-func GetAdvertizedPrefixes(wr *pb.WriteRequest) ([]*net.IPNet, error) {
-	routes := wr.GetBgpCapture().GetUpdate().GetAdvertizedRoutes()
+func GetAdvertizedPrefixes(cap *pb.BGPCapture) ([]*net.IPNet, error) {
+	if cap == nil {
+		return nil, errnilcap
+	}
+
+	routes := cap.GetUpdate().GetAdvertizedRoutes()
 	if routes == nil {
 		return nil, errors.New("No advertized prefixes")
 	}
@@ -86,11 +113,16 @@ func GetAdvertizedPrefixes(wr *pb.WriteRequest) ([]*net.IPNet, error) {
 }
 
 // GetWithdrawnPrefixes returns the withdrawn routes from a captured WriteRequest
-func GetWithdrawnPrefixes(wr *pb.WriteRequest) ([]*net.IPNet, error) {
-	routes := wr.GetBgpCapture().GetUpdate().GetWithdrawnRoutes()
+func GetWithdrawnPrefixes(cap *pb.BGPCapture) ([]*net.IPNet, error) {
+	if cap == nil {
+		return nil, errnilcap
+	}
+
+	routes := cap.GetUpdate().GetWithdrawnRoutes()
 	if routes == nil {
 		return nil, errors.New("No withdrawn prefixes")
 	}
+
 	return getPrefixListAsIPNet(routes.Prefixes)
 }
 
@@ -130,6 +162,9 @@ func getPrefixAsIPNet(pw *pbcomm.PrefixWrapper) (*net.IPNet, error) {
 }
 
 //GetProtoMsg returns a byte array representing the capture from a WritRequest
-func GetProtoMsg(wr *pb.WriteRequest) []byte {
-	return []byte(wr.GetBgpCapture().String())
+func GetProtoMsg(cap *pb.BGPCapture) []byte {
+	if cap == nil {
+		return nil
+	}
+	return []byte(cap.String())
 }

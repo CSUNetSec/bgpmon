@@ -115,10 +115,14 @@ func (t tableMessage) GetDate() time.Time {
 type captureMessage struct {
 	CommonMessage
 	tableName string
-	capture   *pb.WriteRequest
+	capture   *pb.BGPCapture
 }
 
-func newCaptureMessage(name string, cap *pb.WriteRequest) captureMessage {
+func newCaptureMessage(name string, wr *pb.WriteRequest) captureMessage {
+	var cap *pb.BGPCapture
+	if wr != nil {
+		cap = wr.GetBgpCapture()
+	}
 	return captureMessage{CommonMessage: newMessage(), tableName: name, capture: cap}
 }
 
@@ -126,7 +130,7 @@ func (c captureMessage) getTableName() string {
 	return c.tableName
 }
 
-func (c captureMessage) getCapture() *pb.WriteRequest {
+func (c captureMessage) getCapture() *pb.BGPCapture {
 	return c.capture
 }
 
