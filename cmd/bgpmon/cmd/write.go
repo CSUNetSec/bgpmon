@@ -15,7 +15,7 @@ import (
 var writeCmd = &cobra.Command{
 	Use:   "write SESS_ID FILES...",
 	Short: "Writes BGP captures from a file(s) to a session.",
-	Long:  "Opens a write stream(s) on the provided session and writes <workers> files concurrently. Write generates a report upon completion of the success or failure of individual files",
+	Long:  "Opens a write stream(s) on the provided session and writes <workers> files concurrently. Write generates a report upon completion of the success or failure of individual files.",
 	Args:  cobra.MinimumNArgs(2),
 	Run:   writeFunc,
 }
@@ -102,7 +102,6 @@ func summarizeResults(in chan writeMRTResult, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	numWritten := 0
-	numFailed := 0
 
 	var failed []writeMRTResult
 
@@ -110,13 +109,12 @@ func summarizeResults(in chan writeMRTResult, wg *sync.WaitGroup) {
 		numWritten++
 
 		if result.err != nil {
-			numFailed++
 			failed = append(failed, result)
 		}
 	}
 
 	fmt.Printf("Total completed: %d\n", numWritten)
-	fmt.Printf("Total failures: %d\n", numFailed)
+	fmt.Printf("Total failures: %d\n", len(failed))
 	for _, res := range failed {
 		fmt.Printf("%s : %s\n", res.fileName, res.err)
 	}

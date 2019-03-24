@@ -17,6 +17,7 @@ within a group alphabetically. Import groups are separated by a newline. There s
 
 Some files may not use all of the groups above. Here is an example of the import style:
 
+```go
     import (
         "fmt"
         "os"
@@ -25,39 +26,50 @@ Some files may not use all of the groups above. Here is an example of the import
 
         "github.com/spf13/cobra"
     )
+```
     
 ### Variables
 Multi-word variables should use camelCase. The first letter should not be capitalized, as that creates an exported name in golang.
 For consistency, even variables within functions, that are not exported, should use the same style. This also applies to fields
 within structs, and unexported function declarations. Exported names should use CamelCase, with the first letter capitalized.
 
+```go
     func unexportedFunc() {}
     func ExportedFunc() {}
     
     struct example {
         exampleInt int
     }
+```
 
 ### Declarations in if statements
 In golang, it is possible to declare mulitple variable in the conditional line of an if statement. The scope of this variable 
 is the extent of the if and any attached else clauses.
 
+```go
     if a, b := foo; a != b {
         // a and b are in scope here
     } else {
         // Also in scope here
     }
     // Neither are in scope here
+```
+
 This type of statement is **not** allowed in BGPMon. Instead, the following style is preferred:
 
+```go
     a, b := foo()
     if a != b {
     }
+```
+
 There is only one exception to this: error handling. An error can be declared and handled in the same line:
 
+```go
     if err := foo(); err != nil {
         // Handle err
     }
+```
     
 ### Comments
 #### Documentation Comments
