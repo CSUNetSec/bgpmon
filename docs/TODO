@@ -9,4 +9,3 @@ Tests
 Fixing DB Schema
 DB Functions
 Add postgres service to TravisCI
-Fix pbutil to use *BGPCapture instead of *WriteRequest
