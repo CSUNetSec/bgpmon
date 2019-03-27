@@ -10,31 +10,32 @@ import (
 // closeCmd represents the close command
 var closeCmd = &cobra.Command{
 	Use:   "close SESS_ID",
-	Short: "close a session ID",
-	Long:  `closes a session associated with a SESS_ID that is provided.`,
+	Short: "Closes a session.",
+	Long:  `Closes a currently open session named SESS_ID.`,
 	Args:  cobra.ExactArgs(1),
 	Run:   closeSess,
 }
 
-func closeSess(cmd *cobra.Command, args []string) {
+// the *cobra.Command is necessary for cobra but isn't used.
+func closeSess(_ *cobra.Command, args []string) {
 	sessID := args[0]
-
-	if bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort); clierr != nil {
+	bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
+	if clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
-	} else {
-		defer bc.close()
-		emsg := &pb.CloseSessionRequest{
-			SessionId: sessID,
-		}
-		ctx, cancel := getCtxWithCancel()
-		defer cancel()
-		if reply, err := bc.cli.CloseSession(ctx, emsg); err != nil {
-			fmt.Printf("Error: %s\n", err)
-		} else {
-			fmt.Println("closed session with ID:", sessID, " server replied: ", reply)
-		}
+		return
 	}
-
+	defer bc.close()
+	emsg := &pb.CloseSessionRequest{
+		SessionId: sessID,
+	}
+	ctx, cancel := getCtxWithCancel()
+	defer cancel()
+	reply, err := bc.cli.CloseSession(ctx, emsg)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		return
+	}
+	fmt.Println("closed session with ID:", sessID, " server replied: ", reply)
 }
 
 func init() {
