@@ -2,7 +2,6 @@
 // It abstracts database operations through types that are named Executors. Executors allow for one off, or
 // transactional operations, that can be timed out using a context, and can be database unware by getting
 // the approprate SQL statement depending what type of database exists on the back.
-
 package db
 
 import (
@@ -35,6 +34,7 @@ const (
 	makeCaptureTableOp   = "makeCaptureTableTmpl"
 	insertCaptureTableOp = "insertCaptureTableTmpl"
 	getCaptureTablesOp   = "getCaptureTablesTmpl"
+	getCaptureBinaryOp   = "getCaptureBinaryTmpl"
 )
 
 // dbops associates every generic database operation with an array that holds the correct SQL statements
@@ -88,11 +88,11 @@ var dbops = map[string][]string{
 		   timestamp timestamp NOT NULL,
 		   collector_ip inet NOT NULL, 
 		   peer_ip inet NOT NULL, 
-                   as_path integer[] DEFAULT '{}'::integer[],
-                   next_hop inet DEFAULT '0.0.0.0'::inet,
-                   origin_as integer DEFAULT '0'::integer,
-                   adv_prefixes cidr[] DEFAULT '{}'::cidr[],
-                   wdr_prefixes cidr[] DEFAULT '{}'::cidr[],
+		   as_path integer[] DEFAULT '{}'::integer[],
+		   next_hop inet DEFAULT '0.0.0.0'::inet,
+		   origin_as integer DEFAULT '0'::integer,
+		   adv_prefixes cidr[] DEFAULT '{}'::cidr[],
+		   wdr_prefixes cidr[] DEFAULT '{}'::cidr[],
 		   protomsg bytea NOT NULL);`,
 	},
 	// This template shouldn't need VALUES, because those will be provided by the buffer
@@ -118,7 +118,12 @@ var dbops = map[string][]string{
 	         );`,
 	},
 	getCaptureTablesOp: {
+		//postgres
 		`SELECT dbname FROM %s WHERE collector=$1 AND dateFrom>=$2 AND dateTo<$3;`,
+	},
+	getCaptureBinaryOp: {
+		//postgres
+		`SELECT update_id, origin_as, protomsg FROM %s;`,
 	},
 }
 
@@ -442,4 +447,19 @@ func genTableName(colName string, date time.Time, ddm int) string {
 	dur := time.Duration(ddm) * time.Minute
 	trunctime := date.Truncate(dur).UTC()
 	return fmt.Sprintf("%s_%s", colName, trunctime.Format("2006_01_02_15_04_05"))
+}
+
+// ReadFilter is an object passed to ReadStream's so they know what to return
+type ReadFilter struct {
+	collector string
+	start     time.Time
+	end       time.Time
+}
+
+// Capture represent a BGPCapture as it exists in the database
+type Capture struct {
+	fromTable string //mostly debug
+	id        string //the capture_id that together with the table make it unique
+	origin    int    //origin as
+	protomsg  []byte //the protobuf blob
 }

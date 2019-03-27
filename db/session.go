@@ -35,6 +35,8 @@ func newSessionStream(db TimeoutDber, oper *dbOper, s *schemaMgr, wp *swg.SizedW
 
 // ReadStream represents the different kinds of read streams that can be done on a session
 type ReadStream interface {
+	Read() (interface{}, error)
+	Close()
 }
 
 // WriteStream represents the different kind of write streams that can be done on a session
@@ -48,7 +50,7 @@ type WriteStream interface {
 //Sessioner is an interface that wraps the stream open functions and close
 type Sessioner interface {
 	OpenWriteStream(sessionType) (WriteStream, error)
-	OpenReadStream(sessionType) (ReadStream, error)
+	OpenReadStream(sessionType, rf ReadFilter) (ReadStream, error)
 	Close() error
 }
 
@@ -164,10 +166,13 @@ func (s *Session) OpenWriteStream(sType sessionType) (WriteStream, error) {
 
 // OpenReadStream opens and returns a ReadStream with the given type, or an
 // error if no such type exists
-func (s *Session) OpenReadStream(sType sessionType) (ReadStream, error) {
+func (s *Session) OpenReadStream(sType sessionType, rf ReadFilter) (ReadStream, error) {
 	switch sType {
 	case SessionReadCapture:
-		return nil, fmt.Errorf("ReadCapture not yet supported")
+		s.wp.Add()
+		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
+		rs := newReadCapStream(parStream, s.cancel, rf)
+		return rs, nil
 	default:
 		return nil, fmt.Errorf("unsupported read stream type")
 	}

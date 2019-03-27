@@ -30,7 +30,7 @@ type BgpmondServer interface {
 	ListSessions() []SessionHandle
 	CloseSession(string) error
 	OpenWriteStream(string) (db.WriteStream, error)
-	OpenReadStream(string) (db.ReadStream, error)
+	OpenReadStream(string, db.ReadFilter) (db.ReadStream, error)
 
 	RunModule(string, string, map[string]string) error
 	ListModuleTypes() []string
@@ -173,10 +173,10 @@ func (s *server) ListSessions() []SessionHandle {
 func (s *server) OpenWriteStream(sID string) (db.WriteStream, error) {
 	s.mux.Lock()
 	sh, ok := s.sessions[sID]
+	s.mux.Unlock()
 	if !ok {
 		return nil, corelogger.Errorf("Can't open stream on nonexistant session: %s", sID)
 	}
-	s.mux.Unlock()
 
 	stream, err := sh.Session.OpenWriteStream(db.SessionWriteCapture)
 	if err != nil {
@@ -186,8 +186,19 @@ func (s *server) OpenWriteStream(sID string) (db.WriteStream, error) {
 	return stream, nil
 }
 
-func (s *server) OpenReadStream(sID string) (db.ReadStream, error) {
-	return nil, nil
+func (s *server) OpenReadStream(sID string, rf db.ReadFilter) (db.ReadStream, error) {
+	s.mux.Lock()
+	sh, ok := s.sessions[sID]
+	s.mux.Unlock()
+	if !ok {
+		return nil, corelogger.Errorf("Can't open stream on nonexistant session: %s", sID)
+	}
+
+	stream, err := sh.Session.OpenReadStream(db.SessionReadCapture, rf)
+	if err != nil {
+		return nil, corelogger.Errorf("Failed to open stream on session(%s): %s", sID, err)
+	}
+	return stream, nil
 
 }
 
