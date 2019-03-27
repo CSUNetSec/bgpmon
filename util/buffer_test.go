@@ -9,12 +9,16 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// This struct satisfies the SQLExecutor interface, so it can be used
+// to validate several functions that require an executor
 type TestExecutor struct {
 	t        *testing.T
 	lastStmt string
 	lastVals []interface{}
 }
 
+// This compares the last query done on the executor to the incoming arguments.
+// Returns false if they are different
 func (te *TestExecutor) checkLast(query string, args ...interface{}) bool {
 	if len(args) != len(te.lastVals) {
 		return false
@@ -48,10 +52,12 @@ func (te TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
 	return nil
 }
 
+// This tests whether the buffer will flush at the right time
 func TestInsertBuffer(t *testing.T) {
 	base := "INSERT INTO testTable VALUES"
 	testEx := &TestExecutor{t: t}
 	buf := NewInsertBuffer(testEx, base, 2, 3, false)
+
 	buf.Add(1, 2, 3)
 	buf.Add(4, 5, 6)
 	buf.Add(8, 10, 12)
@@ -60,8 +66,8 @@ func TestInsertBuffer(t *testing.T) {
 		t.Logf("Expected: %s %v", base+" (?,?,?),(?,?,?);", []int{1, 2, 3, 4, 5, 6})
 		t.Fatalf("Received: %s %v", testEx.lastStmt, testEx.lastVals)
 	}
-	err := buf.Flush()
-	if err != nil {
+
+	if err := buf.Flush(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,8 +78,8 @@ func TestInsertBuffer(t *testing.T) {
 	}
 }
 
+// This will check if the TimedBuffer flushes with the timeout
 func TestTimedBuffer(t *testing.T) {
-
 	base := "INSERT INTO timed VALUES"
 	testEx := &TestExecutor{t: t}
 	buf := NewInsertBuffer(testEx, base, 2, 3, false)
@@ -99,8 +105,6 @@ func TestTimedBuffer(t *testing.T) {
 	tbuf.Stop()
 }
 
-var db *sql.DB
-
 // This test has no fail condition, but it's success can be observed
 // by selecting on the test table
 func TestBufferOnDb(t *testing.T) {
@@ -112,73 +116,76 @@ func TestBufferOnDb(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer dbConn.Close()
-	db = dbConn
 
-	err = setupTestTable()
-	if err != nil {
+	if err := setupTestTable(dbConn); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Run("", dbBufferTest)
+	t.Run("", func(t *testing.T) {
+		dbBufferTest(t, dbConn)
+	})
 
-	err = teardownTestTable()
-	if err != nil {
+	if err := teardownTestTable(dbConn); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func setupTestTable() error {
+func setupTestTable(db *sql.DB) error {
 	stmt := "CREATE TABLE IF NOT EXISTS test (a int, b int, c int);"
 	_, err := db.Exec(stmt)
 	return err
 }
 
-func teardownTestTable() error {
-	stmt := "DROP TABLE test;"
-	_, err := db.Exec(stmt)
-	return err
-}
-
-func dbBufferTest(t *testing.T) {
-	baseStmt := "INSERT INTO test VALUES"
+func sumTestTable(db *sql.DB) (int, error) {
 	queryStmt := "SELECT * FROM test;"
-	buf := NewInsertBuffer(db, baseStmt, 2, 3, true)
-
-	err := buf.Add(21, 22, 23)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = buf.Add(34, 35, 36)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = buf.Add(47, 48, 49)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = buf.Flush()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	rows, err := db.Query(queryStmt)
 	if err != nil {
-		t.Fatal(err)
+		return 0, err
 	}
 	defer rows.Close()
-
 	sum := 0
 	for rows.Next() {
 		a, b, c := 0, 0, 0
 		rows.Scan(&a, &b, &c)
 		sum += a + b + c
 	}
-	expected := 66 + 105 + 144
+	return sum, nil
+}
 
-	if sum != expected {
-		t.Errorf("Expected %d, Got %d", expected, sum)
+func teardownTestTable(db *sql.DB) error {
+	stmt := "DROP TABLE test;"
+	_, err := db.Exec(stmt)
+	return err
+}
+
+// This will check the InsertBuffer on an actual DB connection.
+func dbBufferTest(t *testing.T, db *sql.DB) {
+	baseStmt := "INSERT INTO test VALUES"
+	buf := NewInsertBuffer(db, baseStmt, 2, 3, true)
+
+	sum := 0
+	if err := buf.Add(21, 22, 23); err != nil {
+		t.Fatal(err)
+	}
+	sum += 21 + 22 + 23
+	if err := buf.Add(34, 35, 36); err != nil {
+		t.Fatal(err)
+	}
+	sum += 34 + 35 + 36
+	if err := buf.Add(47, 48, 49); err != nil {
+		t.Fatal(err)
+	}
+	sum += 47 + 48 + 49
+	if err := buf.Flush(); err != nil {
+		t.Fatal(err)
 	}
 
+	dbSum, err := sumTestTable(db)
+	if err != nil {
+		t.Fatal(err)
+	} else if dbSum != sum {
+		t.Fatalf("Expected: %d, Got: %d", sum, dbSum)
+	}
 }
 
 func getDbConnection() (*sql.DB, error) {
@@ -186,23 +193,20 @@ func getDbConnection() (*sql.DB, error) {
 	return sql.Open("postgres", pgconstr)
 }
 
+// This checks there will be an error if a batch size rule is violated.
 func TestBufferBatchSize(t *testing.T) {
 	testEx := &TestExecutor{t: t}
 	buf := NewInsertBuffer(testEx, "", 2, 3, false)
-	err := buf.Add(1, 2, 3)
-	if err != nil {
+	if err := buf.Add(1, 2, 3); err != nil {
 		t.Fatal(err)
 	}
-	err = buf.Add(4, 5, 6)
-	if err != nil {
+	if err := buf.Add(4, 5, 6); err != nil {
 		t.Fatal(err)
 	}
-	err = buf.Add(7, 8, 9, 10)
-	if err == nil {
+	if err := buf.Add(6, 7, 8, 9, 10); err == nil {
 		t.Fatal(fmt.Errorf("Error expected but not received"))
 	}
-	err = buf.Add(11, 12)
-	if err == nil {
+	if err := buf.Add(11, 12); err == nil {
 		t.Fatal(fmt.Errorf("Error expected but not received"))
 	}
 }

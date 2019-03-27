@@ -77,7 +77,7 @@ func (w *writeCapStream) Write(arg interface{}) error {
 		ok    bool
 	)
 	wr := arg.(*pb.WriteRequest)
-	mtime, cip, err := util.GetTimeColIP(wr)
+	mtime, cip, err := util.GetTimeColIP(wr.GetBgpCapture())
 	if err != nil {
 		dblogger.Errorf("failed to get Collector IP:%v", err)
 		return err

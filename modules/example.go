@@ -10,6 +10,7 @@ import (
 // BaseTask is an example task module which can usefully composed in other modules.
 type BaseTask struct {
 	core.Module
+
 	server core.BgpmondServer
 	logger util.Logger
 	name   string

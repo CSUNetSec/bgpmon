@@ -31,6 +31,7 @@ type rpcServer struct {
 // Run on the rpc server expects two options named "address" and "timeoutsecs"
 func (r *rpcServer) Run(opts map[string]string, finish core.FinishFunc) error {
 	defer finish()
+
 	if !util.CheckForKeys(opts, "address", "timeoutsecs") {
 		return r.logger.Errorf("options address and timeoutsecs not present")
 	}
@@ -42,9 +43,6 @@ func (r *rpcServer) Run(opts map[string]string, finish core.FinishFunc) error {
 	}
 
 	r.timeoutSecs = int(ts)
-	if r.grpcServer != nil {
-		return r.logger.Errorf("Server is already running")
-	}
 	listen, err := net.Listen("tcp", addr)
 	if err != nil {
 		return r.logger.Errorf("Error listening on address: %s", addr)

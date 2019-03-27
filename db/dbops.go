@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -260,4 +261,63 @@ func getCaptures(ex SessionExecutor, msg CommonMessage) chan CommonReply {
 		}
 	}(ex, msg, retc)
 	return retc
+}
+
+func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonMessage) chan CommonReply {
+	retc := make(chan CommonReply)
+	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
+		defer close(repStream)
+
+		cMsg := msg.(getCapMessage)
+		start, end := cMsg.getDates()
+		tables, err := getCaptureTables(ex, cMsg.GetMainTable(), cMsg.getTableCol(), start, end)
+		if err != nil {
+			repStream <- newReply(err)
+			return
+		}
+
+		selectCapTmpl := ex.getdbop(getCaptureBinaryOp)
+		for _, tName := range tables {
+			stmt := fmt.Sprintf(selectCapTmpl, tName)
+			rows, err := ex.Query(stmt)
+			if err != nil {
+				repStream <- newReply(err)
+				return
+			}
+
+			for rows.Next() {
+				if util.NBContextClosed(ctx) {
+					repStream <- newReply(fmt.Errorf("context closed"))
+					rows.Close()
+					return
+				}
+				cap := &Capture{fromTable: tName}
+				err = rows.Scan(&cap.id, &cap.origin, &cap.protomsg)
+				repStream <- newGetCapReply(cap, err)
+			}
+			rows.Close()
+		}
+	}(ctx, ex, msg, retc)
+	return retc
+}
+
+func getCaptureTables(ex SessionExecutor, dbTable, colName string, start, end time.Time) ([]string, error) {
+	stmtTmpl := ex.getdbop(getCaptureTablesOp)
+	stmt := fmt.Sprintf(stmtTmpl, dbTable)
+
+	tableNames := []string{}
+	rows, err := ex.Query(stmt, colName, start, end)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		tName := ""
+		err = rows.Scan(&tName)
+		if err != nil {
+			return nil, err
+		}
+		tableNames = append(tableNames, tName)
+	}
+	return tableNames, nil
 }

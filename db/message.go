@@ -115,10 +115,14 @@ func (t tableMessage) GetDate() time.Time {
 type captureMessage struct {
 	CommonMessage
 	tableName string
-	capture   *pb.WriteRequest
+	capture   *pb.BGPCapture
 }
 
-func newCaptureMessage(name string, cap *pb.WriteRequest) captureMessage {
+func newCaptureMessage(name string, wr *pb.WriteRequest) captureMessage {
+	var cap *pb.BGPCapture
+	if wr != nil {
+		cap = wr.GetBgpCapture()
+	}
 	return captureMessage{CommonMessage: newMessage(), tableName: name, capture: cap}
 }
 
@@ -126,7 +130,7 @@ func (c captureMessage) getTableName() string {
 	return c.tableName
 }
 
-func (c captureMessage) getCapture() *pb.WriteRequest {
+func (c captureMessage) getCapture() *pb.BGPCapture {
 	return c.capture
 }
 
@@ -234,29 +238,28 @@ func (t tableReply) getNode() *node {
 	return t.node
 }
 
-//an internal struct that represents most of the things we extract
-//from the db for each capture that will be sent to the client
-type capture struct {
-	fromTable string //mostly debug
-	id        string //the capture_id that together with the table make it unique
-	oas       int    //origin as
-	blob      []byte //the protobuf blob
-}
-
 type getCapMessage struct {
 	capTableMessage // this query needs all the fields of a captablemessage to find the table
 	//XXX filters etc
 }
 
-type getCapReply struct {
-	CommonReply
-	caps []capture
+func newGetCapMessage(rf ReadFilter) getCapMessage {
+	return getCapMessage{newCapTableMessage("", rf.collector, rf.start, rf.end)}
 }
 
-func newGetCapReply(caps []capture, err error) getCapReply {
+type getCapReply struct {
+	CommonReply
+	cap *Capture
+}
+
+func (c *getCapReply) getCapture() *Capture {
+	return c.cap
+}
+
+func newGetCapReply(cap *Capture, err error) getCapReply {
 	return getCapReply{
 		CommonReply: newReply(err),
-		caps:        caps,
+		cap:         cap,
 	}
 }
 

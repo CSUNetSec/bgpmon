@@ -18,51 +18,52 @@ type periodicModule struct {
 // Optkeys should be: duration , module, args
 // Optval args should be a proper OptString (-key val ...)
 func (p *periodicModule) Run(args map[string]string, f core.FinishFunc) error {
+	defer f()
+
 	if !util.CheckForKeys(args, "duration", "module", "args") {
 		p.logger.Errorf("Expected option keys: duration, module, args. Got %v", args)
-		f()
 		return nil
 	}
+
 	dval, modval, argval := args["duration"], args["module"], args["args"]
+
 	dur, err := time.ParseDuration(dval)
 	if err != nil {
 		p.logger.Errorf("Error parsing duration: %s", dval)
-		f()
 		return nil
 	}
+
 	argmap, err := util.StringToOptMap(argval)
 	if err != nil {
 		p.logger.Errorf("Error %s parsing argument string: %s", err, argmap)
-		f()
 		return nil
 	}
 
 	tick := time.NewTicker(dur)
 	defer tick.Stop()
-	runC := 0
-	errC := 0
+
+	runCt, errCt := 0, 0
 	for {
 		select {
 		case <-p.cancel:
 			p.logger.Infof("Stopping periodic")
 			return nil
 		case <-tick.C:
-			mID := fmt.Sprintf("periodic-%s%d", modval, runC)
+			mID := fmt.Sprintf("periodic-%s%d", modval, runCt)
 			err = p.server.RunModule(modval, mID, argmap)
 			if err != nil {
 				p.logger.Errorf("Error running module(%s): %s", modval, err)
-				errC++
+				errCt++
 			} else {
-				errC = 0
+				errCt = 0
 			}
 
-			if errC >= 5 {
+			if errCt >= 5 {
 				p.logger.Errorf("Failed to run module 5 times, stopping.")
-				f()
 				return nil
 			}
 		}
-		runC++
+		runCt++
 	}
 }
 
