@@ -1,3 +1,5 @@
+// The bgpmond command launches the bgpmon server with a provided configuration file.
+// It launches a default RPC module if one isn't provided in the configuration.
 package main
 
 import (
@@ -12,16 +14,22 @@ import (
 	"github.com/CSUNetSec/bgpmon/util"
 )
 
-var mainlogger = util.NewLogger("system", "main")
+// mainLogger is the standard logging struct for
+// the main struct.
+var mainLogger = util.NewLogger("system", "main")
 
+// Launches the BgpmondServer with a configuration file provided on the command
+// line. If the config file provided doesn't contain an RPC module, this launches
+// a default RPC. This command will only halt on ctrl-C, at which point it will
+// shut down the server.
 func main() {
 	if len(os.Args) != 2 {
-		mainlogger.Fatalf("No configuration file provided")
+		mainLogger.Fatalf("No configuration file provided")
 	}
 
 	server, err := core.NewServerFromFile(os.Args[1])
 	if err != nil {
-		mainlogger.Fatalf("Error creating server: %s", err)
+		mainLogger.Fatalf("Error creating server: %s", err)
 	}
 
 	rpcRunning := false
@@ -33,20 +41,23 @@ func main() {
 	}
 
 	if !rpcRunning {
-		mainlogger.Infof("Configuration didn't include RPC module, launching default")
-		rpcopts, err := util.StringToOptMap(fmt.Sprintf("-address %s -timeoutsecs %d", config.DefaultRPCAddress, config.DefaultRPCTimeoutSecs))
+		mainLogger.Infof("Configuration didn't include RPC module, launching default")
+		rpcOpts, err := util.StringToOptMap(fmt.Sprintf("-address %s -timeoutsecs %d", config.DefaultRPCAddress, config.DefaultRPCTimeoutSecs))
 		if err != nil {
-			mainlogger.Fatalf("Error starting RPC module: %s", err)
+			mainLogger.Fatalf("Error parsing default RPC options: %s", err)
 		}
-		err = server.RunModule("rpc", "rpc", rpcopts)
+		err = server.RunModule("rpc", "rpc", rpcOpts)
 		if err != nil {
-			mainlogger.Fatalf("Error starting RPC module: %s", err)
+			mainLogger.Fatalf("Error starting RPC module: %s", err)
 		}
 	}
 
 	waitOnInterrupt()
-	mainlogger.Infof("Received SIGINT, shutting down")
-	server.Close()
+	mainLogger.Infof("Received SIGINT, shutting down")
+
+	if err := server.Close(); err != nil {
+		mainLogger.Fatalf("Error shutting down server: %s", err)
+	}
 }
 
 func waitOnInterrupt() {
@@ -54,16 +65,4 @@ func waitOnInterrupt() {
 	signal.Notify(close, os.Interrupt)
 	<-close
 	return
-}
-
-func printArray(arr []string) {
-	for _, s := range arr {
-		fmt.Printf("%s\n", s)
-	}
-}
-
-func panicIfNotNil(err error) {
-	if err != nil {
-		panic(err)
-	}
 }

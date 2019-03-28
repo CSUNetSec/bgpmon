@@ -7,35 +7,36 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Logger is a wrapper on a logrus.FieldLogger, meant to ease use
-type Logger interface {
-	Infof(string, ...interface{})
-	Errorf(string, ...interface{}) error
-	Fatalf(string, ...interface{})
-}
-
-type logger struct {
+// Logger is a simple wrapper around logrus.FieldLogger which eases use
+// and adds some functionality.
+type Logger struct {
 	log logrus.FieldLogger
 }
 
-func (l logger) Infof(tmpl string, args ...interface{}) {
+// Infof prints to the screen with INFO priority. This isn't meant to
+// be used for error messages.
+func (l Logger) Infof(tmpl string, args ...interface{}) {
 	l.log.Infof(tmpl, args...)
 }
 
-func (l logger) Errorf(tmpl string, args ...interface{}) error {
+// Errorf prints to the screen with ERROR priority, and returns an
+// error to be handled. It is a combination of log.Errorf and fmt.Errorf.
+func (l Logger) Errorf(tmpl string, args ...interface{}) error {
 	err := fmt.Errorf(tmpl, args...)
 	l.log.Errorf(tmpl, args...)
 	return err
 }
 
-func (l logger) Fatalf(tmpl string, args ...interface{}) {
+// Fatalf prints to the screen with FATAL priority, and exits the
+// application.
+func (l Logger) Fatalf(tmpl string, args ...interface{}) {
 	l.log.Fatalf(tmpl, args...)
 }
 
-// NewLogger returns a util.Logger, with pairs of strings matched for fields
+// NewLogger returns a util.Logger, with pairs of strings matched for fields.
 func NewLogger(fields ...string) Logger {
 	if len(fields)%2 != 0 {
-		panic(fmt.Errorf("Fields length must be a multiple of two"))
+		panic(fmt.Errorf("fields length must be a multiple of two"))
 	}
 
 	var fieldsMap logrus.Fields
@@ -44,10 +45,10 @@ func NewLogger(fields ...string) Logger {
 		fieldsMap[fields[i]] = fields[i+1]
 	}
 
-	return logger{log: logrus.WithFields(fieldsMap)}
+	return Logger{log: logrus.WithFields(fieldsMap)}
 }
 
-// DisableLogging reroutes all created loggers to a nil output
+// DisableLogging reroutes all created loggers to a nil output.
 func DisableLogging() {
 	logrus.SetOutput(ioutil.Discard)
 }
