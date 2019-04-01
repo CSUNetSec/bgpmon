@@ -1,7 +1,7 @@
 // Package db is responsible for the communication between the database backends and the bgpmon daemon.
 // It abstracts database operations through types that are named Executors. Executors allow for one off, or
 // transactional operations, that can be timed out using a context, and can be database unware by getting
-// the approprate SQL statement depending what type of database exists on the back.
+// the appropriate SQL statement depending what type of database exists on the back.
 package db
 
 import (
