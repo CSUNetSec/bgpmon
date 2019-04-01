@@ -36,7 +36,7 @@ func (l Logger) Fatalf(tmpl string, args ...interface{}) {
 // NewLogger returns a util.Logger, with pairs of strings matched for fields.
 func NewLogger(fields ...string) Logger {
 	if len(fields)%2 != 0 {
-		panic(fmt.Errorf("fields length must be a multiple of two"))
+		fields = []string{"Logger Fields", "invalid"}
 	}
 
 	var fieldsMap logrus.Fields
