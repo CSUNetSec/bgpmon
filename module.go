@@ -35,9 +35,45 @@ type Module interface {
 	// instance of a module should share the same name
 	GetName() string
 
+	// GetInfo returns a struct containing info that describes the
+	// running module
+	GetInfo() OpenModuleInfo
+
 	// Stop is called to prematurely cancel a running module. The
 	// module should be deallocated just after calling this.
 	Stop() error
+}
+
+// ModuleInfo is used to describe an available module. It should include the
+// type of the module, a description, and a description of the opts that the
+// module uses.
+type ModuleInfo struct {
+	Type        string
+	Description string
+	Opts        string
+}
+
+// OpenModuleInfo describes an actively running module. It should include the
+// type of the module, the ID, and a string describing the status of the
+// module. Modules don't keep track of their own ID, so that field must be
+// populated by the server.
+type OpenModuleInfo struct {
+	Type   string
+	ID     string
+	Status string
+}
+
+// NewOpenModuleInfo returns an info struct with a type and a status, and
+// leaves the ID to be populated by soemthing else.
+func NewOpenModuleInfo(modType string, status string) OpenModuleInfo {
+	return OpenModuleInfo{Type: modType, ID: "", Status: status}
+}
+
+// ModuleHandler wraps the info and maker types. It's used to store modules
+// globally, and as the argument to register new modules.
+type ModuleHandler struct {
+	Info  ModuleInfo
+	Maker ModuleMaker
 }
 
 // FinishFunc is a function passed from the server to a new module. It can be
@@ -48,38 +84,42 @@ type FinishFunc func()
 // to the BgpmondServer, and a logger to print information.
 type ModuleMaker func(BgpmondServer, util.Logger) Module
 
-var knownModules map[string]ModuleMaker
+var knownModules map[string]ModuleHandler
 
 func init() {
-	knownModules = make(map[string]ModuleMaker)
+	knownModules = make(map[string]ModuleHandler)
 }
 
 // RegisterModule adds a module type to a list of known modules. Once a
 // module maker is registered, the server can create and launch modules
 // of this type
-func RegisterModule(typeName string, makeNew ModuleMaker) error {
+func RegisterModule(handle ModuleHandler) error {
+	typeName := handle.Info.Type
 	_, exists := knownModules[typeName]
 	if exists {
 		return fmt.Errorf("Module type: %s already exists", typeName)
 	}
 
-	knownModules[typeName] = makeNew
+	knownModules[typeName] = handle
 	return nil
 }
 
 func getModuleMaker(typeName string) (ModuleMaker, bool) {
-	maker, exists := knownModules[typeName]
-	return maker, exists
+	handle, exists := knownModules[typeName]
+	if !exists {
+		return nil, false
+	}
+	return handle.Maker, true
 }
 
 func getModuleLogger(modType, modName string) util.Logger {
 	return util.NewLogger("system", "module", "type", modType, "ID", modName)
 }
 
-func getModuleTypes() []string {
-	var ret []string
-	for k := range knownModules {
-		ret = append(ret, k)
+func getModuleTypes() []ModuleInfo {
+	var ret []ModuleInfo
+	for _, v := range knownModules {
+		ret = append(ret, v.Info)
 	}
 	return ret
 }

@@ -72,5 +72,17 @@ func newPeriodicModule(s core.BgpmondServer, l util.Logger) core.Module {
 }
 
 func init() {
-	core.RegisterModule("periodic", newPeriodicModule)
+	opts := "duration : how often to run target module\n" +
+		"module : target module to run repeatedly\n" +
+		"args : arguments to pass to target module"
+
+	periodicHandle := core.ModuleHandler{
+		Info: core.ModuleInfo{
+			Type:        "periodic",
+			Description: "Continuosly run another module at scheduled intervals",
+			Opts:        opts,
+		},
+		Maker: newPeriodicModule,
+	}
+	core.RegisterModule(periodicHandle)
 }

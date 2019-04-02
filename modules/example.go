@@ -34,6 +34,11 @@ func (b *BaseTask) GetName() string {
 	return b.name
 }
 
+// GetInfo satisfies the module interface
+func (b *BaseTask) GetInfo() core.OpenModuleInfo {
+	return core.NewOpenModuleInfo(b.name, "Running")
+}
+
 // Stop satisfies the module interface
 func (b *BaseTask) Stop() error {
 	return nil
@@ -76,11 +81,27 @@ func NewBaseDaemon(server core.BgpmondServer, logger util.Logger, name string) *
 }
 
 func init() {
-	core.RegisterModule("example_task", func(s core.BgpmondServer, l util.Logger) core.Module {
-		return NewBaseTask(s, l, "example_task")
-	})
+	taskHandle := core.ModuleHandler{
+		Info: core.ModuleInfo{
+			Type:        "example_task",
+			Description: "Run an example task module!",
+			Opts:        "None",
+		},
+		Maker: func(s core.BgpmondServer, l util.Logger) core.Module {
+			return NewBaseTask(s, l, "example_task")
+		},
+	}
+	core.RegisterModule(taskHandle)
 
-	core.RegisterModule("example_daemon", func(s core.BgpmondServer, l util.Logger) core.Module {
-		return NewBaseDaemon(s, l, "example_daemon")
-	})
+	daemonHandle := core.ModuleHandler{
+		Info: core.ModuleInfo{
+			Type:        "example_daemon",
+			Description: "Run an example daemon module!",
+			Opts:        "None",
+		},
+		Maker: func(s core.BgpmondServer, l util.Logger) core.Module {
+			return NewBaseDaemon(s, l, "example_daemon")
+		},
+	}
+	core.RegisterModule(daemonHandle)
 }
