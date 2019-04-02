@@ -35,7 +35,7 @@ func (p *periodicModule) Run(args map[string]string, f core.FinishFunc) error {
 
 	argmap, err := util.StringToOptMap(argval)
 	if err != nil {
-		p.logger.Errorf("Error %s parsing argument string: %s", err, argmap)
+		p.logger.Errorf("Error parsing argument string (%s): %s", argval, err)
 		return nil
 	}
 
