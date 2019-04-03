@@ -32,8 +32,8 @@ func StringToOptMap(in string) (map[string]string, error) {
 		return ret, nil
 	}
 
-	inparts := strings.Fields(in)
-	if len(inparts)%2 != 0 {
+	inParts := strings.Fields(in)
+	if len(inParts)%2 != 0 {
 		return nil, ErrOpt
 	}
 	for i := range inParts {
