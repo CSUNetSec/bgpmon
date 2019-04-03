@@ -286,7 +286,7 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 			}
 
 			for rows.Next() {
-				if util.NBContextClosed(ctx) {
+				if util.IsClosed(ctx) {
 					repStream <- newReply(fmt.Errorf("context closed"))
 					rows.Close()
 					return

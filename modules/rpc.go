@@ -182,7 +182,7 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 
 	first = true
 	for {
-		if util.NBContextClosed(timeoutCtx) {
+		if util.IsClosed(timeoutCtx) {
 			if dbStream != nil {
 				dbStream.Cancel()
 			}

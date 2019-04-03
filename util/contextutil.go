@@ -1,15 +1,14 @@
 package util
 
-import (
-	"context"
-)
+import "context"
 
-// NBContextClosed returns true if a context has been closed, false otherwise and doesn't block
-func NBContextClosed(ctx context.Context) bool {
+// IsClosed returns true if a context has been closed, false otherwise.
+// This function is non-blocking.
+func IsClosed(ctx context.Context) bool {
 	select {
 	case <-ctx.Done():
 		return true
 	default:
+		return false
 	}
-	return false
 }

@@ -12,20 +12,21 @@ import (
 
 var (
 	// ErrOpt is returned by StringToOptMap on failure
-	ErrOpt = errors.New("Error parsing options")
+	ErrOpt = errors.New("error parsing options")
 )
 
-//GetTimeouter is a generic interface for things to return timeouts
+// GetTimeouter is an interface to describe anything that expires after a
+// certain amount of time
 type GetTimeouter interface {
 	GetTimeout() time.Duration
 }
 
 // StringToOptMap is a function that will turn a string in the form "-opt1 val1 -opt2 val2" to
-// a map[string]string with key:values like opt1:val1, opt2:val2. In case of a malformed string it errors.
-// For now only options with values are supported. therefore the string must be split in an even
-// number of parts
+// a map[string]string with key:values like opt1:val1, opt2:val2. It will return an error in the
+// case of a malformed string. For now only options with values are supported, so the input
+// string must be split in an even number of parts.
 func StringToOptMap(in string) (map[string]string, error) {
-	//first split the string in spaces
+	// first split the string in spaces
 	ret := make(map[string]string)
 	if in == "" {
 		return ret, nil
@@ -35,33 +36,35 @@ func StringToOptMap(in string) (map[string]string, error) {
 	if len(inparts)%2 != 0 {
 		return nil, ErrOpt
 	}
-	for i := range inparts {
-		if i%2 == 0 && len(inparts) > i+1 { //iterate on pairs
-			optstr := inparts[i]
-			optval := inparts[i+1]
-			if !strings.HasPrefix(optstr, "-") {
+	for i := range inParts {
+		if i%2 == 0 && len(inParts) > i+1 { // iterate on pairs
+			optStr := inParts[i]
+			optVal := inParts[i+1]
+			if !strings.HasPrefix(optStr, "-") {
 				return nil, ErrOpt
 			}
-			ret[optstr[1:]] = optval
+			ret[optStr[1:]] = optVal
 		}
 	}
 	return ret, nil
 }
 
-// OptMapToString is a function that turns a map[string]string to a string like "-key1 val1 -key2 val2"
-// It should be the reverse operation of StringToOptMap modulo preserving opt order
+// OptMapToString is a function that turns a map[string]string to a string like "-key1 val1 -key2 val2".
+// It should be the reverse operation of StringToOptMap. This function only guarantees the correct
+// pairings, not the original order of the pairings when the map was created.
 func OptMapToString(in map[string]string) string {
-	var retbuild strings.Builder
+	var retBuilder strings.Builder
 	for k, v := range in {
-		retbuild.WriteString(fmt.Sprintf("-%s %s ", k, v))
+		retBuilder.WriteString(fmt.Sprintf("-%s %s ", k, v))
 	}
-	return retbuild.String()
+	return retBuilder.String()
 }
 
-// CheckForKeys checks a map[string]string for the existence of all string keys provided
+// CheckForKeys checks a map[string]string for the existence of all string keys provided.
 func CheckForKeys(in map[string]string, keys ...string) bool {
 	for _, k := range keys {
-		if _, ok := in[k]; !ok {
+		_, ok := in[k]
+		if !ok {
 			return false
 		}
 	}
