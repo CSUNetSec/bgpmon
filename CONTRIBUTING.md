@@ -18,14 +18,14 @@ within a group alphabetically. Import groups are separated by a newline. There s
 Some files may not use all of the groups above. Here is an example of the import style:
 
 ```go
-    import (
-        "fmt"
-        "os"
+import (
+    "fmt"
+    "os"
 
-        "github.com/CSUNetSec/bgpmon/util"
+    "github.com/CSUNetSec/bgpmon/util"
 
-        "github.com/spf13/cobra"
-    )
+    "github.com/spf13/cobra"
+)
 ```
     
 ### Variables
@@ -34,12 +34,12 @@ For consistency, even variables within functions, that are not exported, should 
 within structs, and unexported function declarations. Exported names should use CamelCase, with the first letter capitalized.
 
 ```go
-    func unexportedFunc() {}
-    func ExportedFunc() {}
-    
-    struct example {
-        exampleInt int
-    }
+func unexportedFunc() {}
+func ExportedFunc() {}
+
+struct example {
+    exampleInt int
+}
 ```
 
 ### Declarations in if statements
@@ -47,28 +47,28 @@ In golang, it is possible to declare mulitple variable in the conditional line o
 is the extent of the if and any attached else clauses.
 
 ```go
-    if a, b := foo; a != b {
-        // a and b are in scope here
-    } else {
-        // Also in scope here
-    }
-    // Neither are in scope here
+if a, b := foo; a != b {
+    // a and b are in scope here
+} else {
+    // Also in scope here
+}
+// Neither are in scope here
 ```
 
 This type of statement is **not** allowed in BGPMon. Instead, the following style is preferred:
 
 ```go
-    a, b := foo()
-    if a != b {
-    }
+a, b := foo()
+if a != b {
+}
 ```
 
 There is only one exception to this: error handling. An error can be declared and handled in the same line:
 
 ```go
-    if err := foo(); err != nil {
-        // Handle err
-    }
+if err := foo(); err != nil {
+    // Handle err
+}
 ```
     
 ### Comments
