@@ -35,12 +35,12 @@ func closeSess(_ *cobra.Command, args []string) {
 	}
 	ctx, cancel := getCtxWithCancel()
 	defer cancel()
-	reply, err := bc.cli.CloseSession(ctx, emsg)
+	_, err := bc.cli.CloseSession(ctx, emsg)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		return
 	}
-	fmt.Println("closed session with ID:", sessID, " server replied: ", reply)
+	fmt.Printf("Closed session: %s\n", sessID)
 }
 
 var closeModuleCmd = &cobra.Command{
@@ -69,7 +69,7 @@ func closeModule(_ *cobra.Command, args []string) {
 		fmt.Printf("Error: %s\n", err)
 		return
 	}
-	fmt.Printf("Closed session with ID: %s\n", modID)
+	fmt.Printf("Closed module: %s\n", modID)
 }
 
 func init() {

@@ -41,9 +41,9 @@ func listOpenSessions(_ *cobra.Command, args []string) {
 		fmt.Printf("Error: %s\n", err)
 		return
 	}
-	fmt.Printf("%d Open Sessions:\n", len(reply.SessionId))
+	fmt.Printf("Open Sessions: %d\n", len(reply.SessionId))
 	for i, openSess := range reply.SessionId {
-		fmt.Printf("[%d]\n\tID:%s\n", i, openSess)
+		fmt.Printf("[%d]\nID: %s\n", i, openSess)
 	}
 }
 
@@ -71,9 +71,12 @@ func listOpenModules(_ *cobra.Command, args []string) {
 		fmt.Printf("Error: %s\n", err)
 		return
 	}
-	fmt.Printf("%d Open Modules:\n", len(reply.OpenModules))
+	fmt.Printf("Open Modules: %d\n", len(reply.OpenModules))
 	for i, openMod := range reply.OpenModules {
-		fmt.Printf("[%d]\n\tType: %s\n\tID: %s\n\tStatus: %s\n", i, openMod.Type, openMod.Id, openMod.Status)
+		fmt.Printf("[%d]\n", i)
+		fmt.Printf("Type:   %s\n", openMod.Type)
+		fmt.Printf("ID:     %s\n", openMod.Id)
+		fmt.Printf("Status: %s\n", openMod.Status)
 	}
 }
 

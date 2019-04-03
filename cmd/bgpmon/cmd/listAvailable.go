@@ -38,9 +38,12 @@ func listAvailableSessions(_ *cobra.Command, _ []string) {
 		fmt.Printf("Error: %s\n", err)
 		return
 	}
-	fmt.Printf("%d Available Sessions:\n", len(reply.AvailableSessions))
+	fmt.Printf("Available Sessions: %d\n", len(reply.AvailableSessions))
 	for i, as := range reply.AvailableSessions {
-		fmt.Printf("[%d]\n\tName:%s\n\tType:%s\n\tDescription:%v\n", i, as.Name, as.Type, as.Desc)
+		fmt.Printf("[%d]\n", i)
+		fmt.Printf("Name:        %s\n", as.Name)
+		fmt.Printf("Type:        %s\n", as.Type)
+		fmt.Printf("Description: %s\n", as.Desc)
 	}
 }
 
@@ -67,9 +70,12 @@ func listAvailableModules(_ *cobra.Command, _ []string) {
 		fmt.Printf("Error: %s\n", err)
 		return
 	}
-	fmt.Printf("%d Available Modules:\n", len(reply.AvailableModules))
+	fmt.Printf("Available Modules: %d\n", len(reply.AvailableModules))
 	for i, mod := range reply.AvailableModules {
-		fmt.Printf("[%d]\n\tType: %s\n\tDescription: %s\n\tOpts:\n%s\n", i, mod.Type, mod.Desc, mod.Opts)
+		fmt.Printf("[%d]\n", i)
+		fmt.Printf("Type:        %s\n", mod.Type)
+		fmt.Printf("Description: %s\n", mod.Desc)
+		fmt.Printf("Options:     \n%s\n", mod.Opts)
 	}
 }
 

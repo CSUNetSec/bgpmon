@@ -36,7 +36,7 @@ and if successful returns the newly allocated ID for that session.`,
 func openSession(_ *cobra.Command, args []string) {
 	sessType := args[0]
 
-	fmt.Println("Trying to open a available session named:", sessType, " with ID:", sID)
+	fmt.Printf("Trying to open session with (type, id): (%s, %s)\n", sessType, sID)
 	bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
 	if clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
@@ -55,7 +55,7 @@ func openSession(_ *cobra.Command, args []string) {
 		fmt.Printf("Error: %s\n", err)
 		return
 	}
-	fmt.Printf("Opened Session:%s\n", reply.SessionId)
+	fmt.Printf("Opened session: %s\n", reply.SessionId)
 }
 
 // These will be the options for the openModule command
@@ -73,7 +73,7 @@ func openModule(_ *cobra.Command, args []string) {
 	modType := args[0]
 	modID := args[1]
 
-	fmt.Printf("Trying to open a module named: %s with ID: %s\n", modType, modID)
+	fmt.Printf("Trying to open module with (type, id): (%s, %s)\n", modType, modID)
 	bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
 	if clierr != nil {
 		fmt.Printf("Error: %s\n", clierr)
@@ -92,7 +92,7 @@ func openModule(_ *cobra.Command, args []string) {
 		fmt.Printf("Error: %s\n", err)
 		return
 	}
-	fmt.Printf("Opened module:%s\n", reply.Id)
+	fmt.Printf("Opened module: %s\n", reply.Id)
 }
 
 func init() {

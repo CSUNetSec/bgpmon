@@ -44,7 +44,7 @@ func newBgpmonCli(host string, port uint32) (*bgpmonCli, error) {
 
 func (b *bgpmonCli) close() {
 	if err := b.conn.Close(); err != nil {
-		fmt.Printf("Error:%s while closing the connection to bgpmond", err)
+		fmt.Printf("Error:%s while closing the connection to bgpmond\n", err)
 	}
 }
 
@@ -62,7 +62,7 @@ func getBackgroundCtxWithCancel() (context.Context, context.CancelFunc) {
 
 var rootCmd = &cobra.Command{
 	Use:   "bgpmon",
-	Short: "A command line client to interface with bgpmon",
+	Short: "A command line client to interface with a bgpmond server",
 	Long: `bgpmon connects to a running bgpmon daemon and communicates
 with it by issuing commands over RPC.`,
 }
@@ -106,7 +106,7 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		fmt.Printf("Using config file: %s\n", viper.ConfigFileUsed())
 	} else if !os.IsNotExist(err) { // The config file exists but it errored in parsing.
 		fmt.Printf("Error:%s in parsing config file:%s\n", viper.ConfigFileUsed(), err)
 		os.Exit(1)

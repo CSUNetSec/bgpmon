@@ -2,6 +2,7 @@ package modules
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	core "github.com/CSUNetSec/bgpmon"
@@ -15,27 +16,30 @@ type periodicModule struct {
 
 // Run will launch the periodic daemon. Args should specify the duration,
 // module to run and any arguments needed to pass to that module
-// Optkeys should be: duration , module, args
-// Optval args should be a proper OptString (-key val ...)
+// Optkeys should be: duration , module
+// All optKeys in the format T* will be passed on to the target module.
+// Ex. -Tfoo bar will be passed as -foo bar
 func (p *periodicModule) Run(args map[string]string, f core.FinishFunc) error {
 	defer f()
 
-	if !util.CheckForKeys(args, "duration", "module", "args") {
+	if !util.CheckForKeys(args, "duration", "module") {
 		p.logger.Errorf("Expected option keys: duration, module, args. Got %v", args)
 		return nil
 	}
 
-	dval, modval, argval := args["duration"], args["module"], args["args"]
+	dval, modval := args["duration"], args["module"]
+	argmap := make(map[string]string)
+	for k, v := range args {
+		// Args that begin with a T are forwarded to the target module
+		if strings.HasPrefix(k, "T") {
+			// Ignore the T, pass the rest of the arg
+			argmap[k[1:]] = v
+		}
+	}
 
 	dur, err := time.ParseDuration(dval)
 	if err != nil {
 		p.logger.Errorf("Error parsing duration: %s", dval)
-		return nil
-	}
-
-	argmap, err := util.StringToOptMap(argval)
-	if err != nil {
-		p.logger.Errorf("Error parsing argument string (%s): %s", argval, err)
 		return nil
 	}
 
@@ -74,7 +78,7 @@ func newPeriodicModule(s core.BgpmondServer, l util.Logger) core.Module {
 func init() {
 	opts := "duration : how often to run target module\n" +
 		"module : target module to run repeatedly\n" +
-		"args : arguments to pass to target module"
+		"T* : all options prefaced with a T will be forwared to the target module"
 
 	periodicHandle := core.ModuleHandler{
 		Info: core.ModuleInfo{
