@@ -32,5 +32,13 @@ func newpprofModule(s core.BgpmondServer, l util.Logger) core.Module {
 }
 
 func init() {
-	core.RegisterModule("pprof", newpprofModule)
+	pprofHandle := core.ModuleHandler{
+		Info: core.ModuleInfo{
+			Type:        "pprof",
+			Description: "Run the go http profiler",
+			Opts:        "address: the address to start the profiler on",
+		},
+		Maker: newpprofModule,
+	}
+	core.RegisterModule(pprofHandle)
 }

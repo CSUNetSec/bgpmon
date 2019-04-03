@@ -27,11 +27,11 @@ for the client to work.
 
 To show configured sessions on the server
 
-    bgpmon listAvailable
+    bgpmon listAvailable sessions
 
 To open a configured session
 
-    bgpmon open LocalPostgres -s sID
+    bgpmon open session LocalPostgres -s sID
 
 To write MRT files
 
@@ -39,7 +39,11 @@ To write MRT files
 
 To close a session
 
-    bgpmon close sID
+    bgpmon close session sID
+
+To see available modules and the options required to run them
+
+    bgpmon listAvailable modules
 
 # Example config file
 

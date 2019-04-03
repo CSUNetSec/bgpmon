@@ -33,8 +33,8 @@ type BgpmondServer interface {
 	OpenReadStream(string, db.ReadFilter) (db.ReadStream, error)
 
 	RunModule(string, string, map[string]string) error
-	ListModuleTypes() []string
-	ListRunningModules() []string
+	ListModuleTypes() []ModuleInfo
+	ListRunningModules() []OpenModuleInfo
 	CloseModule(string) error
 	Close() error
 }
@@ -230,17 +230,20 @@ func (s *server) getFinishFunc(id string) FinishFunc {
 	}
 }
 
-func (s *server) ListModuleTypes() []string {
+func (s *server) ListModuleTypes() []ModuleInfo {
 	return getModuleTypes()
 }
 
-func (s *server) ListRunningModules() []string {
+func (s *server) ListRunningModules() []OpenModuleInfo {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
-	var ret []string
+	var ret []OpenModuleInfo
 	for k, v := range s.modules {
-		ret = append(ret, fmt.Sprintf("ID: %s NAME: %s TYPE: %d", k, v.GetName(), v.GetType()))
+		info := v.GetInfo()
+		// Modules aren't aware of their own ID, so it has to be populated here
+		info.ID = k
+		ret = append(ret, info)
 	}
 	return ret
 }

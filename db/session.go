@@ -123,12 +123,20 @@ func NewSession(conf config.SessionConfiger, id string, nworkers int) (*Session,
 	}
 	s.db = db
 	sex := newSessionExecutor(s.db, s.dbo)
-
 	s.schema = newSchemaMgr(sex)
-	if err := s.schema.makeSchema(d, "dbs", "nodes"); err != nil {
+
+	if err := s.initDB(d, cn); err != nil {
 		return nil, err
 	}
-	//calling syncnodes on the new schema manager
+
+	return s, nil
+}
+
+func (s *Session) initDB(dbName string, cn map[string]config.NodeConfig) error {
+	if err := s.schema.makeSchema(dbName, "dbs", "nodes"); err != nil {
+		return err
+	}
+
 	nodes, err := s.schema.syncNodes("bgpmon", "nodes", cn)
 	if err != nil {
 		dblogger.Errorf("Error syncing nodes: %s", err)
@@ -136,8 +144,7 @@ func NewSession(conf config.SessionConfiger, id string, nworkers int) (*Session,
 		dblogger.Infof("Synced nodes, creating suggested nodes file")
 		config.PutConfiguredNodes(nodes)
 	}
-
-	return s, nil
+	return nil
 }
 
 //Db satisfies the Dber interface on a Session

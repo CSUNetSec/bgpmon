@@ -114,7 +114,7 @@ func summarizeResults(in chan writeMRTResult, wg *sync.WaitGroup) {
 	}
 
 	fmt.Printf("Total completed: %d\n", numWritten)
-	fmt.Printf("Total failures: %d\n", len(failed))
+	fmt.Printf("Total failures:  %d\n", len(failed))
 	for _, res := range failed {
 		fmt.Printf("%s : %s\n", res.fileName, res.err)
 	}

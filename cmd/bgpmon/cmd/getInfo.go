@@ -34,10 +34,10 @@ func getInfoFunc(_ *cobra.Command, args []string) {
 		return
 	}
 
-	fmt.Printf("ID: %s\n", reply.SessionId)
-	fmt.Printf("Workers: %d\n", reply.Workers)
-	fmt.Printf("Name: %s\n", reply.Type.Name)
-	fmt.Printf("Type: %s\n", reply.Type.Type)
+	fmt.Printf("ID:          %s\n", reply.SessionId)
+	fmt.Printf("Workers:     %d\n", reply.Workers)
+	fmt.Printf("Name:        %s\n", reply.Type.Name)
+	fmt.Printf("Type:        %s\n", reply.Type.Type)
 	fmt.Printf("Description: %s\n", reply.Type.Desc)
 }
 

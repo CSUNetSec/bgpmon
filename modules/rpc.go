@@ -69,7 +69,17 @@ func newRPCServer(s core.BgpmondServer, l util.Logger) core.Module {
 }
 
 func init() {
-	core.RegisterModule("rpc", newRPCServer)
+	opts := "address : the address to start the RPC server\n" +
+		"timeoutsecs : timeout for some RPC requests"
+	rpcHandle := core.ModuleHandler{
+		Info: core.ModuleInfo{
+			Type:        "rpc",
+			Description: "launch an RPC interface to the BgpmondServer",
+			Opts:        opts,
+		},
+		Maker: newRPCServer,
+	}
+	core.RegisterModule(rpcHandle)
 }
 
 // Below are all the methods required for the RPC server
@@ -192,4 +202,55 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 
 	r.logger.Infof("Write stream success")
 	return nil
+}
+
+func (r *rpcServer) RunModule(ctx context.Context, request *pb.RunModuleRequest) (*pb.RunModuleReply, error) {
+	opts, err := util.StringToOptMap(request.Args)
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.server.RunModule(request.Type, request.Id, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.RunModuleReply{Id: request.Id}, nil
+}
+
+func (r *rpcServer) CloseModule(ctx context.Context, request *pb.CloseModuleRequest) (*pb.Empty, error) {
+	err := r.server.CloseModule(request.Id)
+	return &pb.Empty{}, err
+}
+
+func (r *rpcServer) ListAvailableModules(ctx context.Context, _ *pb.Empty) (*pb.ListAvailableModulesReply, error) {
+	var ret []*pb.ModuleInfo
+
+	modules := r.server.ListModuleTypes()
+	for _, v := range modules {
+		info := &pb.ModuleInfo{
+			Type: v.Type,
+			Desc: v.Description,
+			Opts: v.Opts,
+		}
+		ret = append(ret, info)
+	}
+
+	return &pb.ListAvailableModulesReply{AvailableModules: ret}, nil
+}
+
+func (r *rpcServer) ListOpenModules(ctx context.Context, _ *pb.Empty) (*pb.ListOpenModulesReply, error) {
+	var ret []*pb.OpenModuleInfo
+
+	modules := r.server.ListRunningModules()
+	for _, v := range modules {
+		info := &pb.OpenModuleInfo{
+			Type:   v.Type,
+			Id:     v.ID,
+			Status: v.Status,
+		}
+		ret = append(ret, info)
+	}
+
+	return &pb.ListOpenModulesReply{OpenModules: ret}, nil
 }

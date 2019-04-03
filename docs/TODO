@@ -1,8 +1,6 @@
 Get path
     Client get
-    db get
     rpc module get
-Module RPC calls
 Tests
     WriteStream benchmark
     Improving coverage

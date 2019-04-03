@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 
 	core "github.com/CSUNetSec/bgpmon"
 	"github.com/CSUNetSec/bgpmon/config"
@@ -34,7 +33,7 @@ func main() {
 
 	rpcRunning := false
 	for _, v := range server.ListRunningModules() {
-		if strings.Contains(v, "ID: rpc") {
+		if v.Type == "rpc" {
 			rpcRunning = true
 			break
 		}

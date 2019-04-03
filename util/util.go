@@ -28,8 +28,12 @@ type GetTimeouter interface {
 func StringToOptMap(in string) (map[string]string, error) {
 	// first split the string in spaces
 	ret := make(map[string]string)
-	inParts := strings.Fields(in)
-	if len(inParts)%2 != 0 {
+	if in == "" {
+		return ret, nil
+	}
+
+	inparts := strings.Fields(in)
+	if len(inparts)%2 != 0 {
 		return nil, ErrOpt
 	}
 	for i := range inParts {
