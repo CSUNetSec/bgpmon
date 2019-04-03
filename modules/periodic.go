@@ -19,12 +19,14 @@ type periodicModule struct {
 // Optkeys should be: duration , module
 // All optKeys in the format T* will be passed on to the target module.
 // Ex. -Tfoo bar will be passed as -foo bar
-func (p *periodicModule) Run(args map[string]string, f core.FinishFunc) error {
-	defer f()
-
+func (p *periodicModule) Run(args map[string]string, f core.FinishFunc) {
+	defer p.wg.Done()
+	// f is not deferred because it should not be run if the modules
+	// Close method is called.
 	if !util.CheckForKeys(args, "duration", "module") {
 		p.logger.Errorf("Expected option keys: duration, module, args. Got %v", args)
-		return nil
+		f()
+		return
 	}
 
 	dval, modval := args["duration"], args["module"]
@@ -40,7 +42,8 @@ func (p *periodicModule) Run(args map[string]string, f core.FinishFunc) error {
 	dur, err := time.ParseDuration(dval)
 	if err != nil {
 		p.logger.Errorf("Error parsing duration: %s", dval)
-		return nil
+		f()
+		return
 	}
 
 	tick := time.NewTicker(dur)
@@ -49,9 +52,9 @@ func (p *periodicModule) Run(args map[string]string, f core.FinishFunc) error {
 	runCt, errCt := 0, 0
 	for {
 		select {
-		case <-p.cancel:
+		case <-p.ctx.Done():
 			p.logger.Infof("Stopping periodic")
-			return nil
+			return
 		case <-tick.C:
 			mID := fmt.Sprintf("periodic-%s%d", modval, runCt)
 			err = p.server.RunModule(modval, mID, argmap)
@@ -64,7 +67,8 @@ func (p *periodicModule) Run(args map[string]string, f core.FinishFunc) error {
 
 			if errCt >= 5 {
 				p.logger.Errorf("Failed to run module 5 times, stopping.")
-				return nil
+				f()
+				return
 			}
 		}
 		runCt++

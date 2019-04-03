@@ -13,14 +13,15 @@ type pprofMod struct {
 }
 
 //Run on the pprof module expects one option named "address"
-func (p *pprofMod) Run(opts map[string]string, finish core.FinishFunc) error {
+func (p *pprofMod) Run(opts map[string]string, finish core.FinishFunc) {
 	defer finish()
 	if !util.CheckForKeys(opts, "address") {
-		return p.logger.Errorf("option address not present")
+		p.logger.Errorf("option address not present")
+		return
 	}
 	addr := opts["address"]
 	p.logger.Errorf("%s", http.ListenAndServe(addr, nil))
-	return nil
+	return
 }
 
 func (p *pprofMod) Stop() error {

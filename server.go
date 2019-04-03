@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	corelogger = util.NewLogger("system", "core")
+	coreLogger = util.NewLogger("system", "core")
 )
 
 // BgpmondServer is the interface for interacting with a server instance.
@@ -46,6 +46,11 @@ type SessionHandle struct {
 	Session  *db.Session
 }
 
+// server is the primary server object. It contains a map of sessions
+// and modules, a mutex to coordinate concurrent calls, and a configer
+// to load sessions. It is the only "real" implementation of the BgpmondServer
+// interface, but it does not replace it so the interface can be implemented
+// in tests.
 type server struct {
 	sessions map[string]SessionHandle
 	modules  map[string]Module
@@ -92,47 +97,69 @@ func NewServerFromFile(fName string) (BgpmondServer, error) {
 	return NewServer(bc)
 }
 
+// OpenSession will look for a configured session with type sType. It will
+// create that session with ID sID and worker count workers. If that type
+// does not exist, the ID is already taken, or the session fails to open,
+// this function returns an error.
 func (s *server) OpenSession(sType, sID string, workers int) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
 	if _, ok := s.sessions[sID]; ok {
-		return corelogger.Errorf("Session ID: %s already exists.", sID)
+		return coreLogger.Errorf("Session ID: %s already exists.", sID)
 	}
 
 	sc, err := s.conf.GetSessionConfigWithName(sType)
 	if err != nil {
-		return corelogger.Errorf("No session type with session type name: %s found", sType)
+		return coreLogger.Errorf("No session type with session type name: %s found", sType)
 	}
 
 	session, err := db.NewSession(sc, sID, workers)
 	if err != nil {
-		return corelogger.Errorf("Create session failed: %v", err)
+		return coreLogger.Errorf("Create session failed: %v", err)
 	}
 
 	hosts := fmt.Sprintf("Hosts: %v", sc.GetHostNames())
-	stype := &pb.SessionType{Name: sc.GetName(), Type: sc.GetTypeName(), Desc: hosts}
-	sh := SessionHandle{Name: sID, SessType: stype, Session: session}
+
+	stype := &pb.SessionType{
+		Name: sc.GetName(),
+		Type: sc.GetTypeName(),
+		Desc: hosts,
+	}
+	sh := SessionHandle{
+		Name:     sID,
+		SessType: stype,
+		Session:  session,
+	}
 	s.sessions[sID] = sh
 
 	return nil
 }
 
+// CloseSession closes a single session with ID sID. It will return an error
+// if sID does not exist on the server or the session returns an error in
+// closing.
 func (s *server) CloseSession(sID string) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
 	sh, ok := s.sessions[sID]
 	if !ok {
-		return corelogger.Errorf("No session found with ID: %s", sID)
+		return coreLogger.Errorf("No session found with ID: %s", sID)
 	}
 
-	sh.Session.Close()
+	if err := sh.Session.Close(); err != nil {
+		return err
+	}
+
 	delete(s.sessions, sID)
 
 	return nil
 }
 
+// CloseAllSessions is a convenience method to shut down every open
+// session on the server. This function could block if there are
+// open streams on any of the sessions.
 func (s *server) CloseAllSessions() {
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -145,7 +172,11 @@ func (s *server) CloseAllSessions() {
 	return
 }
 
+// ListSessionTypes will return the configured types the server
+// is aware of.
 func (s *server) ListSessionTypes() []*pb.SessionType {
+	// This function doesn't need to lock the sessions map because
+	// it is only concerned with available sessions, not open ones.
 	availSessions := []*pb.SessionType{}
 	for _, sc := range s.conf.GetSessionConfigs() {
 		availsess := &pb.SessionType{
@@ -159,6 +190,8 @@ func (s *server) ListSessionTypes() []*pb.SessionType {
 	return availSessions
 }
 
+// ListSessions will return the handles for all currently open sessions
+// on the server.
 func (s *server) ListSessions() []SessionHandle {
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -170,50 +203,68 @@ func (s *server) ListSessions() []SessionHandle {
 	return sList
 }
 
+// OpenWriteStream will look up the session with ID sID and create/return a WriteStream
+// on that session. This function can block if the session is already saturated with
+// Streams.
 func (s *server) OpenWriteStream(sID string) (db.WriteStream, error) {
+
+	// The sessions are only locked here because the OpenWriteStream function below
+	// can be blocking. If it blocked while the mutex was locked, this would lock
+	// most functions on the server.
 	s.mux.Lock()
 	sh, ok := s.sessions[sID]
 	s.mux.Unlock()
+
 	if !ok {
-		return nil, corelogger.Errorf("Can't open stream on nonexistant session: %s", sID)
+		return nil, coreLogger.Errorf("Can't open stream on nonexistant session: %s", sID)
 	}
 
 	stream, err := sh.Session.OpenWriteStream(db.SessionWriteCapture)
 	if err != nil {
-		return nil, corelogger.Errorf("Failed to open stream on session(%s): %s", sID, err)
+		return nil, coreLogger.Errorf("Failed to open stream on session(%s): %s", sID, err)
 	}
 
 	return stream, nil
 }
 
+// OpenReadStream will look up the session with ID sID, and create/return a ReadStream
+// with the provided filter. This function can block if the session is already saturated
+// with Streams.
 func (s *server) OpenReadStream(sID string, rf db.ReadFilter) (db.ReadStream, error) {
+
+	// The sessions are only locked here because the OpenReadStream function below
+	// can be blocking. If it blocked while the mutex was locked, this would lock
+	// most functions on the server.
 	s.mux.Lock()
 	sh, ok := s.sessions[sID]
 	s.mux.Unlock()
+
 	if !ok {
-		return nil, corelogger.Errorf("Can't open stream on nonexistant session: %s", sID)
+		return nil, coreLogger.Errorf("Can't open stream on nonexistant session: %s", sID)
 	}
 
 	stream, err := sh.Session.OpenReadStream(db.SessionReadCapture, rf)
 	if err != nil {
-		return nil, corelogger.Errorf("Failed to open stream on session(%s): %s", sID, err)
+		return nil, coreLogger.Errorf("Failed to open stream on session(%s): %s", sID, err)
 	}
-	return stream, nil
 
+	return stream, nil
 }
 
+// RunModule will look up the modType in the registered modules, create the module,
+// add it to it's module map, and launch the module with modargs.
 func (s *server) RunModule(modType, name string, modargs map[string]string) error {
-	corelogger.Infof("Running module %s with ID %s", modType, name)
+	coreLogger.Infof("Running module %s with ID %s", modType, name)
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
 	if _, ok := s.modules[name]; ok {
-		return corelogger.Errorf("Module with ID: %s is already running", name)
+		return coreLogger.Errorf("Module with ID: %s is already running", name)
 	}
 
 	maker, ok := getModuleMaker(modType)
 	if !ok {
-		return corelogger.Errorf("No module type: %s found", modType)
+		return coreLogger.Errorf("No module type: %s found", modType)
 	}
 
 	newMod := maker(s, getModuleLogger(modType, name))
@@ -222,6 +273,8 @@ func (s *server) RunModule(modType, name string, modargs map[string]string) erro
 	return nil
 }
 
+// getFinishFuncn generates a function which deletes the module with
+// ID from the server.
 func (s *server) getFinishFunc(id string) FinishFunc {
 	return func() {
 		s.mux.Lock()
@@ -230,10 +283,12 @@ func (s *server) getFinishFunc(id string) FinishFunc {
 	}
 }
 
+// ListModuleTypes lists the modules available for the server to run.
 func (s *server) ListModuleTypes() []ModuleInfo {
 	return getModuleTypes()
 }
 
+// ListRunningModules lists all currently running modules on the server.
 func (s *server) ListRunningModules() []OpenModuleInfo {
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -248,20 +303,32 @@ func (s *server) ListRunningModules() []OpenModuleInfo {
 	return ret
 }
 
+// CloseModule will stop a module with ID name. If name is not the ID of
+// a running module, or there is an error while closing it, this function
+// returns an error.
 func (s *server) CloseModule(name string) error {
-	s.mux.Lock()
-	defer s.mux.Unlock()
 
+	// This is only locked here because the Stop() function below can block,
+	// and if it blocked while the mux was locked, this could lock most functions
+	// on the server.
+	s.mux.Lock()
 	mod, ok := s.modules[name]
+	s.mux.Unlock()
+
 	if !ok {
-		return corelogger.Errorf("No module with ID: %s found", name)
+		return coreLogger.Errorf("No module with ID: %s found", name)
 	}
 
-	mod.Stop()
+	if err := mod.Stop(); err != nil {
+		return err
+	}
+
 	delete(s.modules, name)
 	return nil
 }
 
+// CloseAllModules is a convenience method to close all modules running
+// on the server.
 func (s *server) CloseAllModules() {
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -272,6 +339,7 @@ func (s *server) CloseAllModules() {
 	}
 }
 
+// Close completely shuts down the server.
 func (s *server) Close() error {
 	s.CloseAllModules()
 	s.CloseAllSessions()

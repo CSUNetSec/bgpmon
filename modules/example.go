@@ -3,6 +3,10 @@
 package modules
 
 import (
+	"context"
+	"fmt"
+	"sync"
+
 	core "github.com/CSUNetSec/bgpmon"
 	"github.com/CSUNetSec/bgpmon/util"
 )
@@ -17,11 +21,11 @@ type BaseTask struct {
 }
 
 // Run satisfies the module interface
-func (b *BaseTask) Run(launchOpts map[string]string, finish core.FinishFunc) error {
+func (b *BaseTask) Run(launchOpts map[string]string, finish core.FinishFunc) {
 	defer finish()
 
 	b.logger.Infof("Example task run with opts:%v", launchOpts)
-	return nil
+	return
 }
 
 // GetType satisfies the module interface
@@ -39,9 +43,9 @@ func (b *BaseTask) GetInfo() core.OpenModuleInfo {
 	return core.NewOpenModuleInfo(b.name, "Running")
 }
 
-// Stop satisfies the module interface
+// Stop satisfies the module interface. A task is not stoppable.
 func (b *BaseTask) Stop() error {
-	return nil
+	return fmt.Errorf("tasks can't be stopped")
 }
 
 // NewBaseTask is the ModuleMaker function for a BaseTask
@@ -52,15 +56,21 @@ func NewBaseTask(server core.BgpmondServer, logger util.Logger, name string) *Ba
 // BaseDaemon is an example daemon module which can be usefully composed in other modules.
 type BaseDaemon struct {
 	*BaseTask
-	cancel chan bool
+
+	wg  *sync.WaitGroup
+	ctx context.Context
+	cf  context.CancelFunc
 }
 
-// Run satisfies the module interface
-func (b *BaseDaemon) Run(launchOpts map[string]string, _ core.FinishFunc) error {
+// Run satisfies the module interface, and prints waits for the module to
+// be closed.
+func (b *BaseDaemon) Run(launchOpts map[string]string, _ core.FinishFunc) {
+	defer b.wg.Done()
+
 	b.logger.Infof("Example daemon run with: %v", launchOpts)
-	<-b.cancel
+	<-b.ctx.Done()
 	b.logger.Infof("Example daemon closed")
-	return nil
+	return
 }
 
 // GetType satisfies the module interface
@@ -68,16 +78,20 @@ func (b *BaseDaemon) GetType() int {
 	return core.ModuleDaemon
 }
 
-// Stop satisfies the module interface
+// Stop satisfies the module interface. For a daemon module, this means
+// cancelling the context and waiting for the Run function to complete.
 func (b *BaseDaemon) Stop() error {
-	close(b.cancel)
+	b.cf()
+	b.wg.Wait()
 	return nil
 }
 
 // NewBaseDaemon is the ModuleMaker function for a BaseDaemon
 func NewBaseDaemon(server core.BgpmondServer, logger util.Logger, name string) *BaseDaemon {
-	cancel := make(chan bool)
-	return &BaseDaemon{BaseTask: NewBaseTask(server, logger, name), cancel: cancel}
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	return &BaseDaemon{BaseTask: NewBaseTask(server, logger, name), wg: wg, ctx: ctx, cf: cancel}
 }
 
 func init() {

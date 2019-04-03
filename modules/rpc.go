@@ -16,46 +16,59 @@ import (
 	"google.golang.org/grpc"
 )
 
+// This is a very common error, so this is a simple function
+// to generate it.
 var (
 	mkNxSessionErr = func(a string) error {
 		return fmt.Errorf("Session ID: %s not found", a)
 	}
 )
 
+// rpcServer is the basic object which handles all RPC calls.
 type rpcServer struct {
 	*BaseDaemon
+
 	grpcServer  *grpc.Server
 	timeoutSecs int
 }
 
 // Run on the rpc server expects two options named "address" and "timeoutsecs"
-func (r *rpcServer) Run(opts map[string]string, finish core.FinishFunc) error {
-	defer finish()
+func (r *rpcServer) Run(opts map[string]string, finish core.FinishFunc) {
+	defer r.wg.Done()
+	// finish is not deferred because it should only be called when an error
+	// occurs
 
 	if !util.CheckForKeys(opts, "address", "timeoutsecs") {
-		return r.logger.Errorf("options address and timeoutsecs not present")
+		r.logger.Errorf("options address and timeoutsecs not present")
+		finish()
+		return
 	}
 	addr := opts["address"]
 	tsecs := opts["timeoutsecs"]
 	ts, err := strconv.ParseInt(tsecs, 10, 32)
 	if err != nil {
-		return r.logger.Errorf("Error parsing timeoutsecs :%s", err)
+		r.logger.Errorf("Error parsing timeoutsecs :%s", err)
+		finish()
+		return
 	}
 
 	r.timeoutSecs = int(ts)
 	listen, err := net.Listen("tcp", addr)
 	if err != nil {
-		return r.logger.Errorf("Error listening on address: %s", addr)
+		r.logger.Errorf("Error listening on address: %s", addr)
+		finish()
+		return
 	}
 
 	r.grpcServer = grpc.NewServer()
 	pb.RegisterBgpmondServer(r.grpcServer, r)
 	r.grpcServer.Serve(listen)
-	return nil
+	return
 }
 
 func (r *rpcServer) Stop() error {
 	r.grpcServer.GracefulStop()
+	r.wg.Wait()
 	return nil
 }
 
@@ -83,6 +96,8 @@ func init() {
 }
 
 // Below are all the methods required for the RPC server
+
+// TODO
 func (r *rpcServer) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
 	r.logger.Infof("Running Get with request:%v", req)
 	/*
@@ -109,6 +124,7 @@ func (r *rpcServer) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
 	return nil
 }
 
+// CloseSession is the RPC port to the servers CloseSession function
 func (r *rpcServer) CloseSession(ctx context.Context, request *pb.CloseSessionRequest) (*pb.Empty, error) {
 	r.logger.Infof("Closing session %s", request.SessionId)
 
@@ -118,6 +134,7 @@ func (r *rpcServer) CloseSession(ctx context.Context, request *pb.CloseSessionRe
 	return &pb.Empty{}, err
 }
 
+// ListOpenSession is the RPC port to the servers ListSessions function
 func (r *rpcServer) ListOpenSessions(ctx context.Context, request *pb.Empty) (*pb.ListOpenSessionsReply, error) {
 	sessionIDs := []string{}
 	for _, sh := range r.server.ListSessions() {
@@ -127,12 +144,14 @@ func (r *rpcServer) ListOpenSessions(ctx context.Context, request *pb.Empty) (*p
 	return &pb.ListOpenSessionsReply{SessionId: sessionIDs}, nil
 }
 
+// ListAvailableSessions is the RPC port to the servers ListSessionTypes function
 func (r *rpcServer) ListAvailableSessions(ctx context.Context, request *pb.Empty) (*pb.ListAvailableSessionsReply, error) {
 	availSessions := r.server.ListSessionTypes()
 
 	return &pb.ListAvailableSessionsReply{AvailableSessions: availSessions}, nil
 }
 
+// OpenSession is the RPC port to the servers OpenSession function
 func (r *rpcServer) OpenSession(ctx context.Context, request *pb.OpenSessionRequest) (*pb.OpenSessionReply, error) {
 	r.logger.Infof("Opening session named %s of config name:%s with %d workers", request.SessionId, request.SessionName, request.Workers)
 
@@ -151,12 +170,14 @@ func (r *rpcServer) GetSessionInfo(ctx context.Context, request *pb.SessionInfoR
 	return nil, mkNxSessionErr(request.SessionId)
 }
 
+// Write is the RPC port to a server OpenWriteStream and writing to that stream.
 func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
+	// TODO: Replace first with sync.Once()?
 	var (
 		first    bool
 		dbStream db.WriteStream
 	)
-	timeoutCtx, cf := context.WithTimeout(context.Background(), r.GetTimeout())
+	timeoutCtx, cf := context.WithTimeout(r.ctx, r.GetTimeout())
 	defer cf()
 
 	first = true
@@ -204,6 +225,7 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 	return nil
 }
 
+// RunModule is the RPC port to the servers RunModule function
 func (r *rpcServer) RunModule(ctx context.Context, request *pb.RunModuleRequest) (*pb.RunModuleReply, error) {
 	opts, err := util.StringToOptMap(request.Args)
 	if err != nil {
@@ -218,11 +240,13 @@ func (r *rpcServer) RunModule(ctx context.Context, request *pb.RunModuleRequest)
 	return &pb.RunModuleReply{Id: request.Id}, nil
 }
 
+// CloseModule is the RPC port to the servers CloseModule function
 func (r *rpcServer) CloseModule(ctx context.Context, request *pb.CloseModuleRequest) (*pb.Empty, error) {
 	err := r.server.CloseModule(request.Id)
 	return &pb.Empty{}, err
 }
 
+// ListAvailableModules is the RPC port to the servers ListModuleTypes function
 func (r *rpcServer) ListAvailableModules(ctx context.Context, _ *pb.Empty) (*pb.ListAvailableModulesReply, error) {
 	var ret []*pb.ModuleInfo
 
@@ -239,6 +263,7 @@ func (r *rpcServer) ListAvailableModules(ctx context.Context, _ *pb.Empty) (*pb.
 	return &pb.ListAvailableModulesReply{AvailableModules: ret}, nil
 }
 
+// ListOpenModules is the RPC port to the servers ListRunningModules function
 func (r *rpcServer) ListOpenModules(ctx context.Context, _ *pb.Empty) (*pb.ListOpenModulesReply, error) {
 	var ret []*pb.OpenModuleInfo
 

@@ -26,9 +26,9 @@ type Module interface {
 	// goroutine. Args can be used to pass any information the module
 	// needs. A module can call its FinishFunc at any time to be deallocated
 	// by the server
-	Run(args map[string]string, f FinishFunc) error
+	Run(args map[string]string, f FinishFunc)
 
-	// GetType should return one of ModuleTask, or ModuleDaemon
+	// GetType should return one the module types defined above.
 	GetType() int
 
 	// GetName returns a string to identify the module type. Each
@@ -40,7 +40,8 @@ type Module interface {
 	GetInfo() OpenModuleInfo
 
 	// Stop is called to prematurely cancel a running module. The
-	// module should be deallocated just after calling this.
+	// module should be deallocated just after calling this. Stop
+	// should be blocking until it knows the module has been stopped.
 	Stop() error
 }
 
@@ -78,12 +79,16 @@ type ModuleHandler struct {
 
 // FinishFunc is a function passed from the server to a new module. It can be
 // called by the new module to let the server know the module can be deallocated.
+// Similar to a context CancelFunc, this type should not be stored. Instead,
+// it should be passed to any function that needs it. A FinishFunc should NOT
+// be called after a modules Stop() function has been called.
 type FinishFunc func()
 
 // ModuleMaker is a function to instanciate a module. It is given a handle
 // to the BgpmondServer, and a logger to print information.
 type ModuleMaker func(BgpmondServer, util.Logger) Module
 
+// This map holds all of the registered ModuleHandlers
 var knownModules map[string]ModuleHandler
 
 func init() {
@@ -104,6 +109,8 @@ func RegisterModule(handle ModuleHandler) error {
 	return nil
 }
 
+// getModuleMaker returns the creator function associated with this type
+// name. If this type name isn't registered, it returns nil, and false.
 func getModuleMaker(typeName string) (ModuleMaker, bool) {
 	handle, exists := knownModules[typeName]
 	if !exists {
@@ -112,10 +119,14 @@ func getModuleMaker(typeName string) (ModuleMaker, bool) {
 	return handle.Maker, true
 }
 
+// getModuleLogger returns a util.Logger with fields specific to this module.
+// This ensures all modules log in the same format.
 func getModuleLogger(modType, modName string) util.Logger {
 	return util.NewLogger("system", "module", "type", modType, "ID", modName)
 }
 
+// getModuleTypes returns the info on all modules registered to the
+// server.
 func getModuleTypes() []ModuleInfo {
 	var ret []ModuleInfo
 	for _, v := range knownModules {
