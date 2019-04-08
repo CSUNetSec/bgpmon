@@ -6,20 +6,30 @@ import (
 	"time"
 )
 
-// SQLBuffer is an interface used to describe anything that can buffer SQL values to be flushed later
+// SQLBuffer is an interface used to describe anything that can buffer SQL values to be flushed later.
 type SQLBuffer interface {
+	// Add should add all the provided arguments to the buffer. This can error
+	// if improper arguments are added, or in the case of an InsertBuffer, the
+	// capacity was reached and the Flush failed.
 	Add(arg ...interface{}) error
+
+	// Flush will execute the statement provided to the buffer with
+	// the provided values. If it does not return an error, it should
+	// leave the buffer in a cleared state.
 	Flush() error
+
+	// Clear removes all of the previously added values without flushing
+	// them.
 	Clear()
 }
 
-// InsertBuffer Represents the VALUES() array for an insert statement
+// InsertBuffer Represents the VALUES() array for an insert statement.
 // Helps to optimize the amount of inserted values on a
-// single query
+// single query.
 type InsertBuffer struct {
 	ex         SQLExecutor     // Executor to flush to
 	stmt       string          // Base INSERT statement
-	stmtbld    strings.Builder // Efficiently builds the added statement
+	stmtBldr   strings.Builder // Efficiently builds the added statement
 	max        int             // The number of adds to flush after
 	ct         int             // Current number of entries
 	batchSize  int             // Number of arguments expected of an add
@@ -32,20 +42,20 @@ type InsertBuffer struct {
 // is the SQLExecutor that the query will be run on when the buffer is full. max is
 // the number of VALUES clauses that can be added to this buffer. Each VALUES() clause must
 // contain exactly batchSize values. If usePositional is true, the resulting insert statement
-// will use this format: ($1, $2, $3). If it is false, it will use: (?,?,?)
-func NewInsertBuffer(ex SQLExecutor, stmt string, max int, batchSize int, usePositional bool) SQLBuffer {
+// will use this format: ($1, $2, $3). If it is false, it will use: (?,?,?).
+func NewInsertBuffer(ex SQLExecutor, stmt string, max int, batchSize int, usePositional bool) *InsertBuffer {
 	return &InsertBuffer{max: max, ex: ex, stmt: stmt, ct: 0, usePosArgs: usePositional, batchSize: batchSize}
 }
 
 // Add Satisfies the SQLBuffer interface. This can return an error if the buffer
 // is full but fails to flush, or if the length of arg is not equal to the batch
-// size
+// size.
 func (ib *InsertBuffer) Add(arg ...interface{}) error {
 	if len(arg) != ib.batchSize {
-		return fmt.Errorf("Incorrect number of arguments. Expected: %d, Got %d", ib.batchSize, len(arg))
+		return fmt.Errorf("incorrect number of arguments. Expected: %d, Got %d", ib.batchSize, len(arg))
 	}
 
-	ib.stmtbld.WriteString("(")
+	ib.stmtBldr.WriteString("(")
 	for i := range arg {
 		idx := ",?"
 		if ib.usePosArgs {
@@ -55,12 +65,12 @@ func (ib *InsertBuffer) Add(arg ...interface{}) error {
 
 		// If this is the first value, ignore the comma
 		if i == 0 {
-			ib.stmtbld.WriteString(idx[1:])
+			ib.stmtBldr.WriteString(idx[1:])
 		} else {
-			ib.stmtbld.WriteString(idx)
+			ib.stmtBldr.WriteString(idx)
 		}
 	}
-	ib.stmtbld.WriteString("),")
+	ib.stmtBldr.WriteString("),")
 
 	ib.values = append(ib.values, arg...)
 	ib.ct++
@@ -78,16 +88,16 @@ func (ib *InsertBuffer) Flush() error {
 		return nil
 	}
 
-	addedStmt := ib.stmtbld.String()
+	addedStmt := ib.stmtBldr.String()
 	if addedStmt[len(addedStmt)-1] != ',' {
-		return fmt.Errorf("Improperly formatted statement: %s", addedStmt)
+		return fmt.Errorf("improperly terminated statement: %s", addedStmt)
 	}
 
 	addedStmt = addedStmt[:len(addedStmt)-1] + ";"
 
-	convStmt := fmt.Sprintf("%s %s", ib.stmt, addedStmt)
+	combinedStmt := fmt.Sprintf("%s %s", ib.stmt, addedStmt)
 
-	_, err := ib.ex.Exec(convStmt, ib.values...)
+	_, err := ib.ex.Exec(combinedStmt, ib.values...)
 	if err != nil {
 		return err
 	}
@@ -100,27 +110,30 @@ func (ib *InsertBuffer) Flush() error {
 func (ib *InsertBuffer) Clear() {
 	ib.values = ib.values[:0]
 	ib.ct = 0
-	ib.stmtbld.Reset()
+	ib.stmtBldr.Reset()
 }
 
-// TimedBuffer is a SQLBuffer that wraps another SQLBuffer, flushing it after a certain amount of time
+// TimedBuffer is a SQLBuffer that wraps another SQLBuffer, flushing it after a
+// certain amount of time.
 type TimedBuffer struct {
 	SQLBuffer
 	tick     *time.Timer
 	duration time.Duration
 }
 
-// NewTimedBuffer returns a TimedBuffer that expires after duration d
+// NewTimedBuffer returns a TimedBuffer that expires after duration d.
 func NewTimedBuffer(parent SQLBuffer, d time.Duration) *TimedBuffer {
 	t := &TimedBuffer{SQLBuffer: parent, duration: d}
-	ticker := time.AfterFunc(d, func() {
+	t.tick = time.AfterFunc(d, func() {
+		// This returns an error, but has no way of passing it upward
+		// or logging it.
 		t.Flush()
 	})
-	t.tick = ticker
 	return t
 }
 
-// Add Satisfies the SQLBuffer interface
+// Add Satisfies the SQLBuffer interface. For a TimedBuffer, the args are
+// added to the underlying buffer and the timer is reset.
 func (t *TimedBuffer) Add(args ...interface{}) error {
 	if err := t.SQLBuffer.Add(args...); err != nil {
 		return err
@@ -129,7 +142,8 @@ func (t *TimedBuffer) Add(args ...interface{}) error {
 	return nil
 }
 
-// Stop is unique to the TimedBuffer, it stops the timer and closes the waiting goroutine
+// Stop is unique to the TimedBuffer, it prevents the buffer from
+// expiring after the provided duration.
 func (t *TimedBuffer) Stop() {
 	t.tick.Stop()
 }

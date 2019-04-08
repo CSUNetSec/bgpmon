@@ -2,23 +2,31 @@ package util
 
 import (
 	"database/sql"
-	"fmt"
 	"testing"
 	"time"
 
 	_ "github.com/lib/pq"
 )
 
+/*
+This file tests the functions and structs defined in buffer.go.
+Some of these tests require a live Postgres instance to be running.
+The postgres instance has to have a user with these credentials:
+	Username: bgpmon
+	Password: bgpmon
+	Database: bgpmon
+*/
+
 // This struct satisfies the SQLExecutor interface, so it can be used
-// to validate several functions that require an executor
+// to validate several functions that require an executor.
 type TestExecutor struct {
 	t        *testing.T
 	lastStmt string
 	lastVals []interface{}
 }
 
-// This compares the last query done on the executor to the incoming arguments.
-// Returns false if they are different
+// checkLast compares the last query done on the executor to the incoming arguments.
+// Returns false if they are different.
 func (te *TestExecutor) checkLast(query string, args ...interface{}) bool {
 	if len(args) != len(te.lastVals) {
 		return false
@@ -44,23 +52,30 @@ func (te *TestExecutor) Exec(query string, args ...interface{}) (sql.Result, err
 	return nil, nil
 }
 
-func (te TestExecutor) Query(query string, args ...interface{}) (*sql.Rows, error) {
+func (te *TestExecutor) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	return nil, nil
 }
 
-func (te TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
+func (te *TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
 	return nil
 }
 
-// This tests whether the buffer will flush at the right time
+// TestInsertBuffer tests whether the buffer will flush at the right time.
 func TestInsertBuffer(t *testing.T) {
 	base := "INSERT INTO testTable VALUES"
 	testEx := &TestExecutor{t: t}
 	buf := NewInsertBuffer(testEx, base, 2, 3, false)
 
-	buf.Add(1, 2, 3)
-	buf.Add(4, 5, 6)
-	buf.Add(8, 10, 12)
+	if err := buf.Add(1, 2, 3); err != nil {
+		t.Fatalf("Error adding (1,2,3) to buffer: %s", err)
+	}
+	if err := buf.Add(4, 5, 6); err != nil {
+		t.Fatalf("Error adding (4,5,6) to buffer: %s", err)
+	}
+	if err := buf.Add(8, 10, 12); err != nil {
+		t.Fatalf("Error adding (8,10,12) to buffer: %s", err)
+	}
+
 	pass := testEx.checkLast(base+" (?,?,?),(?,?,?);", 1, 2, 3, 4, 5, 6)
 	if !pass {
 		t.Logf("Expected: %s %v", base+" (?,?,?),(?,?,?);", []int{1, 2, 3, 4, 5, 6})
@@ -68,7 +83,7 @@ func TestInsertBuffer(t *testing.T) {
 	}
 
 	if err := buf.Flush(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Error flushing buffer: %s", err)
 	}
 
 	pass = testEx.checkLast(base+" (?,?,?);", 8, 10, 12)
@@ -78,16 +93,24 @@ func TestInsertBuffer(t *testing.T) {
 	}
 }
 
-// This will check if the TimedBuffer flushes with the timeout
+// TestTimedBuffer will check if the TimedBuffer flushes with the timeout.
 func TestTimedBuffer(t *testing.T) {
 	base := "INSERT INTO timed VALUES"
 	testEx := &TestExecutor{t: t}
 	buf := NewInsertBuffer(testEx, base, 2, 3, false)
 	tbuf := NewTimedBuffer(buf, 3*time.Second)
 
-	tbuf.Add(11, 13, 15)
-	tbuf.Add(17, 19, 21) // Should get flushed here
-	tbuf.Add(23, 25, 27) // These values should stay in the buffer until at least 3 seconds have passed
+	if err := tbuf.Add(11, 13, 15); err != nil {
+		t.Fatalf("Error adding (11, 13, 15) to TimedBuffer: %s", err)
+	}
+	if err := tbuf.Add(17, 19, 21); err != nil { // Should get flushed here
+		t.Fatalf("Error adding (17, 19, 21) to TimedBuffer: %s", err)
+	}
+	if err := tbuf.Add(23, 25, 27); err != nil { // These values should stay in the buffer until at least 3 seconds have passed
+		t.Fatalf("Error adding (23, 25, 27) to TimedBuffer: %s", err)
+	}
+
+	// Sleep for just 1 second, the 3rd set of values shouldn't have flushed yet.
 	time.Sleep(1 * time.Second)
 	pass := testEx.checkLast(base+" (?,?,?),(?,?,?);", 11, 13, 15, 17, 19, 21)
 	if !pass {
@@ -95,6 +118,7 @@ func TestTimedBuffer(t *testing.T) {
 		t.Fatalf("Received: %s %v", testEx.lastStmt, testEx.lastVals)
 	}
 
+	// Sleep for three more seconds, everyting should have flushed by now.
 	time.Sleep(3 * time.Second)
 	pass = testEx.checkLast(base+" (?,?,?);", 23, 25, 27)
 	if !pass {
@@ -105,12 +129,13 @@ func TestTimedBuffer(t *testing.T) {
 	tbuf.Stop()
 }
 
-// This test has no fail condition, but it's success can be observed
-// by selecting on the test table
+// TestBufferOnDb will connect to a live postgres instance to test the insert
+// buffer.
 func TestBufferOnDb(t *testing.T) {
 	if testing.Short() {
 		t.Skipf("Skipping TestBufferOnDb on short tests")
 	}
+
 	dbConn, err := getDbConnection()
 	if err != nil {
 		t.Fatal(err)
@@ -158,26 +183,26 @@ func teardownTestTable(db *sql.DB) error {
 	return err
 }
 
-// This will check the InsertBuffer on an actual DB connection.
+// dbBufferTest will check the InsertBuffer on an actual DB connection.
 func dbBufferTest(t *testing.T, db *sql.DB) {
 	baseStmt := "INSERT INTO test VALUES"
 	buf := NewInsertBuffer(db, baseStmt, 2, 3, true)
 
 	sum := 0
 	if err := buf.Add(21, 22, 23); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Error adding (21, 22, 23) to DB: %s", err)
 	}
 	sum += 21 + 22 + 23
 	if err := buf.Add(34, 35, 36); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Error adding (34, 35, 36) to DB: %s", err)
 	}
 	sum += 34 + 35 + 36
 	if err := buf.Add(47, 48, 49); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Error adding (47, 48, 49) to DB: %s", err)
 	}
 	sum += 47 + 48 + 49
 	if err := buf.Flush(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Error flushing to DB: %s", err)
 	}
 
 	dbSum, err := sumTestTable(db)
@@ -189,24 +214,24 @@ func dbBufferTest(t *testing.T, db *sql.DB) {
 }
 
 func getDbConnection() (*sql.DB, error) {
-	pgconstr := "user=bgpmon password=bgpmon dbname=bgpmon host=localhost sslmode=disable"
-	return sql.Open("postgres", pgconstr)
+	pgConstr := "user=bgpmon password=bgpmon dbname=bgpmon host=localhost sslmode=disable"
+	return sql.Open("postgres", pgConstr)
 }
 
-// This checks there will be an error if a batch size rule is violated.
+// TestBufferBatchSize checks there will be an error if a batch size rule is violated.
 func TestBufferBatchSize(t *testing.T) {
 	testEx := &TestExecutor{t: t}
 	buf := NewInsertBuffer(testEx, "", 2, 3, false)
 	if err := buf.Add(1, 2, 3); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Error adding (1, 2, 3) for batch size 3: %s", err)
 	}
 	if err := buf.Add(4, 5, 6); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Error adding (4, 5, 6) for batch size 3: %s", err)
 	}
 	if err := buf.Add(6, 7, 8, 9, 10); err == nil {
-		t.Fatal(fmt.Errorf("Error expected but not received"))
+		t.Fatal("Error expected but not received")
 	}
 	if err := buf.Add(11, 12); err == nil {
-		t.Fatal(fmt.Errorf("Error expected but not received"))
+		t.Fatal("Error expected but not received")
 	}
 }
