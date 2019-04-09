@@ -265,6 +265,7 @@ func getCaptures(ex SessionExecutor, msg CommonMessage) chan CommonReply {
 
 func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonMessage) chan CommonReply {
 	retc := make(chan CommonReply)
+
 	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
 		defer close(repStream)
 
@@ -276,6 +277,7 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 			return
 		}
 
+		fmt.Printf("%v\n", tables)
 		selectCapTmpl := ex.getdbop(getCaptureBinaryOp)
 		for _, tName := range tables {
 			stmt := fmt.Sprintf(selectCapTmpl, tName)
@@ -298,19 +300,21 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 			rows.Close()
 		}
 	}(ctx, ex, msg, retc)
+
 	return retc
 }
 
 func getCaptureTables(ex SessionExecutor, dbTable, colName string, start, end time.Time) ([]string, error) {
 	stmtTmpl := ex.getdbop(getCaptureTablesOp)
-	stmt := fmt.Sprintf(stmtTmpl, dbTable)
+	stmt := fmt.Sprintf(stmtTmpl, dbTable, colName, start.Local().Format("2006-01-02 15:04:05"), end.Local().Format("2006-01-02 15:04:05"))
 
 	tableNames := []string{}
-	rows, err := ex.Query(stmt, colName, start, end)
+	rows, err := ex.Query(stmt)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	for rows.Next() {
 		tName := ""
 		err = rows.Scan(&tName)

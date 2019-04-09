@@ -33,7 +33,7 @@ func loadSessionConfiger() (config.SessionConfiger, error) {
 	return sc, nil
 }
 
-func openSession(wc int) (*Session, error) {
+func openTestSession(wc int) (*Session, error) {
 	sc, err := loadSessionConfiger()
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func TestSessionOpenClose(t *testing.T) {
 		t.Skip()
 	}
 
-	session, err := openSession(1)
+	session, err := openTestSession(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestSessionSetWorkers(t *testing.T) {
 		t.Skip()
 	}
 
-	session, err := openSession(8)
+	session, err := openTestSession(8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestOpenWriteStreams(t *testing.T) {
 		t.Skip()
 	}
 
-	session, err := openSession(4)
+	session, err := openTestSession(4)
 	if err != nil {
 		t.Fatal(err)
 	}
