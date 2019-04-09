@@ -23,6 +23,10 @@ func (rcs *readCapStream) Read() (interface{}, error) {
 		if !ok {
 			return nil, io.EOF
 		}
+
+		if msg.Error() != nil {
+			return nil, msg.Error()
+		}
 		capMsg := msg.(getCapReply)
 
 		return capMsg.getCapture(), capMsg.Error()
