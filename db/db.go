@@ -119,7 +119,7 @@ var dbops = map[string][]string{
 	},
 	getCaptureTablesOp: {
 		//postgres
-		`SELECT dbname FROM %s WHERE collector='%s' AND dateFrom>='%s' AND dateTo<'%s' ;`,
+		`SELECT dbname FROM %s WHERE collector=$1 AND dateFrom>=$2 AND dateTo<$3;`,
 	},
 	getCaptureBinaryOp: {
 		//postgres
@@ -454,11 +454,6 @@ type ReadFilter struct {
 	collector string
 	start     time.Time
 	end       time.Time
-}
-
-// GetWhereClause
-func (rf ReadFilter) GetWhereClause() string {
-	return ""
 }
 
 // Capture represent a BGPCapture as it exists in the database

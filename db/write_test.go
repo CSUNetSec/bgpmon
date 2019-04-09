@@ -1,10 +1,7 @@
 package db
 
 import (
-	//	"fmt"
-	"io"
 	"testing"
-	"time"
 
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/CSUNetSec/protoparse/fileutil"
@@ -49,7 +46,7 @@ func TestSingleWriteStream(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	session, err := openTestSession(1)
+	session, err := openSession(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,42 +62,4 @@ func TestSingleWriteStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-}
-
-func TestSingleReadStream(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	session, err := openTestSession(1)
-	if err != nil {
-		t.Fatalf("Error opening test session: %s", err)
-	}
-	defer session.Close()
-
-	rf := ReadFilter{
-		collector: "routeviews2",
-		start:     time.Date(2013, time.January, 1, 0, 0, 0, 0, time.UTC),
-		end:       time.Date(2013, time.January, 2, 1, 0, 0, 0, time.UTC),
-	}
-
-	stream, err := session.OpenReadStream(SessionReadCapture, rf)
-	if err != nil {
-		t.Fatalf("Error opening read stream: %s", err)
-	}
-	defer stream.Close()
-
-	msgCt := 0
-	_, err = stream.Read()
-	for err == nil {
-		//fmt.Printf("[%d] %v\n", msgCt, cap)
-		msgCt++
-		_, err = stream.Read()
-	}
-
-	if err != io.EOF {
-		t.Fatalf("Stream failed: %s", err)
-	}
-
-	t.Logf("Total messages read: %d", msgCt)
 }
