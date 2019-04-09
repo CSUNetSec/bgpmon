@@ -35,7 +35,9 @@ func newSessionStream(db TimeoutDber, oper *dbOper, s *schemaMgr, wp *swg.SizedW
 
 // ReadStream represents the different kinds of read streams that can be done on a session
 type ReadStream interface {
-	Read() (interface{}, error)
+	Read() bool
+	Data() interface{}
+	Err() error
 	Close()
 }
 

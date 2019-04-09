@@ -264,7 +264,9 @@ func getCaptures(ex SessionExecutor, msg CommonMessage) chan CommonReply {
 }
 
 func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonMessage) chan CommonReply {
-	retc := make(chan CommonReply)
+	// This has a buffer length of 1 so it can be cancelled and not block while
+	// waiting to deliver the cancel message
+	retc := make(chan CommonReply, 1)
 
 	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
 		defer close(repStream)
@@ -277,7 +279,6 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 			return
 		}
 
-		fmt.Printf("%v\n", tables)
 		selectCapTmpl := ex.getdbop(getCaptureBinaryOp)
 		for _, tName := range tables {
 			stmt := fmt.Sprintf(selectCapTmpl, tName)
@@ -286,18 +287,20 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 				repStream <- newReply(err)
 				return
 			}
+			defer rows.Close()
 
 			for rows.Next() {
-				if util.IsClosed(ctx) {
-					repStream <- newReply(fmt.Errorf("context closed"))
-					rows.Close()
-					return
-				}
 				cap := &Capture{fromTable: tName}
 				err = rows.Scan(&cap.id, &cap.origin, &cap.protomsg)
-				repStream <- newGetCapReply(cap, err)
+
+				select {
+				case <-ctx.Done():
+					repStream <- newReply(fmt.Errorf("context closed"))
+					return
+				case repStream <- newGetCapReply(cap, err):
+					break
+				}
 			}
-			rows.Close()
 		}
 	}(ctx, ex, msg, retc)
 

@@ -91,14 +91,11 @@ func TestSingleReadStream(t *testing.T) {
 	defer stream.Close()
 
 	msgCt := 0
-	_, err = stream.Read()
-	for err == nil {
-		//fmt.Printf("[%d] %v\n", msgCt, cap)
+	for stream.Read() {
 		msgCt++
-		_, err = stream.Read()
 	}
 
-	if err != io.EOF {
+	if stream.Err() != io.EOF {
 		t.Fatalf("Stream failed: %s", err)
 	}
 

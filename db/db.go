@@ -456,7 +456,7 @@ type ReadFilter struct {
 	end       time.Time
 }
 
-// GetWhereClause
+// GetWhereClause returns a where clause to describe the filter
 func (rf ReadFilter) GetWhereClause() string {
 	return ""
 }
