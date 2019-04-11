@@ -1,5 +1,4 @@
 Get path
-    Client get
     rpc module get
 Tests
     WriteStream benchmark
