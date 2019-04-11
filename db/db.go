@@ -456,6 +456,11 @@ type ReadFilter struct {
 	end       time.Time
 }
 
+// NewReadFilter constructs a ReadFilter with the specified collector and time span
+func NewReadFilter(collector string, s, e time.Time) ReadFilter {
+	return ReadFilter{collector: collector, start: s, end: e}
+}
+
 // GetWhereClause returns a where clause to describe the filter
 func (rf ReadFilter) GetWhereClause() string {
 	return ""

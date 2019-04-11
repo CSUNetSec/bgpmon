@@ -41,6 +41,15 @@ func (rcs *readCapStream) Data() interface{} {
 	return capMsg.getCapture()
 }
 
+func (rcs *readCapStream) Bytes() []byte {
+	if rcs.lastRep == nil {
+		return nil
+	}
+
+	capMsg := (*rcs.lastRep).(getCapReply)
+	return capMsg.getCapture().protomsg
+}
+
 func (rcs *readCapStream) Err() error {
 	return rcs.lastErr
 }

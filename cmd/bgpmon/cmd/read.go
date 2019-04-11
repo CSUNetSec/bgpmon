@@ -40,7 +40,7 @@ func getOutputFile() (*os.File, error) {
 	if output == "" {
 		return os.Stdout, nil
 	}
-	return os.Open(output)
+	return os.Create(output)
 }
 
 var readCapCmd = &cobra.Command{

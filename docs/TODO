@@ -1,5 +1,3 @@
-Get path
-    rpc module get
 Tests
     WriteStream benchmark
     Improving coverage

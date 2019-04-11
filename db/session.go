@@ -37,6 +37,7 @@ func newSessionStream(db TimeoutDber, oper *dbOper, s *schemaMgr, wp *swg.SizedW
 type ReadStream interface {
 	Read() bool
 	Data() interface{}
+	Bytes() []byte
 	Err() error
 	Close()
 }
