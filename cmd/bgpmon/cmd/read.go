@@ -44,7 +44,7 @@ func getOutputFile() (*os.File, error) {
 }
 
 var readCapCmd = &cobra.Command{
-	Use:   "capture SESS_ID FILTER",
+	Use:   "count SESS_ID FILTER",
 	Short: "Reads bgp captures from a bgpmond server.",
 	Long: `Constructs a filter from the provided filter string, opens a read stream on a bgpmond server,
 	and reads all captures passing the filter.`,
@@ -64,12 +64,6 @@ func readCapture(_ *cobra.Command, args []string) {
 
 	if len(args) > 1 {
 		// Parse filters here
-	}
-
-	outputFd, err := getOutputFile()
-	if err != nil {
-		fmt.Printf("Error opening output file: %s\n", err)
-		return
 	}
 
 	moncli, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
@@ -96,6 +90,8 @@ func readCapture(_ *cobra.Command, args []string) {
 		return
 	}
 
+	msg := 0
+
 	for {
 		cap, err := stream.Recv()
 		if err != nil {
@@ -109,16 +105,11 @@ func readCapture(_ *cobra.Command, args []string) {
 			fmt.Printf("Stream returned error: %s\n", cap.Error)
 			break
 		}
-
-		for _, v := range cap.Chunk {
-			_, err = outputFd.Write(v)
-			if err != nil {
-				fmt.Printf("Error writing to output file: %s\n", err)
-				return
-			}
-		}
+		msg++
 
 	}
+
+	fmt.Printf("Total messages: %d\n", msg)
 	return
 }
 
