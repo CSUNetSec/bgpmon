@@ -106,12 +106,16 @@ func (r *rpcServer) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
 	switch req.Type {
 	case pb.GetRequest_CAPTURE:
 		rf := db.NewReadFilter(req.CollectorName, time.Unix(int64(req.StartTimestamp), 0), time.Unix(int64(req.EndTimestamp), 0))
-		stream, err = r.server.OpenReadStream(req.SessionId, rf)
+		stream, err = r.server.OpenReadStream(req.SessionId, db.SessionReadCapture, rf)
 		if err != nil {
 			return err
 		}
 	case pb.GetRequest_PREFIX:
-		return fmt.Errorf("Not implemented")
+		rf := db.NewReadFilter(req.CollectorName, time.Unix(int64(req.StartTimestamp), 0), time.Unix(int64(req.EndTimestamp), 0))
+		stream, err = r.server.OpenReadStream(req.SessionId, db.SessionReadPrefix, rf)
+		if err != nil {
+			return err
+		}
 	case pb.GetRequest_ASPATH:
 		return fmt.Errorf("Not implemented")
 	}

@@ -35,6 +35,7 @@ const (
 	insertCaptureTableOp = "insertCaptureTableTmpl"
 	getCaptureTablesOp   = "getCaptureTablesTmpl"
 	getCaptureBinaryOp   = "getCaptureBinaryTmpl"
+	getPrefixOp          = "getPrefixTmpl"
 )
 
 // dbops associates every generic database operation with an array that holds the correct SQL statements
@@ -118,12 +119,16 @@ var dbops = map[string][]string{
 	         );`,
 	},
 	getCaptureTablesOp: {
-		//postgres
+		// postgres
 		`SELECT dbname FROM %s WHERE collector='%s' AND dateFrom>='%s' AND dateTo<'%s' ;`,
 	},
 	getCaptureBinaryOp: {
-		//postgres
+		// postgres
 		`SELECT update_id, origin_as, protomsg FROM %s;`,
+	},
+	getPrefixOp: {
+		// postgres
+		`SELECT unnest(adv_prefixes) FROM %s`,
 	},
 }
 

@@ -287,8 +287,9 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 				repStream <- newReply(err)
 				return
 			}
-			defer rows.Close()
-
+			// Rows.close is not deferred here because we may be opening a lot of them.
+			// Instead of waiting until the end of the function to close them, they are
+			// closed after the loop, or within the cancellation case.
 			for rows.Next() {
 				cap := &Capture{fromTable: tName}
 				err = rows.Scan(&cap.id, &cap.origin, &cap.protomsg)
@@ -296,11 +297,54 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 				select {
 				case <-ctx.Done():
 					repStream <- newReply(fmt.Errorf("context closed"))
+					rows.Close()
 					return
 				case repStream <- newGetCapReply(cap, err):
 					break
 				}
 			}
+			rows.Close()
+		}
+	}(ctx, ex, msg, retc)
+
+	return retc
+}
+
+func getPrefixStream(ctx context.Context, ex SessionExecutor, msg CommonMessage) chan CommonReply {
+	retc := make(chan CommonReply, 1)
+
+	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
+		defer close(repStream)
+
+		cMsg := msg.(getCapMessage)
+		start, end := cMsg.getDates()
+		tables, err := getCaptureTables(ex, cMsg.GetMainTable(), cMsg.getTableCol(), start, end)
+		if err != nil {
+			repStream <- newReply(err)
+		}
+
+		selectPrefixTmpl := ex.getdbop(getPrefixOp)
+		for _, tName := range tables {
+			stmt := fmt.Sprintf(selectPrefixTmpl, tName)
+			rows, err := ex.Query(stmt)
+			if err != nil {
+				repStream <- newReply(err)
+				return
+			}
+
+			for rows.Next() {
+				pref := ""
+				err = rows.Scan(&pref)
+				select {
+				case <-ctx.Done():
+					repStream <- newReply(fmt.Errorf("context closed"))
+					rows.Close()
+					return
+				case repStream <- newGetPrefixReply(pref, err):
+					break
+				}
+			}
+			rows.Close()
 		}
 	}(ctx, ex, msg, retc)
 
