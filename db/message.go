@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding"
+	"net"
 	"time"
 
 	"github.com/CSUNetSec/bgpmon/config"
@@ -274,4 +275,28 @@ func (c getCapReply) MarshalBinary() ([]byte, error) {
 type SerializableReply interface {
 	CommonReply
 	encoding.BinaryMarshaler
+}
+
+type getPrefixReply struct {
+	CommonReply
+	net *net.IPNet
+}
+
+func (gpr *getPrefixReply) getPrefix() *net.IPNet {
+	return gpr.net
+}
+
+func newGetPrefixReply(pref string, msgErr error) *getPrefixReply {
+	_, net, perr := net.ParseCIDR(pref)
+	var err error
+	if msgErr == nil {
+		err = msgErr
+	} else {
+		err = perr
+	}
+
+	return &getPrefixReply{
+		CommonReply: newReply(err),
+		net:         net,
+	}
 }

@@ -264,7 +264,10 @@ func getCaptures(ex SessionExecutor, msg CommonMessage) chan CommonReply {
 }
 
 func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonMessage) chan CommonReply {
-	retc := make(chan CommonReply)
+	// This has a buffer length of 1 so it can be cancelled and not block while
+	// waiting to deliver the cancel message
+	retc := make(chan CommonReply, 1)
+
 	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
 		defer close(repStream)
 
@@ -284,33 +287,81 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 				repStream <- newReply(err)
 				return
 			}
-
+			// Rows.close is not deferred here because we may be opening a lot of them.
+			// Instead of waiting until the end of the function to close them, they are
+			// closed after the loop, or within the cancellation case.
 			for rows.Next() {
-				if util.IsClosed(ctx) {
+				cap := &Capture{fromTable: tName}
+				err = rows.Scan(&cap.id, &cap.origin, &cap.protomsg)
+
+				select {
+				case <-ctx.Done():
 					repStream <- newReply(fmt.Errorf("context closed"))
 					rows.Close()
 					return
+				case repStream <- newGetCapReply(cap, err):
+					break
 				}
-				cap := &Capture{fromTable: tName}
-				err = rows.Scan(&cap.id, &cap.origin, &cap.protomsg)
-				repStream <- newGetCapReply(cap, err)
 			}
 			rows.Close()
 		}
 	}(ctx, ex, msg, retc)
+
+	return retc
+}
+
+func getPrefixStream(ctx context.Context, ex SessionExecutor, msg CommonMessage) chan CommonReply {
+	retc := make(chan CommonReply, 1)
+
+	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
+		defer close(repStream)
+
+		cMsg := msg.(getCapMessage)
+		start, end := cMsg.getDates()
+		tables, err := getCaptureTables(ex, cMsg.GetMainTable(), cMsg.getTableCol(), start, end)
+		if err != nil {
+			repStream <- newReply(err)
+		}
+
+		selectPrefixTmpl := ex.getdbop(getPrefixOp)
+		for _, tName := range tables {
+			stmt := fmt.Sprintf(selectPrefixTmpl, tName)
+			rows, err := ex.Query(stmt)
+			if err != nil {
+				repStream <- newReply(err)
+				return
+			}
+
+			for rows.Next() {
+				pref := ""
+				err = rows.Scan(&pref)
+				select {
+				case <-ctx.Done():
+					repStream <- newReply(fmt.Errorf("context closed"))
+					rows.Close()
+					return
+				case repStream <- newGetPrefixReply(pref, err):
+					break
+				}
+			}
+			rows.Close()
+		}
+	}(ctx, ex, msg, retc)
+
 	return retc
 }
 
 func getCaptureTables(ex SessionExecutor, dbTable, colName string, start, end time.Time) ([]string, error) {
 	stmtTmpl := ex.getdbop(getCaptureTablesOp)
-	stmt := fmt.Sprintf(stmtTmpl, dbTable)
+	stmt := fmt.Sprintf(stmtTmpl, dbTable, colName, start.Local().Format("2006-01-02 15:04:05"), end.Local().Format("2006-01-02 15:04:05"))
 
 	tableNames := []string{}
-	rows, err := ex.Query(stmt, colName, start, end)
+	rows, err := ex.Query(stmt)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	for rows.Next() {
 		tName := ""
 		err = rows.Scan(&tName)

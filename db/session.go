@@ -11,15 +11,19 @@ import (
 	swg "github.com/remeh/sizedwaitgroup"
 )
 
-type sessionType int
+// SessionType describes on the supported session streams.
+type SessionType int
 
 const (
 	// SessionWriteCapture is provided to a Sessioner's OpenWriteStream to open
-	// a capture write stream
-	SessionWriteCapture sessionType = iota
-	//SessionReadCapture is provided to a Sessioner's OpenReadStream to open a
-	// read capture stream
+	// a capture write stream.
+	SessionWriteCapture SessionType = iota
+	// SessionReadCapture is provided to a Sessioner's OpenReadStream to open a
+	// read capture stream.
 	SessionReadCapture
+	// SessionReadPrefix is provided to a Sessioner's OpenReadStream to open a
+	// read prefix stream.
+	SessionReadPrefix
 )
 
 type sessionStream struct {
@@ -35,7 +39,10 @@ func newSessionStream(db TimeoutDber, oper *dbOper, s *schemaMgr, wp *swg.SizedW
 
 // ReadStream represents the different kinds of read streams that can be done on a session
 type ReadStream interface {
-	Read() (interface{}, error)
+	Read() bool
+	Data() interface{}
+	Bytes() []byte
+	Err() error
 	Close()
 }
 
@@ -49,8 +56,8 @@ type WriteStream interface {
 
 //Sessioner is an interface that wraps the stream open functions and close
 type Sessioner interface {
-	OpenWriteStream(sessionType) (WriteStream, error)
-	OpenReadStream(sessionType, rf ReadFilter) (ReadStream, error)
+	OpenWriteStream(SessionType) (WriteStream, error)
+	OpenReadStream(SessionType, rf ReadFilter) (ReadStream, error)
 	Close() error
 }
 
@@ -159,7 +166,7 @@ func (s *Session) GetTimeout() time.Duration {
 
 // OpenWriteStream opens and returns a WriteStream with the given type, or an
 // error if no such type exists
-func (s *Session) OpenWriteStream(sType sessionType) (WriteStream, error) {
+func (s *Session) OpenWriteStream(sType SessionType) (WriteStream, error) {
 	switch sType {
 	case SessionWriteCapture:
 		s.wp.Add()
@@ -173,12 +180,17 @@ func (s *Session) OpenWriteStream(sType sessionType) (WriteStream, error) {
 
 // OpenReadStream opens and returns a ReadStream with the given type, or an
 // error if no such type exists
-func (s *Session) OpenReadStream(sType sessionType, rf ReadFilter) (ReadStream, error) {
+func (s *Session) OpenReadStream(sType SessionType, rf ReadFilter) (ReadStream, error) {
 	switch sType {
 	case SessionReadCapture:
 		s.wp.Add()
 		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
 		rs := newReadCapStream(parStream, s.cancel, rf)
+		return rs, nil
+	case SessionReadPrefix:
+		s.wp.Add()
+		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
+		rs := newReadPrefixStream(parStream, s.cancel, rf)
 		return rs, nil
 	default:
 		return nil, fmt.Errorf("unsupported read stream type")

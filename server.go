@@ -30,7 +30,7 @@ type BgpmondServer interface {
 	ListSessions() []SessionHandle
 	CloseSession(string) error
 	OpenWriteStream(string) (db.WriteStream, error)
-	OpenReadStream(string, db.ReadFilter) (db.ReadStream, error)
+	OpenReadStream(string, db.SessionType, db.ReadFilter) (db.ReadStream, error)
 
 	RunModule(string, string, map[string]string) error
 	ListModuleTypes() []ModuleInfo
@@ -230,7 +230,7 @@ func (s *server) OpenWriteStream(sID string) (db.WriteStream, error) {
 // OpenReadStream will look up the session with ID sID, and create/return a ReadStream
 // with the provided filter. This function can block if the session is already saturated
 // with Streams.
-func (s *server) OpenReadStream(sID string, rf db.ReadFilter) (db.ReadStream, error) {
+func (s *server) OpenReadStream(sID string, readType db.SessionType, rf db.ReadFilter) (db.ReadStream, error) {
 
 	// The sessions are only locked here because the OpenReadStream function below
 	// can be blocking. If it blocked while the mutex was locked, this would lock
@@ -243,7 +243,7 @@ func (s *server) OpenReadStream(sID string, rf db.ReadFilter) (db.ReadStream, er
 		return nil, coreLogger.Errorf("Can't open stream on nonexistant session: %s", sID)
 	}
 
-	stream, err := sh.Session.OpenReadStream(db.SessionReadCapture, rf)
+	stream, err := sh.Session.OpenReadStream(readType, rf)
 	if err != nil {
 		return nil, coreLogger.Errorf("Failed to open stream on session(%s): %s", sID, err)
 	}

@@ -35,6 +35,7 @@ const (
 	insertCaptureTableOp = "insertCaptureTableTmpl"
 	getCaptureTablesOp   = "getCaptureTablesTmpl"
 	getCaptureBinaryOp   = "getCaptureBinaryTmpl"
+	getPrefixOp          = "getPrefixTmpl"
 )
 
 // dbops associates every generic database operation with an array that holds the correct SQL statements
@@ -118,12 +119,16 @@ var dbops = map[string][]string{
 	         );`,
 	},
 	getCaptureTablesOp: {
-		//postgres
-		`SELECT dbname FROM %s WHERE collector=$1 AND dateFrom>=$2 AND dateTo<$3;`,
+		// postgres
+		`SELECT dbname FROM %s WHERE collector='%s' AND dateFrom>='%s' AND dateTo<'%s' ;`,
 	},
 	getCaptureBinaryOp: {
-		//postgres
+		// postgres
 		`SELECT update_id, origin_as, protomsg FROM %s;`,
+	},
+	getPrefixOp: {
+		// postgres
+		`SELECT unnest(adv_prefixes) FROM %s`,
 	},
 }
 
@@ -454,6 +459,16 @@ type ReadFilter struct {
 	collector string
 	start     time.Time
 	end       time.Time
+}
+
+// NewReadFilter constructs a ReadFilter with the specified collector and time span
+func NewReadFilter(collector string, s, e time.Time) ReadFilter {
+	return ReadFilter{collector: collector, start: s, end: e}
+}
+
+// GetWhereClause returns a where clause to describe the filter
+func (rf ReadFilter) GetWhereClause() string {
+	return ""
 }
 
 // Capture represent a BGPCapture as it exists in the database

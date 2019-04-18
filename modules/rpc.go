@@ -97,30 +97,50 @@ func init() {
 
 // Below are all the methods required for the RPC server
 
-// TODO
 func (r *rpcServer) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
 	r.logger.Infof("Running Get with request:%v", req)
-	/*
-		sh, exists := s.sessions[req.SessionId]
-		if !exists {
-			return mkNxSessionErr(req.SessionId)
+
+	var stream db.ReadStream
+	var err error
+
+	switch req.Type {
+	case pb.GetRequest_CAPTURE:
+		rf := db.NewReadFilter(req.CollectorName, time.Unix(int64(req.StartTimestamp), 0), time.Unix(int64(req.EndTimestamp), 0))
+		stream, err = r.server.OpenReadStream(req.SessionId, db.SessionReadCapture, rf)
+		if err != nil {
+			return err
+		}
+	case pb.GetRequest_PREFIX:
+		rf := db.NewReadFilter(req.CollectorName, time.Unix(int64(req.StartTimestamp), 0), time.Unix(int64(req.EndTimestamp), 0))
+		stream, err = r.server.OpenReadStream(req.SessionId, db.SessionReadPrefix, rf)
+		if err != nil {
+			return err
+		}
+	case pb.GetRequest_ASPATH:
+		return fmt.Errorf("Not implemented")
+	}
+	defer stream.Close()
+
+	for stream.Read() {
+		data := stream.Bytes()
+		getRep := &pb.GetReply{
+			Type:       req.Type,
+			Error:      "",
+			Incomplete: false,
+			Chunk:      [][]byte{data},
 		}
 
-		switch req.Type {
-		case pb.GetRequest_CAPTURE:
-			cchan := db.GetCaptures(sh.sess, req)
-			for capt := range cchan {
-				if serr := rep.Send(&capt); serr != nil {
-					return errors.Wrap(serr, "failed to send capture to client")
-				}
-			}
-		case pb.GetRequest_ASPATH:
-		case pb.GetRequest_PREFIX:
-
-		default:
-			return errors.New("unimplemented Get request type")
+		err := rep.Send(getRep)
+		if err != nil {
+			return err
 		}
-	*/
+
+	}
+
+	if stream.Err() != nil && stream.Err() != io.EOF {
+		return stream.Err()
+	}
+
 	return nil
 }
 
