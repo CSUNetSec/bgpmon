@@ -11,7 +11,7 @@ import (
 	"github.com/CSUNetSec/bgpmon/util"
 )
 
-// BaseTask is an example task module which can usefully composed in other modules.
+// BaseTask is an example task module which can be usefully composed in other modules.
 type BaseTask struct {
 	core.Module
 
@@ -20,25 +20,22 @@ type BaseTask struct {
 	name   string
 }
 
-// Run satisfies the module interface
-func (b *BaseTask) Run(launchOpts map[string]string, finish core.FinishFunc) {
-	defer finish()
-
+// Run satisfies the module interface.
+func (b *BaseTask) Run(launchOpts map[string]string) {
 	b.logger.Infof("Example task run with opts:%v", launchOpts)
-	return
 }
 
-// GetType satisfies the module interface
+// GetType satisfies the module interface.
 func (b *BaseTask) GetType() int {
 	return core.ModuleTask
 }
 
-// GetName satisfies the module interface
+// GetName satisfies the module interface.
 func (b *BaseTask) GetName() string {
 	return b.name
 }
 
-// GetInfo satisfies the module interface
+// GetInfo satisfies the module interface.
 func (b *BaseTask) GetInfo() core.OpenModuleInfo {
 	return core.NewOpenModuleInfo(b.name, "Running")
 }
@@ -48,7 +45,7 @@ func (b *BaseTask) Stop() error {
 	return fmt.Errorf("tasks can't be stopped")
 }
 
-// NewBaseTask is the ModuleMaker function for a BaseTask
+// NewBaseTask creates a base task with the server, logger and name.
 func NewBaseTask(server core.BgpmondServer, logger util.Logger, name string) *BaseTask {
 	return &BaseTask{server: server, logger: logger, name: name}
 }
@@ -64,16 +61,15 @@ type BaseDaemon struct {
 
 // Run satisfies the module interface, and prints waits for the module to
 // be closed.
-func (b *BaseDaemon) Run(launchOpts map[string]string, _ core.FinishFunc) {
+func (b *BaseDaemon) Run(launchOpts map[string]string) {
 	defer b.wg.Done()
 
 	b.logger.Infof("Example daemon run with: %v", launchOpts)
 	<-b.ctx.Done()
 	b.logger.Infof("Example daemon closed")
-	return
 }
 
-// GetType satisfies the module interface
+// GetType satisfies the module interface.
 func (b *BaseDaemon) GetType() int {
 	return core.ModuleDaemon
 }
@@ -86,7 +82,7 @@ func (b *BaseDaemon) Stop() error {
 	return nil
 }
 
-// NewBaseDaemon is the ModuleMaker function for a BaseDaemon
+// NewBaseDaemon creates a base daemon with the server, logger and name.
 func NewBaseDaemon(server core.BgpmondServer, logger util.Logger, name string) *BaseDaemon {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
@@ -98,7 +94,7 @@ func init() {
 	taskHandle := core.ModuleHandler{
 		Info: core.ModuleInfo{
 			Type:        "example_task",
-			Description: "Run an example task module!",
+			Description: "Run an example task module",
 			Opts:        "None",
 		},
 		Maker: func(s core.BgpmondServer, l util.Logger) core.Module {
@@ -110,7 +106,7 @@ func init() {
 	daemonHandle := core.ModuleHandler{
 		Info: core.ModuleInfo{
 			Type:        "example_daemon",
-			Description: "Run an example daemon module!",
+			Description: "Run an example daemon module",
 			Opts:        "None",
 		},
 		Maker: func(s core.BgpmondServer, l util.Logger) core.Module {

@@ -24,7 +24,7 @@ WorkerCt = 4
 # repository /bgpmon
 [Modules.rpc1]
 Type="rpc"
-Args="-address :12289 -timeoutsecs 240"
+Args="-address :12289 -timeoutSecs 240"
 
 # pprof enables the http profiler at an address specified by Args
 [Modules.pprof1]

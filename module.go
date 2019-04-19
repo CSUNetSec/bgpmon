@@ -1,42 +1,39 @@
 package bgpmon
 
 import (
-	"fmt"
-
 	"github.com/CSUNetSec/bgpmon/util"
 )
 
 // Types of modules.
 const (
 	// A task will run until it's finished. It will only be deallocated by
-	// the server when it calls it's own FinishFunc.
+	// the server when it calls its own FinishFunc.
 	ModuleTask = iota
 
 	// A daemon will run constantly, and won't stop until it is closed by
-	// the server. If it encounters an error, it can call it's FinishFunc
+	// the server. If it encounters an error, it can call its FinishFunc
 	// to be deallocated early.
 	ModuleDaemon
 )
 
-// Module describes a process that can be started by the server. It can
+// Module describes a service that can be started by the server. It can
 // interact with the server in any way, including opening sessions,
 // streams, and other modules.
 type Module interface {
-	// Run starts the process, and is guaranteed to launch in a separate
+	// Run starts the module, and is guaranteed to launch in a separate
 	// goroutine. Args can be used to pass any information the module
-	// needs. A module can call its FinishFunc at any time to be deallocated
-	// by the server
-	Run(args map[string]string, f FinishFunc)
+	// needs.
+	Run(args map[string]string)
 
-	// GetType should return one the module types defined above.
+	// GetType should return one of the module types defined above.
 	GetType() int
 
 	// GetName returns a string to identify the module type. Each
-	// instance of a module should share the same name
+	// instance of a module should share the same name.
 	GetName() string
 
 	// GetInfo returns a struct containing info that describes the
-	// running module
+	// running module.
 	GetInfo() OpenModuleInfo
 
 	// Stop is called to prematurely cancel a running module. The
@@ -65,7 +62,7 @@ type OpenModuleInfo struct {
 }
 
 // NewOpenModuleInfo returns an info struct with a type and a status, and
-// leaves the ID to be populated by soemthing else.
+// leaves the ID to be populated by something else.
 func NewOpenModuleInfo(modType string, status string) OpenModuleInfo {
 	return OpenModuleInfo{Type: modType, ID: "", Status: status}
 }
@@ -77,14 +74,7 @@ type ModuleHandler struct {
 	Maker ModuleMaker
 }
 
-// FinishFunc is a function passed from the server to a new module. It can be
-// called by the new module to let the server know the module can be deallocated.
-// Similar to a context CancelFunc, this type should not be stored. Instead,
-// it should be passed to any function that needs it. A FinishFunc should NOT
-// be called after a modules Stop() function has been called.
-type FinishFunc func()
-
-// ModuleMaker is a function to instanciate a module. It is given a handle
+// ModuleMaker is a function to instantiate a module. It is given a handle
 // to the BgpmondServer, and a logger to print information.
 type ModuleMaker func(BgpmondServer, util.Logger) Module
 
@@ -98,15 +88,15 @@ func init() {
 // RegisterModule adds a module type to a list of known modules. Once a
 // module maker is registered, the server can create and launch modules
 // of this type
-func RegisterModule(handle ModuleHandler) error {
+func RegisterModule(handle ModuleHandler) {
 	typeName := handle.Info.Type
 	_, exists := knownModules[typeName]
 	if exists {
-		return fmt.Errorf("Module type: %s already exists", typeName)
+		coreLogger.Infof("Module type: %s already exists, ignoring new registration.")
+		return
 	}
 
 	knownModules[typeName] = handle
-	return nil
 }
 
 // getModuleMaker returns the creator function associated with this type

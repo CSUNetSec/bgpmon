@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"sync"
 	"time"
 
 	core "github.com/CSUNetSec/bgpmon"
@@ -16,14 +17,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// This is a very common error, so this is a simple function
-// to generate it.
-var (
-	mkNxSessionErr = func(a string) error {
-		return fmt.Errorf("Session ID: %s not found", a)
-	}
-)
-
 // rpcServer is the basic object which handles all RPC calls.
 type rpcServer struct {
 	*BaseDaemon
@@ -32,23 +25,19 @@ type rpcServer struct {
 	timeoutSecs int
 }
 
-// Run on the rpc server expects two options named "address" and "timeoutsecs"
-func (r *rpcServer) Run(opts map[string]string, finish core.FinishFunc) {
+// Run on the rpc server expects two options named "address" and "timeoutSecs"
+func (r *rpcServer) Run(opts map[string]string) {
 	defer r.wg.Done()
-	// finish is not deferred because it should only be called when an error
-	// occurs
 
-	if !util.CheckForKeys(opts, "address", "timeoutsecs") {
-		r.logger.Errorf("options address and timeoutsecs not present")
-		finish()
+	if !util.CheckForKeys(opts, "address", "timeoutSecs") {
+		r.logger.Errorf("options address and timeoutSecs not present")
 		return
 	}
 	addr := opts["address"]
-	tsecs := opts["timeoutsecs"]
-	ts, err := strconv.ParseInt(tsecs, 10, 32)
+	tSecs := opts["timeoutSecs"]
+	ts, err := strconv.ParseInt(tSecs, 10, 32)
 	if err != nil {
-		r.logger.Errorf("Error parsing timeoutsecs :%s", err)
-		finish()
+		r.logger.Errorf("Error parsing timeoutSecs :%s", err)
 		return
 	}
 
@@ -56,17 +45,23 @@ func (r *rpcServer) Run(opts map[string]string, finish core.FinishFunc) {
 	listen, err := net.Listen("tcp", addr)
 	if err != nil {
 		r.logger.Errorf("Error listening on address: %s", addr)
-		finish()
 		return
 	}
 
 	r.grpcServer = grpc.NewServer()
 	pb.RegisterBgpmondServer(r.grpcServer, r)
-	r.grpcServer.Serve(listen)
-	return
+
+	err = r.grpcServer.Serve(listen)
+	if err != nil {
+		r.logger.Errorf("%s", err)
+	}
 }
 
 func (r *rpcServer) Stop() error {
+	if r.grpcServer == nil {
+		return nil
+	}
+
 	r.grpcServer.GracefulStop()
 	r.wg.Wait()
 	return nil
@@ -77,6 +72,7 @@ func (r *rpcServer) GetTimeout() time.Duration {
 	return time.Duration(r.timeoutSecs) * time.Second
 }
 
+// newRPCServer is the ModuleMaker for this module.
 func newRPCServer(s core.BgpmondServer, l util.Logger) core.Module {
 	return &rpcServer{BaseDaemon: NewBaseDaemon(s, l, "rpc"), grpcServer: nil}
 }
@@ -149,14 +145,16 @@ func (r *rpcServer) CloseSession(ctx context.Context, request *pb.CloseSessionRe
 	r.logger.Infof("Closing session %s", request.SessionId)
 
 	err := r.server.CloseSession(request.SessionId)
+	if err == nil {
+		r.logger.Infof("Session %s closed", request.SessionId)
+	}
 
-	r.logger.Infof("Session %s closed", request.SessionId)
 	return &pb.Empty{}, err
 }
 
 // ListOpenSession is the RPC port to the servers ListSessions function
 func (r *rpcServer) ListOpenSessions(ctx context.Context, request *pb.Empty) (*pb.ListOpenSessionsReply, error) {
-	sessionIDs := []string{}
+	var sessionIDs []string
 	for _, sh := range r.server.ListSessions() {
 		sessionIDs = append(sessionIDs, sh.Name)
 	}
@@ -187,27 +185,17 @@ func (r *rpcServer) GetSessionInfo(ctx context.Context, request *pb.SessionInfoR
 		}
 	}
 
-	return nil, mkNxSessionErr(request.SessionId)
+	return nil, fmt.Errorf("session ID: %s not found", request.SessionId)
 }
 
 // Write is the RPC port to a server OpenWriteStream and writing to that stream.
 func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
-	// TODO: Replace first with sync.Once()?
-	var (
-		first    bool
-		dbStream db.WriteStream
-	)
 	timeoutCtx, cf := context.WithTimeout(r.ctx, r.GetTimeout())
 	defer cf()
 
-	first = true
+	var dbStream db.WriteStream
+	var once sync.Once
 	for {
-		if util.IsClosed(timeoutCtx) {
-			if dbStream != nil {
-				dbStream.Cancel()
-			}
-			return r.logger.Errorf("context closed, aborting write")
-		}
 
 		writeRequest, err := stream.Recv()
 		if err == io.EOF {
@@ -219,13 +207,22 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 			return err
 		}
 
-		if first {
+		once.Do(func() {
+			var err error
 			dbStream, err = r.server.OpenWriteStream(writeRequest.SessionId)
 			if err != nil {
-				return r.logger.Errorf("error opening stream: %s", err)
+				cf()
+				r.logger.Errorf("Error opening stream: %s", err)
+				return
 			}
-			first = false
 			defer dbStream.Close()
+		})
+
+		if util.IsClosed(timeoutCtx) {
+			if dbStream != nil {
+				dbStream.Cancel()
+			}
+			return r.logger.Errorf("context closed, aborting write")
 		}
 
 		if err := dbStream.Write(writeRequest); err != nil {
