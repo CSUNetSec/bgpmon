@@ -19,23 +19,56 @@ var (
 )
 
 // BgpmondServer is the interface for interacting with a server instance.
-// It provides function to open and close sessions and modules, and get
+// It provides functions to open and close sessions and modules, and get
 // data on the state on the server.
 type BgpmondServer interface {
-	// Opens a session of type sType, which must come from the config file.
+	// OpenSession opens a session of type sType, which must come from the config file.
 	// The ID of this session is sID, which is used to interact with this
 	// session, and wc is the worker count, or 0, to use a default wc of 1.
 	OpenSession(sType, sID string, wc int) error
+
+	// ListSessionTypes returns types which can be opened on the server. These are
+	// defined in netsec-protobus, but the name of a SessionType returned
+	// here should be a valid sType for OpenSession.
 	ListSessionTypes() []*pb.SessionType
+
+	// ListSessions returns a slice of currently active sesions on the server.
+	// Each session handle includes a name, a session type, and a pointer to the
+	// underlying session.
 	ListSessions() []SessionHandle
+
+	// CloseSession attempts to close active session with the provided session ID.
+	// If that ID does not exist, or that session fails to close, this will return
+	// an error.
 	CloseSession(string) error
+
+	// OpenWriteStream tries to open a write stream on the provided session ID with
+	// the provided type. If the session doesn't exist or the WriteStream fails to
+	// open, this will return an error.
 	OpenWriteStream(string) (db.WriteStream, error)
+
+	// OpenReadStream tries to open a read stream on the provided session ID with
+	// the provided type and read filter. If the session doesn't exist or the ReadStream
+	// fails to open, this will return an error.
 	OpenReadStream(string, db.SessionType, db.ReadFilter) (db.ReadStream, error)
 
-	RunModule(string, string, map[string]string) error
+	// RunModule will launch the module specified with mType with the ID mID. opts will
+	// be passed to the modules Run function.
+	RunModule(mType string, mID string, opts map[string]string) error
+
+	// ListModuleTypes will return a slice of ModuleInfo specifying the type of module
+	// and the options it accepts.
 	ListModuleTypes() []ModuleInfo
+
+	// ListRunningModules returns a slice of the active modules on the server.
+	// OpenModuleInfo describes the modules type, options, and status.
 	ListRunningModules() []OpenModuleInfo
+
+	// CloseModule attempts to close an active module with the provided ID. If that ID
+	// does not exist, or the module fails to close, this will return an error.
 	CloseModule(string) error
+
+	// Close will close all active modules, then all active sessions.
 	Close() error
 }
 
@@ -72,7 +105,10 @@ func NewServer(conf config.Configer) (BgpmondServer, error) {
 	for _, mod := range conf.GetModules() {
 		err := s.RunModule(mod.GetType(), mod.GetID(), mod.GetArgs())
 		if err != nil {
-			s.Close()
+			cErr := s.Close()
+			if cErr != nil {
+				coreLogger.Infof("Error shutting down server: %s", cErr)
+			}
 			return nil, err
 		}
 	}
@@ -87,6 +123,9 @@ func NewServerFromFile(fName string) (BgpmondServer, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// fd.Close can return an error, but we aren't prepared
+	// to handle it in any way.
 	defer fd.Close()
 
 	bc, err := config.NewConfig(fd)
@@ -121,14 +160,14 @@ func (s *server) OpenSession(sType, sID string, workers int) error {
 
 	hosts := fmt.Sprintf("Hosts: %v", sc.GetHostNames())
 
-	stype := &pb.SessionType{
+	pbType := &pb.SessionType{
 		Name: sc.GetName(),
 		Type: sc.GetTypeName(),
 		Desc: hosts,
 	}
 	sh := SessionHandle{
 		Name:     sID,
-		SessType: stype,
+		SessType: pbType,
 		Session:  session,
 	}
 	s.sessions[sID] = sh
@@ -165,11 +204,12 @@ func (s *server) CloseAllSessions() {
 	defer s.mux.Unlock()
 
 	for k, v := range s.sessions {
-		v.Session.Close()
+		err := v.Session.Close()
+		if err != nil {
+			coreLogger.Infof("Error closing session: %s", err)
+		}
 		delete(s.sessions, k)
 	}
-
-	return
 }
 
 // ListSessionTypes will return the configured types the server
@@ -177,15 +217,15 @@ func (s *server) CloseAllSessions() {
 func (s *server) ListSessionTypes() []*pb.SessionType {
 	// This function doesn't need to lock the sessions map because
 	// it is only concerned with available sessions, not open ones.
-	availSessions := []*pb.SessionType{}
+	var availSessions []*pb.SessionType
 	for _, sc := range s.conf.GetSessionConfigs() {
-		availsess := &pb.SessionType{
+		availSess := &pb.SessionType{
 			Name: sc.GetName(),
 			Type: sc.GetTypeName(),
 			Desc: fmt.Sprintf("Hosts: %v", sc.GetHostNames()),
 		}
 
-		availSessions = append(availSessions, availsess)
+		availSessions = append(availSessions, availSess)
 	}
 	return availSessions
 }
@@ -196,7 +236,7 @@ func (s *server) ListSessions() []SessionHandle {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
-	sList := []SessionHandle{}
+	var sList []SessionHandle
 	for _, sh := range s.sessions {
 		sList = append(sList, sh)
 	}
@@ -252,8 +292,8 @@ func (s *server) OpenReadStream(sID string, readType db.SessionType, rf db.ReadF
 }
 
 // RunModule will look up the modType in the registered modules, create the module,
-// add it to it's module map, and launch the module with modargs.
-func (s *server) RunModule(modType, name string, modargs map[string]string) error {
+// add it to it's module map, and launch the module with opts.
+func (s *server) RunModule(modType, name string, opts map[string]string) error {
 	coreLogger.Infof("Running module %s with ID %s", modType, name)
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -269,18 +309,18 @@ func (s *server) RunModule(modType, name string, modargs map[string]string) erro
 
 	newMod := maker(s, getModuleLogger(modType, name))
 	s.modules[name] = newMod
-	go newMod.Run(modargs, s.getFinishFunc(name))
+
+	go s.launchModule(name, newMod, opts)
+
 	return nil
 }
 
-// getFinishFuncn generates a function which deletes the module with
-// ID from the server.
-func (s *server) getFinishFunc(id string) FinishFunc {
-	return func() {
-		s.mux.Lock()
-		delete(s.modules, id)
-		s.mux.Unlock()
-	}
+func (s *server) launchModule(id string, mod Module, opts map[string]string) {
+	mod.Run(opts)
+
+	s.mux.Lock()
+	delete(s.modules, id)
+	s.mux.Unlock()
 }
 
 // ListModuleTypes lists the modules available for the server to run.
@@ -328,14 +368,18 @@ func (s *server) CloseModule(name string) error {
 }
 
 // CloseAllModules is a convenience method to close all modules running
-// on the server.
+// on the server. This function can block while the modules are being shut down.
 func (s *server) CloseAllModules() {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
 	for k, v := range s.modules {
-		v.Stop()
+		if err := v.Stop(); err != nil {
+			coreLogger.Infof("Error closing module: %s", err)
+		}
+
+		// If the Stop function fails to close the module, de-register
+		// it anyway.
+		s.mux.Lock()
 		delete(s.modules, k)
+		s.mux.Unlock()
 	}
 }
 
