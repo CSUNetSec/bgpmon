@@ -118,7 +118,7 @@ func TestTimedBuffer(t *testing.T) {
 		t.Fatalf("Received: %s %v", testEx.lastStmt, testEx.lastVals)
 	}
 
-	// Sleep for three more seconds, everyting should have flushed by now.
+	// Sleep for three more seconds, everything should have flushed by now.
 	time.Sleep(3 * time.Second)
 	pass = testEx.checkLast(base+" (?,?,?);", 23, 25, 27)
 	if !pass {

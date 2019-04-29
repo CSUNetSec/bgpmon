@@ -8,7 +8,7 @@ import (
 )
 
 // This is a wrapper for listOpenSessions and listOpenModules.
-// The Short and Long are the same becuase the relevant details
+// The Short and Long are the same because the relevant details
 // are in the subcommands.
 var listOpenCmd = &cobra.Command{
 	Use:   "listOpen",
