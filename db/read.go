@@ -47,7 +47,7 @@ func (rcs *readCapStream) Bytes() []byte {
 	}
 
 	capMsg := (*rcs.lastRep).(getCapReply)
-	return capMsg.getCapture().protomsg
+	return capMsg.getCapture().protoMsg
 }
 
 func (rcs *readCapStream) Err() error {

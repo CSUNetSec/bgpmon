@@ -70,7 +70,26 @@ if err := foo(); err != nil {
     // Handle err
 }
 ```
-    
+
+### Type Rules
+To reduce confusion, a non-exported type should have no exported functions, unless they are required for the type to adhere
+to an interface. Functions that belong to an unexported type can not be exported, even if they begin with a capital letter.
+For example:
+
+```go
+// Non-exported struct
+type example struct {}
+
+// This function should not begin with a capital because it can't be exported
+func (e example) Bad() {}
+
+// This style is much less confusing
+func (e example) good() {}
+
+// This is allowed because it adheres to the io.Closer interface
+func (e example) Close() error {}
+```
+
 ### Comments
 #### Documentation Comments
 All comments that appear in godoc documentation must use be complete sentences with proper grammar and spelling. Some strings
