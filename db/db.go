@@ -196,88 +196,59 @@ func (s SessionExecutor) getOper() queryProvider {
 	return s.queryProvider
 }
 
-// a wrapper of a sql.Tx that is able to accept multiple
-// db ops and run them in the same tx.
-// it will implement the SQLAtomicExectutor interface and choose
-// where to apply the sql function depending on how it was constructed.
-type ctxTx struct {
-	doTx bool
-	tx   *sql.Tx
-	db   *sql.DB
-	cf   context.CancelFunc
-	ctx  context.Context
+// ctxExecutor is a AtomicSQLExecutor that can timeout via a context. It works
+// internally with transaction, so it must be rolled back or committed.
+type ctxExecutor struct {
+	tx  *sql.Tx
+	cf  context.CancelFunc
+	ctx context.Context
 }
 
-// newCtxExecutor creates a new ctxTx for that operation which implements the
-// SQLAtomicExecutor interface. The argument passed instructs it to either
-// do it on a transaction if true, or on the normal DB connection if false.
-func newCtxExecutor(tdb TimeoutDber, doTx bool) (*ctxTx, error) {
-	var (
-		tx  *sql.Tx
-		err error
-		db  *sql.DB
-	)
-
-	db = tdb.Db()
+// newCtxExecutor creates a new ctxExecutor and opens the transaction. Once
+// this is called, the DB timeout is active. If this object is still in use
+// when the timeout comes, the transaction will be rolled back and all further
+// calls on this object will return an error.
+func newCtxExecutor(tdb TimeoutDber) (*ctxExecutor, error) {
 	ctx, cf := context.WithTimeout(context.Background(), tdb.GetTimeout())
-	if doTx {
-		tx, err = db.BeginTx(ctx, nil)
-		if err != nil {
-			cf()
-			return nil, err
-		}
+
+	db := tdb.Db()
+	tx, err := db.BeginTx(ctx, nil)
+
+	if err != nil {
+		return nil, err
 	}
 
-	return &ctxTx{
-		doTx: doTx,
-		tx:   tx,
-		cf:   cf,
-		ctx:  ctx,
-		db:   db,
+	return &ctxExecutor{
+		tx:  tx,
+		cf:  cf,
+		ctx: ctx,
 	}, nil
 }
 
 // Exec makes the CtxExecutor conform to the the sql.Db semantics.
-func (c *ctxTx) Exec(query string, args ...interface{}) (sql.Result, error) {
-	if c.doTx && c.tx != nil {
-		return c.tx.ExecContext(c.ctx, query, args...)
-	}
-	return c.db.ExecContext(c.ctx, query, args...)
+func (c *ctxExecutor) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return c.tx.ExecContext(c.ctx, query, args...)
 }
 
 // Query makes the CtxExecutor conform to the the sql.Db semantics.
-func (c *ctxTx) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	if c.doTx && c.tx != nil {
-		return c.tx.QueryContext(c.ctx, query, args...)
-	}
-	return c.db.QueryContext(c.ctx, query, args...)
+func (c *ctxExecutor) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return c.tx.QueryContext(c.ctx, query, args...)
 }
 
 // QueryRow makes the CtxExecutor conform to the the sql.Db semantics.
-func (c *ctxTx) QueryRow(query string, args ...interface{}) *sql.Row {
-	if c.doTx && c.tx != nil {
-		return c.tx.QueryRowContext(c.ctx, query, args...)
-	}
-	return c.db.QueryRowContext(c.ctx, query, args...)
+func (c *ctxExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
+	return c.tx.QueryRowContext(c.ctx, query, args...)
 }
 
 // Commit makes the CtxExecutor conform the sq.Tx semantics.
-func (c *ctxTx) Commit() error {
+func (c *ctxExecutor) Commit() error {
 	defer c.cf()
-	if !c.doTx || c.tx == nil {
-		return fmt.Errorf("ctxTx can't be committed when not using a transaction")
-	}
-
 	return c.tx.Commit()
 }
 
 // Rollback makes the CtxExecutor conform the sq.Tx semantics.
-func (c *ctxTx) Rollback() error {
+func (c *ctxExecutor) Rollback() error {
 	defer c.cf()
-	if !c.doTx || c.tx == nil {
-		return fmt.Errorf("ctxTx can't be rolled back when not using a transaction")
-	}
-
 	return c.tx.Rollback()
 }
 
@@ -432,7 +403,7 @@ func (ntc *nestedTableCache) LookupTable(nodeIP net.IP, t time.Time) (string, er
 func (ntc *nestedTableCache) LookupNode(nodeIP net.IP) (*node, error) {
 	n, ok := ntc.nodes[nodeIP.String()]
 	if !ok {
-		return nil, fmt.Errorf("No such node")
+		return nil, fmt.Errorf("no such node")
 	}
 	return n, nil
 }
@@ -450,8 +421,8 @@ func (ntc *nestedTableCache) addNode(n *node) {
 // genTableName takes a name of a collector, a time and a duration, and
 // creates a tablename for the relations that will hold the relevant captures.
 // It uses underscores as a field separator because they don't have any effect in SQL.
-func genTableName(colName string, date time.Time, ddm int) string {
-	dur := time.Duration(ddm) * time.Minute
+func genTableName(colName string, date time.Time, durMins int) string {
+	dur := time.Duration(durMins) * time.Minute
 	truncTime := date.Truncate(dur).UTC()
 	return fmt.Sprintf("%s_%s", colName, truncTime.Format("2006_01_02_15_04_05"))
 }

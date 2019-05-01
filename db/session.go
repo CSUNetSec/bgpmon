@@ -57,13 +57,6 @@ type WriteStream interface {
 	Close()
 }
 
-// Sessioner is an interface that wraps the open and close functions.
-type Sessioner interface {
-	OpenWriteStream(SessionType) (WriteStream, error)
-	OpenReadStream(SessionType, rf ReadFilter) (ReadStream, error)
-	Close() error
-}
-
 // Session represents a session to the underlying db. It holds references to the schema manager and workerpool.
 type Session struct {
 	uuid          string
@@ -114,14 +107,22 @@ func NewSession(conf config.SessionConfiger, id string, workers int) (*Session, 
 	// The DB will need to be a field within session
 	switch st := conf.GetTypeName(); st {
 	case "postgres":
+		if len(hostNames) != 1 {
+			return nil, fmt.Errorf("postgres sessions require exactly one hostname")
+		}
+
 		s.dbo = newPostgressDbOper()
-		if len(hostNames) == 1 && password != "" && certDir == "" && username != "" { //no ssl standard pw
+		// If the user provided a username and password, but no cert dir,
+		// don't use SSL
+		if password != "" && certDir == "" && username != "" {
 			constr = s.dbo.getQuery(connectNoSSLOp)
-		} else if certDir != "" && username != "" { //ssl
+		} else if certDir != "" && username != "" {
+			// Otherwise, use SSL
 			constr = s.dbo.getQuery(connectSSLOp)
 		} else {
 			return nil, errors.New("postgres sessions require a password and exactly one hostname")
 		}
+
 		db, err = sql.Open("postgres", fmt.Sprintf(constr, username, password, dbName, hostNames[0]))
 		if err != nil {
 			return nil, errors.Wrap(err, "sql open")

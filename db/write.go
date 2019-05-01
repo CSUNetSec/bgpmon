@@ -57,7 +57,7 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) (*writeCapSt
 	w.buffers = make(map[string]util.SQLBuffer)
 	w.cache = newNestedTableCache(parStream.schema)
 
-	ctxTx, err := newCtxExecutor(w.db, true)
+	ctxTx, err := newCtxExecutor(w.db)
 	if err != nil {
 		dbLogger.Errorf("Error opening ctxTx executor: %s", err)
 		return nil, err
