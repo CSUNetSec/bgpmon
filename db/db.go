@@ -147,7 +147,7 @@ var dbOps = map[dbOp][]string{
 			name varchar PRIMARY KEY,
 			email varchar,
 			knownOrigins integer[] DEFAULT '{}'::integer[],
-			ownedPrefixes cider[] DEFAULT '{}'::integer[]
+			ownedPrefixes cidr[] DEFAULT '{}'::cidr[]
 		);`,
 	},
 }
