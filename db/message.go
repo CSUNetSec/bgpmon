@@ -17,26 +17,44 @@ type CommonMessage interface {
 
 	// This holds all info on the collectors.
 	GetNodeTable() string
+
+	// This holds info on customers or anyone interested in the stored
+	// BGP data.
+	GetEntityTable() string
+
 	SetMainTable(string)
 	SetNodeTable(string)
+	SetEntityTable(string)
 }
 
 type msg struct {
-	mainTable string
-	nodeTable string
+	mainTable   string
+	nodeTable   string
+	entityTable string
 }
 
-func (m *msg) GetMainTable() string  { return m.mainTable }
-func (m *msg) GetNodeTable() string  { return m.nodeTable }
-func (m *msg) SetMainTable(n string) { m.mainTable = n }
-func (m *msg) SetNodeTable(n string) { m.nodeTable = n }
+func (m *msg) GetMainTable() string   { return m.mainTable }
+func (m *msg) GetNodeTable() string   { return m.nodeTable }
+func (m *msg) GetEntityTable() string { return m.entityTable }
+
+func (m *msg) SetMainTable(n string)   { m.mainTable = n }
+func (m *msg) SetNodeTable(n string)   { m.nodeTable = n }
+func (m *msg) SetEntityTable(n string) { m.entityTable = n }
 
 func newMessage() CommonMessage {
-	return &msg{mainTable: "dbs", nodeTable: "nodes"}
+	return &msg{
+		mainTable:   defaultMainTable,
+		nodeTable:   defaultNodeTable,
+		entityTable: defaultEntityTable,
+	}
 }
 
-func newCustomMessage(main, node string) CommonMessage {
-	return &msg{mainTable: main, nodeTable: node}
+func newCustomMessage(main, node, entity string) CommonMessage {
+	return &msg{
+		mainTable:   main,
+		nodeTable:   node,
+		entityTable: entity,
+	}
 }
 
 type nodesMessage struct {

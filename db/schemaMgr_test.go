@@ -34,7 +34,7 @@ func TestSchemaMgrStartStop(t *testing.T) {
 		t.Skipf("Skipping TestSchemaMgr for short tests")
 	}
 	sx, _ := getex()
-	sm := newSchemaMgr(sx)
+	sm := newSchemaMgr(sx, "dbs", "nodes", "entities")
 	sm.stop()
 	//give it a sec to close
 	time.Sleep(1 * time.Second)
@@ -46,8 +46,9 @@ func TestSchemaCheckSchema(t *testing.T) {
 		t.Skipf("Skipping TestSchemaCheckSchema for short tests")
 	}
 	sx, _ := getex()
-	sm := newSchemaMgr(sx)
-	ok, err := sm.checkSchema("bgpmon", "dbs", "nodes")
+	sm := newSchemaMgr(sx, "dbs", "nodes", "entities")
+
+	ok, err := sm.checkSchema()
 	t.Logf("schema mgr checkSchema: [ok:%v , err:%v]", ok, err)
 	sm.stop()
 	//give it a sec to close

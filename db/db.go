@@ -15,6 +15,14 @@ import (
 	"github.com/CSUNetSec/bgpmon/util"
 )
 
+// These define the default table names to hold the names of generated
+// tables, nodes, and entities.
+const (
+	defaultMainTable   = "dbs"
+	defaultNodeTable   = "nodes"
+	defaultEntityTable = "entities"
+)
+
 // This block holds the currently supported database backends.
 const (
 	postgres = iota
@@ -38,6 +46,7 @@ const (
 	getCaptureTablesOp
 	getCaptureBinaryOp
 	getPrefixOp
+	makeEntityTableOp
 )
 
 // dbOps associates every generic database operation with an array that holds the correct SQL statements
@@ -131,6 +140,15 @@ var dbOps = map[dbOp][]string{
 	getPrefixOp: {
 		// postgres
 		`SELECT unnest(adv_prefixes) FROM %s`,
+	},
+	makeEntityTableOp: {
+		// postgres
+		`CREATE TABLE IF NOT EXISTS %s (
+			name varchar PRIMARY KEY,
+			email varchar,
+			knownOrigins integer[] DEFAULT '{}'::integer[],
+			ownedPrefixes cider[] DEFAULT '{}'::integer[]
+		);`,
 	},
 }
 

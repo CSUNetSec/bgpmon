@@ -61,7 +61,7 @@ func TestMakeSchema(t *testing.T) {
 	}
 	defer db.Close()
 	sex := newSessionExecutor(db, pdboper)
-	msg := newCustomMessage("dbs", "nodes")
+	msg := newCustomMessage("dbs", "nodes", "entities")
 	t.Log("postgres opened for makeschema test")
 	if err := checkSchema(sex, msg).Error(); err != nil && err != errNoTable {
 		t.Fatal(err)
