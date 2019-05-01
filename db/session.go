@@ -111,7 +111,7 @@ func NewSession(conf config.SessionConfiger, id string, workers int) (*Session, 
 			return nil, fmt.Errorf("postgres sessions require exactly one hostname")
 		}
 
-		s.dbo = newPostgressDbOper()
+		s.dbo = newPostgressQueryProvider()
 		// If the user provided a username and password, but no cert dir,
 		// don't use SSL
 		if password != "" && certDir == "" && username != "" {

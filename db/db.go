@@ -176,7 +176,7 @@ type mapProvider struct {
 	dbType int
 }
 
-func newPostgressDbOper() *mapProvider {
+func newPostgressQueryProvider() *mapProvider {
 	return &mapProvider{
 		dbType: postgres,
 	}
@@ -210,7 +210,7 @@ func (s SessionExecutor) getExecutor() util.SQLExecutor {
 	return s.SQLExecutor
 }
 
-func (s SessionExecutor) getOper() queryProvider {
+func (s SessionExecutor) getQueryProvider() queryProvider {
 	return s.queryProvider
 }
 
@@ -421,7 +421,7 @@ func (ntc *nestedTableCache) LookupTable(nodeIP net.IP, t time.Time) (string, er
 func (ntc *nestedTableCache) LookupNode(nodeIP net.IP) (*node, error) {
 	n, ok := ntc.nodes[nodeIP.String()]
 	if !ok {
-		return nil, fmt.Errorf("no such node")
+		return nil, errNoNode
 	}
 	return n, nil
 }

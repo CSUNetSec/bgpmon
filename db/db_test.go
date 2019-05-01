@@ -30,7 +30,7 @@ var (
 		IsCollector: false,
 		Description: "in the db and updated",
 	}
-	pdboper = newPostgressDbOper()
+	pdboper = newPostgressQueryProvider()
 )
 
 func TestConnectPostgres(t *testing.T) {
