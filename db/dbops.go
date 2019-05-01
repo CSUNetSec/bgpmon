@@ -27,7 +27,7 @@ func checkSchema(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 		err error
 	)
 
-	tocheck := []string{msg.GetMainTable(), msg.GetNodeTable()}
+	tocheck := []string{msg.GetMainTable(), msg.GetNodeTable(), msg.GetEntityTable()}
 	allgood := true
 	for _, tname := range tocheck {
 		if err = ex.QueryRow(csquery, tname).Scan(&res); err != nil {
