@@ -222,3 +222,25 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 
 	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
 }
+
+type entityStream struct {
+	*sessionStream
+
+	ex util.AtomicSQLExecutor
+}
+
+func (es *entityStream) Write(ent interface{}) error {
+	return nil
+}
+
+func (es *entityStream) Flush() error {
+	return nil
+}
+
+func (es *entityStream) Close() {
+
+}
+
+func newEntityStream(parStream *sessionStream, pcancel chan bool) *entityStream {
+	return &entityStream{}
+}
