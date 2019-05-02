@@ -201,7 +201,7 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 		return nil
 	}
 
-	asPath := util.GetAsPath(cap)
+	asPath, _ := util.GetASPath(cap) // ignoring the error here as this message could only have withdraws
 	nextHop, err := util.GetNextHop(cap)
 	if err != nil {
 		nextHop = net.IPv4(0, 0, 0, 0)
@@ -213,11 +213,11 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 		origin = 0
 	}
 	//here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
-	advertized, _ := util.GetAdvertizedPrefixes(cap)
+	advertised, _ := util.GetAdvertisedPrefixes(cap)
 	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
 	protoMsg := util.GetProtoMsg(cap)
 
-	advArr := util.PrefixesToPQArray(advertized)
+	advArr := util.PrefixesToPQArray(advertised)
 	wdrArr := util.PrefixesToPQArray(withdrawn)
 
 	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)

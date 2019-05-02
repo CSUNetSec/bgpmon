@@ -204,18 +204,29 @@ func insertCapture(ex SessionExecutor, msg CommonMessage) CommonReply {
 	insertTmpl := ex.getQuery(insertCaptureTableOp)
 	stmt := fmt.Sprintf(insertTmpl, cMsg.getTableName())
 
-	advPrefixes, _ := util.GetAdvertizedPrefixes(cMsg.getCapture())
+	advPrefixes, _ := util.GetAdvertisedPrefixes(cMsg.getCapture())
 	wdrPrefixes, _ := util.GetWithdrawnPrefixes(cMsg.getCapture())
 
 	adv := util.PrefixesToPQArray(advPrefixes)
 	wdr := util.PrefixesToPQArray(wdrPrefixes)
 
 	time, colIP, _ := util.GetTimeColIP(cMsg.getCapture())
-	peerIP, _ := util.GetPeerIP(cMsg.getCapture())
-	asPath := util.GetAsPath(cMsg.getCapture())
-	nextHop, _ := util.GetNextHop(cMsg.getCapture())
-	// This util function needs to be fixed
-	origin := util.GetOriginAs(cMsg.getCapture())
+	peerIP, errPeerIP := util.GetPeerIP(cMsg.getCapture())
+	if errPeerIP != nil {
+		return newReply(errors.Wrap(errPeerIP, "insertCapture with no peer"))
+	}
+	asPath, errASpath := util.GetASPath(cMsg.getCapture())
+	if errASpath != nil && advPrefixes != nil {
+		return newReply(errors.Wrap(errASpath, "insertCapture, advertised prefixes but no AS-path"))
+	}
+	nextHop, errNextHop := util.GetNextHop(cMsg.getCapture())
+	if errNextHop != nil && advPrefixes != nil {
+		return newReply(errors.Wrap(errNextHop, "insertCapture, advertised prefixes but no next hop"))
+	}
+	origin, errOrigin := util.GetOriginAS(cMsg.getCapture())
+	if errOrigin != nil && advPrefixes != nil { // this case should be caught by errASpath but anyway.
+		return newReply(errors.Wrap(errOrigin, "insertCapture, advertised prefixes but no origin AS"))
+	}
 	protoMsg := util.GetProtoMsg(cMsg.getCapture())
 
 	_, err := ex.Exec(stmt, time, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, adv, wdr, protoMsg)
@@ -227,11 +238,11 @@ func insertCapture(ex SessionExecutor, msg CommonMessage) CommonReply {
 	return newReply(nil)
 }
 
-//the reason that i'm implementing getCaptures to manually iterate on
-//all tables and not to use a dbfunction that via dynamic sql would return
-//the result, is that i am worried that someone might request too many captures
-//and i would like the return to be streamed. therefore i iterate on the table and
-//create a common replies. it also differs in the sense that it has a channel reply
+// the reason that i'm implementing getCaptures to manually iterate on
+// all tables and not to use a dbfunction that via dynamic sql would return
+// the result, is that i am worried that someone might request too many captures
+// and i would like the return to be streamed. therefore i iterate on the table and
+// create a common replies. it also differs in the sense that it has a channel reply
 func getCaptures(ex SessionExecutor, msg CommonMessage) chan CommonReply {
 	retc := make(chan CommonReply)
 	go func(SessionExecutor, CommonMessage, chan CommonReply) {
