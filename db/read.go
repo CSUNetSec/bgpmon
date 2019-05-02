@@ -47,7 +47,7 @@ func (rcs *readCapStream) Bytes() []byte {
 	}
 
 	capMsg := (*rcs.lastRep).(getCapReply)
-	return capMsg.getCapture().protomsg
+	return capMsg.getCapture().protoMsg
 }
 
 func (rcs *readCapStream) Err() error {
@@ -77,7 +77,7 @@ func newReadCapStream(parStream *sessionStream, pcancel chan bool, rf ReadFilter
 		cf()
 	}(pcancel, r.cancel, cf)
 
-	ex := newSessionExecutor(r.db.Db(), r.oper)
+	ex := newSessionExecutor(r.db.DB(), r.oper)
 	r.dbResp = getCaptureBinaryStream(ctx, ex, newGetCapMessage(rf))
 	return r
 }
@@ -155,7 +155,7 @@ func newReadPrefixStream(parStream *sessionStream, pcancel chan bool, rf ReadFil
 		cf()
 	}(pcancel, r.cancel, cf)
 
-	ex := newSessionExecutor(r.db.Db(), r.oper)
+	ex := newSessionExecutor(r.db.DB(), r.oper)
 	r.dbResp = getPrefixStream(ctx, ex, newGetCapMessage(rf))
 	return r
 }

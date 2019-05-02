@@ -57,9 +57,9 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) (*writeCapSt
 	w.buffers = make(map[string]util.SQLBuffer)
 	w.cache = newNestedTableCache(parStream.schema)
 
-	ctxTx, err := newCtxExecutor(w.db, true)
+	ctxTx, err := newCtxExecutor(w.db)
 	if err != nil {
-		dblogger.Errorf("Error opening ctxTx executor: %s", err)
+		dbLogger.Errorf("Error opening ctxTx executor: %s", err)
 		return nil, err
 	}
 	w.ex = ctxTx
@@ -79,13 +79,13 @@ func (w *writeCapStream) Write(arg interface{}) error {
 	wr := arg.(*pb.WriteRequest)
 	mtime, cip, err := util.GetTimeColIP(wr.GetBgpCapture())
 	if err != nil {
-		dblogger.Errorf("failed to get Collector IP:%v", err)
+		dbLogger.Errorf("failed to get Collector IP:%v", err)
 		return err
 	}
 	//check our local cache first, otherwise contact schemamgr
 	table, err = w.cache.LookupTable(cip, mtime)
 	if err != nil {
-		return dblogger.Errorf("Failed to get table from cache: %s", err)
+		return dbLogger.Errorf("Failed to get table from cache: %s", err)
 	}
 	w.req <- newCaptureMessage(table, wr)
 	resp, ok := <-w.resp
@@ -100,7 +100,7 @@ func (w *writeCapStream) Write(arg interface{}) error {
 //Flush is called when a stream finishes successfully
 //It flushes all remaining buffers
 func (w *writeCapStream) Flush() error {
-	dblogger.Infof("Flushing stream")
+	dbLogger.Infof("Flushing stream")
 	for key := range w.buffers {
 		w.buffers[key].Flush()
 	}
@@ -110,13 +110,13 @@ func (w *writeCapStream) Flush() error {
 //Cancel is used when there is an error on the client-side,
 //called to rollback all executed queries
 func (w *writeCapStream) Cancel() {
-	dblogger.Infof("Cancelling stream")
+	dbLogger.Infof("Cancelling stream")
 	for key := range w.buffers {
 		w.buffers[key].Clear()
 	}
 
 	if err := w.ex.Rollback(); err != nil {
-		dblogger.Errorf("Error rolling back stream: %s", err)
+		dbLogger.Errorf("Error rolling back stream: %s", err)
 	}
 	return
 }
@@ -126,7 +126,7 @@ func (w *writeCapStream) Cancel() {
 //the stream is still running
 //This should be called by the same goroutine as the one calling Send
 func (w *writeCapStream) Close() {
-	dblogger.Infof("Closing session stream")
+	dbLogger.Infof("Closing session stream")
 	close(w.cancel)
 	close(w.req)
 	w.daemonWG.Wait()
@@ -145,7 +145,7 @@ func (w *writeCapStream) Close() {
 //		should return that the stream has been closed before shutting down
 //		completely.
 func (w *writeCapStream) listen(cancel chan bool) {
-	defer dblogger.Infof("WriteCapStream closed successfully")
+	defer dbLogger.Infof("WriteCapStream closed successfully")
 	defer close(w.resp)
 	defer w.daemonWG.Done()
 
@@ -185,8 +185,8 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 
 	tName := cMsg.getTableName()
 	if _, ok := w.buffers[tName]; !ok {
-		dblogger.Infof("Creating new buffer for table: %s", tName)
-		stmt := fmt.Sprintf(w.oper.getdbop(insertCaptureTableOp), tName)
+		dbLogger.Infof("Creating new buffer for table: %s", tName)
+		stmt := fmt.Sprintf(w.oper.getQuery(insertCaptureTableOp), tName)
 		w.buffers[tName] = util.NewInsertBuffer(w.ex, stmt, bufferSize, 9, true)
 	}
 	buf := w.buffers[tName]
@@ -197,11 +197,11 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 	ts, colIP, _ := util.GetTimeColIP(cap)
 	peerIP, err := util.GetPeerIP(cap)
 	if err != nil {
-		dblogger.Infof("Unable to parse peer ip, ignoring message")
+		dbLogger.Infof("Unable to parse peer ip, ignoring message")
 		return nil
 	}
 
-	asPath := util.GetAsPath(cap)
+	asPath, _ := util.GetASPath(cap) // ignoring the error here as this message could only have withdraws
 	nextHop, err := util.GetNextHop(cap)
 	if err != nil {
 		nextHop = net.IPv4(0, 0, 0, 0)
@@ -213,11 +213,11 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 		origin = 0
 	}
 	//here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
-	advertized, _ := util.GetAdvertizedPrefixes(cap)
+	advertised, _ := util.GetAdvertisedPrefixes(cap)
 	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
 	protoMsg := util.GetProtoMsg(cap)
 
-	advArr := util.PrefixesToPQArray(advertized)
+	advArr := util.PrefixesToPQArray(advertised)
 	wdrArr := util.PrefixesToPQArray(withdrawn)
 
 	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)

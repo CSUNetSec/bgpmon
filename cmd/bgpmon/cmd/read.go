@@ -116,7 +116,7 @@ func readCapture(_ *cobra.Command, args []string) {
 
 var readPrefixCmd = &cobra.Command{
 	Use:   "prefix SESS_ID FILTER",
-	Short: "Reads advertized prefixes from a bgpmond server.",
+	Short: "Reads advertised prefixes from a bgpmond server.",
 	Long: `Constructs a filter from the provided filter string, opens a read stream on a bgpmond server,
 	and reads all prefixes passing the filter.`,
 	Run:  readPrefixes,
