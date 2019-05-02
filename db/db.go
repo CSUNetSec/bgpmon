@@ -139,14 +139,14 @@ var (
 	dbLogger = util.NewLogger("system", "db")
 )
 
-// Dber is an interface that returns a reference to the underlying *sql.DB
-type Dber interface {
-	Db() *sql.DB
+// DBer is an interface that returns a reference to the underlying *sql.DB
+type DBer interface {
+	DB() *sql.DB
 }
 
-// TimeoutDber composes Dber and GetTimeouter to return timeout duration for dbOps
-type TimeoutDber interface {
-	Dber
+// TimeoutDBer composes DBer and GetTimeouter to return timeout duration for dbOps
+type TimeoutDBer interface {
+	DBer
 	util.GetTimeouter
 }
 
@@ -208,10 +208,10 @@ type ctxExecutor struct {
 // this is called, the DB timeout is active. If this object is still in use
 // when the timeout comes, the transaction will be rolled back and all further
 // calls on this object will return an error.
-func newCtxExecutor(tdb TimeoutDber) (*ctxExecutor, error) {
+func newCtxExecutor(tdb TimeoutDBer) (*ctxExecutor, error) {
 	ctx, cf := context.WithTimeout(context.Background(), tdb.GetTimeout())
 
-	db := tdb.Db()
+	db := tdb.DB()
 	tx, err := db.BeginTx(ctx, nil)
 
 	if err != nil {
@@ -225,17 +225,17 @@ func newCtxExecutor(tdb TimeoutDber) (*ctxExecutor, error) {
 	}, nil
 }
 
-// Exec makes the CtxExecutor conform to the the sql.Db semantics.
+// Exec makes the CtxExecutor conform to the the sql.DB semantics.
 func (c *ctxExecutor) Exec(query string, args ...interface{}) (sql.Result, error) {
 	return c.tx.ExecContext(c.ctx, query, args...)
 }
 
-// Query makes the CtxExecutor conform to the the sql.Db semantics.
+// Query makes the CtxExecutor conform to the the sql.DB semantics.
 func (c *ctxExecutor) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	return c.tx.QueryContext(c.ctx, query, args...)
 }
 
-// QueryRow makes the CtxExecutor conform to the the sql.Db semantics.
+// QueryRow makes the CtxExecutor conform to the the sql.DB semantics.
 func (c *ctxExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
 	return c.tx.QueryRowContext(c.ctx, query, args...)
 }

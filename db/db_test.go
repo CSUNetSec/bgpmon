@@ -30,7 +30,7 @@ var (
 		IsCollector: false,
 		Description: "in the db and updated",
 	}
-	pdboper = newPostgressQueryProvider()
+	queries = newPostgressQueryProvider()
 )
 
 func TestConnectPostgres(t *testing.T) {
@@ -60,8 +60,9 @@ func TestMakeSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	sex := newSessionExecutor(db, pdboper)
+	sex := newSessionExecutor(db, queries)
 	msg := newCustomMessage("dbs", "nodes")
+
 	t.Log("postgres opened for makeschema test")
 	if err := checkSchema(sex, msg).Error(); err != nil && err != errNoTable {
 		t.Fatal(err)
@@ -91,7 +92,7 @@ func TestSyncNodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	sex := newSessionExecutor(db, pdboper)
+	sex := newSessionExecutor(db, queries)
 	innodes := make(map[string]config.NodeConfig)
 	//insert node 3 in the db so that syncnodes finds it there.
 	//that will test merging of incoming and already there nodes
