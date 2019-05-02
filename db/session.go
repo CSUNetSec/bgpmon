@@ -27,13 +27,13 @@ const (
 )
 
 type sessionStream struct {
-	db     TimeoutDber
+	db     TimeoutDBer
 	oper   queryProvider
 	schema *schemaMgr
 	wp     *swg.SizedWaitGroup
 }
 
-func newSessionStream(db TimeoutDber, oper queryProvider, s *schemaMgr, wp *swg.SizedWaitGroup) *sessionStream {
+func newSessionStream(db TimeoutDBer, oper queryProvider, s *schemaMgr, wp *swg.SizedWaitGroup) *sessionStream {
 	return &sessionStream{db: db, oper: oper, schema: s, wp: wp}
 }
 
@@ -161,12 +161,12 @@ func (s *Session) initDB(cn map[string]config.NodeConfig) error {
 	return nil
 }
 
-// Db satisfies the Dber interface on a Session
-func (s *Session) Db() *sql.DB {
+// DB satisfies the DBer interface on a Session
+func (s *Session) DB() *sql.DB {
 	return s.db
 }
 
-// GetTimeout satisfies the GetTimeouter interface on a Session so it can be a TimeoutDber
+// GetTimeout satisfies the GetTimeouter interface on a Session so it can be a TimeoutDBer
 func (s *Session) GetTimeout() time.Duration {
 	return time.Duration(s.dbTimeoutSecs) * time.Second
 }
