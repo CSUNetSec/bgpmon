@@ -15,9 +15,9 @@ const (
 	bufferSize = 40
 )
 
-//writeCapStream accepts CommonMessages and returns CommonReplies.
-//internally it synchronizes with the schema manager and keeps open buffers
-//for efficient writes
+// writeCapStream is the WriteStream for BGP captures.
+// Internally it synchronizes with the schema manager and keeps open buffers
+// for efficient writes.
 type writeCapStream struct {
 	*sessionStream
 	req    chan CommonMessage
@@ -30,11 +30,11 @@ type writeCapStream struct {
 	daemonWG sync.WaitGroup
 }
 
-//NewwriteCapStream returns a newly allocated writeCapStream
-func newWriteCapStream(parStream *sessionStream, pcancel chan bool) (*writeCapStream, error) {
-	w := &writeCapStream{sessionStream: parStream, daemonWG: sync.WaitGroup{}}
+// newWriteCapStream returns a newly allocated writeCapStream.
+func newWriteCapStream(baseStream *sessionStream, pCancel chan bool) (*writeCapStream, error) {
+	w := &writeCapStream{sessionStream: baseStream, daemonWG: sync.WaitGroup{}}
 
-	parentCancel := pcancel
+	parentCancel := pCancel
 	childCancel := make(chan bool)
 	daemonCancel := make(chan bool)
 	// If the parent requests a close, and the routine isn't already closed,
@@ -55,11 +55,12 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) (*writeCapSt
 	// when it's cancelled, and doesn't have to wait for the next request.
 	w.resp = make(chan CommonReply, 1)
 	w.buffers = make(map[string]util.SQLBuffer)
-	w.cache = newNestedTableCache(parStream.schema)
+	w.cache = newNestedTableCache(baseStream.schema)
 
 	ctxTx, err := newCtxExecutor(w.db)
 	if err != nil {
 		dbLogger.Errorf("Error opening ctxTx executor: %s", err)
+		close(w.cancel)
 		return nil, err
 	}
 	w.ex = ctxTx
@@ -69,40 +70,38 @@ func newWriteCapStream(parStream *sessionStream, pcancel chan bool) (*writeCapSt
 	return w, nil
 }
 
-//Send performs a type of send on the sessionstream with an arbitrary argument
-//WARNING, sending after a close will cause a panic, and may hang
+// Write performs a type of send on the sessionstream with an arbitrary argument.
+// WARNING, sending after a close will cause a panic, and may hang.
 func (w *writeCapStream) Write(arg interface{}) error {
-	var (
-		table string
-		ok    bool
-	)
 	wr := arg.(*pb.WriteRequest)
-	mtime, cip, err := util.GetTimeColIP(wr.GetBgpCapture())
+	mTime, cIP, err := util.GetTimeColIP(wr.GetBgpCapture())
 	if err != nil {
 		dbLogger.Errorf("failed to get Collector IP:%v", err)
 		return err
 	}
-	//check our local cache first, otherwise contact schemamgr
-	table, err = w.cache.LookupTable(cip, mtime)
+	// Check our local cache first, otherwise contact schemaMgr.
+	table, err := w.cache.LookupTable(cIP, mTime)
 	if err != nil {
-		return dbLogger.Errorf("Failed to get table from cache: %s", err)
+		return dbLogger.Errorf("failed to get table from cache: %s", err)
 	}
 	w.req <- newCaptureMessage(table, wr)
 	resp, ok := <-w.resp
-
 	if !ok {
-		return fmt.Errorf("Response channel closed")
+		return fmt.Errorf("response channel closed")
 	}
-	return resp.Error()
 
+	return resp.Error()
 }
 
-//Flush is called when a stream finishes successfully
-//It flushes all remaining buffers
+// Flush is called when a stream finishes successfully.
+// It flushes all remaining buffers.
 func (w *writeCapStream) Flush() error {
 	dbLogger.Infof("Flushing stream")
 	for key := range w.buffers {
-		w.buffers[key].Flush()
+		err := w.buffers[key].Flush()
+		if err != nil {
+			dbLogger.Errorf("writeCapStream failed to flush buffer: %s", err)
+		}
 	}
 	return w.ex.Commit()
 }
@@ -118,13 +117,12 @@ func (w *writeCapStream) Cancel() {
 	if err := w.ex.Rollback(); err != nil {
 		dbLogger.Errorf("Error rolling back stream: %s", err)
 	}
-	return
 }
 
 //Close is only for a normal close operation. A cancellation
 //can only be done by Closing the parent session while
 //the stream is still running
-//This should be called by the same goroutine as the one calling Send
+//This should be called by the same goroutine as the one calling Write.
 func (w *writeCapStream) Close() {
 	dbLogger.Infof("Closing session stream")
 	close(w.cancel)
@@ -160,7 +158,7 @@ func (w *writeCapStream) listen(cancel chan bool) {
 			}
 
 			// If it was an abnormal closing, the client may, or may not, expect
-			// another value from a call to Send(). This channel has a buffer of
+			// another value from a call to Write(). This channel has a buffer of
 			// 1 so this won't block, and the value can be received soon.
 			if !normal {
 				w.resp <- newReply(fmt.Errorf("writeCapStream cancelled"))
@@ -194,14 +192,14 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 	// WriteRequests
 	cap := cMsg.getCapture()
 
-	ts, colIP, _ := util.GetTimeColIP(cap)
+	timestamp, colIP, _ := util.GetTimeColIP(cap)
 	peerIP, err := util.GetPeerIP(cap)
 	if err != nil {
 		dbLogger.Infof("Unable to parse peer ip, ignoring message")
 		return nil
 	}
 
-	asPath, _ := util.GetASPath(cap) // ignoring the error here as this message could only have withdraws
+	asPath, _ := util.GetASPath(cap) // Ignoring the error here as this message could only have withdraws.
 	nextHop, err := util.GetNextHop(cap)
 	if err != nil {
 		nextHop = net.IPv4(0, 0, 0, 0)
@@ -212,7 +210,7 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 	} else {
 		origin = 0
 	}
-	//here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
+	// Here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
 	advertised, _ := util.GetAdvertisedPrefixes(cap)
 	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
 	protoMsg := util.GetProtoMsg(cap)
@@ -220,5 +218,5 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 	advArr := util.PrefixesToPQArray(advertised)
 	wdrArr := util.PrefixesToPQArray(withdrawn)
 
-	return buf.Add(ts, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
+	return buf.Add(timestamp, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
 }
