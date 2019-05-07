@@ -15,6 +15,11 @@ var (
 	ErrOpt = errors.New("error parsing options")
 )
 
+type Timespan struct {
+	Start time.Time
+	End   time.Time
+}
+
 // GetTimeouter is an interface to describe anything that expires after a
 // certain amount of time
 type GetTimeouter interface {

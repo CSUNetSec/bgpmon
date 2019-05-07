@@ -11,7 +11,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
 )
 
@@ -270,38 +269,6 @@ func (c *ctxExecutor) Rollback() error {
 	return c.tx.Rollback()
 }
 
-// node is a representation of a machine that is used as a BGP vantage point. It can be either
-// a collector or a peer. If it is a collector, it is used to generate table names for captures
-// seen by that collector. It can also be geolocated. Nodes can be discovered from stored messages
-// or provided from a configuration file.
-type node struct {
-	name        string
-	ip          string
-	isCollector bool
-	duration    int
-	description string
-	coords      string
-	address     string
-}
-
-// newNode creates an empty node.
-func newNode() *node {
-	return &node{}
-}
-
-// nodeConfigFromNode creates a node configuration from a node.
-func (n *node) nodeConfigFromNode() config.NodeConfig {
-	return config.NodeConfig{
-		Name:                n.name,
-		IP:                  n.ip,
-		IsCollector:         n.isCollector,
-		DumpDurationMinutes: n.duration,
-		Description:         n.description,
-		Coords:              n.coords,
-		Location:            n.address,
-	}
-}
-
 // tableCache provides functions to lookup caches for existing table
 // names and nodes.
 type tableCache interface {
@@ -460,12 +427,4 @@ func NewReadFilter(collector string, s, e time.Time) ReadFilter {
 // GetWhereClause returns a where clause to describe the filter
 func (rf ReadFilter) GetWhereClause() string {
 	return ""
-}
-
-// Capture represent a BGPCapture as it exists in the database
-type Capture struct {
-	fromTable string // mostly debug
-	id        string // the capture_id that together with the table makes it unique
-	origin    int    // origin as
-	protoMsg  []byte // the protobuf blob
 }
