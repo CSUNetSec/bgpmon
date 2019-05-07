@@ -4,21 +4,9 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"net"
-	"time"
 
 	"github.com/lib/pq"
 )
-
-// inTimeRange is a helper function that checks if t is in the [start,end) range.
-func inTimeRange(t, start, end time.Time) bool {
-	if start.Equal(t) {
-		return true
-	}
-	if start.Before(t) && t.Before(end) {
-		return true
-	}
-	return false
-}
 
 // SQLExecutor is a wrapper around sql.Tx, sql.Db, and others we implement. It represents
 // something that can execute queries on a database.
