@@ -28,23 +28,40 @@ type schemaMgr struct {
 	sex      SessionExecutor //this executor should be a dbSessionExecutor, not at tx.
 	cache    *dbCache
 	daemonWG sync.WaitGroup
+
+	mainTable   string
+	nodeTable   string
+	entityTable string
+}
+
+func (s *schemaMgr) getCommonMessage() CommonMessage {
+	return newCustomMessage(s.mainTable, s.nodeTable, s.entityTable)
+}
+
+func (s *schemaMgr) setMessageTables(cm CommonMessage) {
+	cm.SetMainTable(s.mainTable)
+	cm.SetNodeTable(s.nodeTable)
+	cm.SetEntityTable(s.entityTable)
 }
 
 // This function launches the run method in a separate goroutine
-func newSchemaMgr(sex SessionExecutor) *schemaMgr {
+func newSchemaMgr(sex SessionExecutor, main, node, entity string) *schemaMgr {
 	sm := &schemaMgr{
-		iChan:    make(chan schemaMessage),
-		oChan:    make(chan CommonReply),
-		sex:      sex,
-		cache:    newDBCache(),
-		daemonWG: sync.WaitGroup{},
+		iChan:       make(chan schemaMessage),
+		oChan:       make(chan CommonReply),
+		sex:         sex,
+		cache:       newDBCache(),
+		daemonWG:    sync.WaitGroup{},
+		mainTable:   main,
+		nodeTable:   node,
+		entityTable: entity,
 	}
 	sm.daemonWG.Add(1)
 	go sm.run()
 	return sm
 }
 
-//should be run in a separate goroutine
+// Should be run in a separate goroutine
 func (s *schemaMgr) run() {
 	defer slogger.Infof("Schema manager closed successfully")
 	defer close(s.oChan)
@@ -155,34 +172,36 @@ func (s *schemaMgr) stop() {
 	s.daemonWG.Wait()
 }
 
-func (s *schemaMgr) checkSchema(dbname, maintable, nodetable string) (bool, error) {
-	cmdin := newSchemaMessage(newCustomMessage(maintable, nodetable), mgrCheckSchemaOp)
+func (s *schemaMgr) checkSchema() (bool, error) {
+	cmdin := newSchemaMessage(s.getCommonMessage(), mgrCheckSchemaOp)
 	s.iChan <- cmdin
 	sreply := <-s.oChan
 	return sreply.Error() == nil, sreply.Error()
 }
 
-func (s *schemaMgr) makeSchema(dbname, maintable, nodetable string) error {
-	cmdin := newSchemaMessage(newCustomMessage(maintable, nodetable), mgrInitSchemaOp)
+func (s *schemaMgr) makeSchema() error {
+	cmdin := newSchemaMessage(s.getCommonMessage(), mgrInitSchemaOp)
 	s.iChan <- cmdin
 	sreply := <-s.oChan
 	return sreply.Error()
 }
 
-func (s *schemaMgr) syncNodes(dbname, nodetable string, knownNodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
+func (s *schemaMgr) syncNodes(knownNodes map[string]config.NodeConfig) (map[string]config.NodeConfig, error) {
 	nMsg := newNodesMessage(knownNodes)
-	nMsg.SetNodeTable(nodetable)
+	s.setMessageTables(nMsg)
+
 	cmdin := newSchemaMessage(nMsg, mgrSyncNodesOp)
 	s.iChan <- cmdin
 	sreply := <-s.oChan
 	nRep := sreply.(nodesReply)
+
 	return nRep.getNodes(), nRep.Error()
 }
 
-func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date time.Time) (string, time.Time, time.Time, error) {
+func (s *schemaMgr) getTable(ipstr string, date time.Time) (string, time.Time, time.Time, error) {
 	tMsg := newTableMessage(ipstr, date)
-	tMsg.SetMainTable(maintable)
-	tMsg.SetNodeTable(nodetable)
+	s.setMessageTables(tMsg)
+
 	cmdin := newSchemaMessage(tMsg, mgrGetTableOp)
 	s.iChan <- cmdin
 	sreply := <-s.oChan
@@ -190,15 +209,18 @@ func (s *schemaMgr) getTable(dbname, maintable, nodetable, ipstr string, date ti
 	if sreply.Error() != nil {
 		return "", time.Time{}, time.Time{}, sreply.Error()
 	}
+
 	tRep := sreply.(tableReply)
 	tName := tRep.getName()
 	tStart, tEnd := tRep.getDates()
+
 	return tName, tStart, tEnd, tRep.Error()
 }
 
-func (s *schemaMgr) getNode(dbname, nodetable string, nodeName string, nodeIP string) (*node, error) {
+func (s *schemaMgr) getNode(nodeName string, nodeIP string) (*node, error) {
 	nMsg := newNodeMessage(nodeName, nodeIP)
-	nMsg.SetNodeTable(nodetable)
+	s.setMessageTables(nMsg)
+
 	cmdin := newSchemaMessage(nMsg, mgrGetNodeOp)
 	s.iChan <- cmdin
 	sreply := <-s.oChan
@@ -207,11 +229,11 @@ func (s *schemaMgr) getNode(dbname, nodetable string, nodeName string, nodeIP st
 }
 
 func (s *schemaMgr) LookupTable(nodeIP net.IP, t time.Time) (string, error) {
-	tName, _, _, err := s.getTable("bgpmon", "dbs", "nodes", nodeIP.String(), t)
+	tName, _, _, err := s.getTable(nodeIP.String(), t)
 	return tName, err
 }
 
 func (s *schemaMgr) LookupNode(nodeIP net.IP) (*node, error) {
-	n, err := s.getNode("bgpmon", "nodes", "", nodeIP.String())
+	n, err := s.getNode("", nodeIP.String())
 	return n, err
 }

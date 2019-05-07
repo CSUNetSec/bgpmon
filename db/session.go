@@ -134,21 +134,21 @@ func NewSession(conf config.SessionConfiger, id string, workers int) (*Session, 
 	}
 	s.db = db
 	sEx := newSessionExecutor(s.db, s.dbo)
-	s.schema = newSchemaMgr(sEx)
+	s.schema = newSchemaMgr(sEx, defaultMainTable, defaultNodeTable, defaultEntityTable)
 
-	if err := s.initDB(dbName, cn); err != nil {
+	if err := s.initDB(cn); err != nil {
 		return nil, err
 	}
 
 	return s, nil
 }
 
-func (s *Session) initDB(dbName string, cn map[string]config.NodeConfig) error {
-	if err := s.schema.makeSchema(dbName, "dbs", "nodes"); err != nil {
+func (s *Session) initDB(cn map[string]config.NodeConfig) error {
+	if err := s.schema.makeSchema(); err != nil {
 		return err
 	}
 
-	nodes, err := s.schema.syncNodes("bgpmon", "nodes", cn)
+	nodes, err := s.schema.syncNodes(cn)
 	if err != nil {
 		dbLogger.Errorf("Error syncing nodes: %s", err)
 	} else {

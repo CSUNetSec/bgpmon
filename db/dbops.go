@@ -27,7 +27,7 @@ func checkSchema(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 		err error
 	)
 
-	tocheck := []string{msg.GetMainTable(), msg.GetNodeTable()}
+	tocheck := []string{msg.GetMainTable(), msg.GetNodeTable(), msg.GetEntityTable()}
 	allgood := true
 	for _, tname := range tocheck {
 		if err = ex.QueryRow(csquery, tname).Scan(&res); err != nil {
@@ -183,18 +183,23 @@ func getTable(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 func makeSchema(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 	maintableTmpl := ex.getQuery(makeMainTableOp)
 	nodetableTmpl := ex.getQuery(makeNodeTableOp)
-	var (
-		err error
-	)
-	if _, err = ex.Exec(fmt.Sprintf(maintableTmpl, msg.GetMainTable())); err != nil {
+	entityTableTmpl := ex.getQuery(makeEntityTableOp)
+
+	if _, err := ex.Exec(fmt.Sprintf(maintableTmpl, msg.GetMainTable())); err != nil {
 		return newReply(errors.Wrap(err, "makeSchema maintable"))
 	}
 	dbLogger.Infof("created table:%s", msg.GetMainTable())
 
-	if _, err = ex.Exec(fmt.Sprintf(nodetableTmpl, msg.GetNodeTable())); err != nil {
+	if _, err := ex.Exec(fmt.Sprintf(nodetableTmpl, msg.GetNodeTable())); err != nil {
 		return newReply(errors.Wrap(err, "makeSchema nodetable"))
 	}
 	dbLogger.Infof("created table:%s", msg.GetNodeTable())
+
+	if _, err := ex.Exec(fmt.Sprintf(entityTableTmpl, msg.GetEntityTable())); err != nil {
+		return newReply(errors.Wrap(err, "makeSchema entityTable"))
+	}
+	dbLogger.Infof("created table:%s", msg.GetEntityTable())
+
 	return newReply(nil)
 }
 
