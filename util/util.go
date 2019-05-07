@@ -15,9 +15,22 @@ var (
 	ErrOpt = errors.New("error parsing options")
 )
 
+// Timespan represents a start and end time.
 type Timespan struct {
 	Start time.Time
 	End   time.Time
+}
+
+// Contains returns true if t is within [start, end)
+func (ts Timespan) Contains(t time.Time) bool {
+	if ts.Start.Equal(t) {
+		return true
+	}
+
+	if ts.Start.Before(t) && t.Before(ts.End) {
+		return true
+	}
+	return false
 }
 
 // GetTimeouter is an interface to describe anything that expires after a
