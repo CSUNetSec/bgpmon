@@ -311,3 +311,16 @@ func newGetPrefixReply(pref string, msgErr error) *getPrefixReply {
 		net:         net,
 	}
 }
+
+type entityMessage struct {
+	CommonMessage
+	entity *Entity
+}
+
+func (em *entityMessage) getEntity() *Entity {
+	return em.entity
+}
+
+func newEntityMessage(ent *Entity) *entityMessage {
+	return &entityMessage{CommonMessage: newMessage(), entity: ent}
+}

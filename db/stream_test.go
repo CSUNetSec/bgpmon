@@ -73,6 +73,39 @@ func TestSingleWriteStream(t *testing.T) {
 	}
 }
 
+func TestEntityWriteStream(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	session, err := openTestSession(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+
+	stream, err := session.OpenWriteStream(SessionWriteEntity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+
+	testEnt := Entity{
+		name:  "Test Entity",
+		email: "testentity@test.com",
+	}
+
+	err = stream.Write(&testEnt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = stream.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
 func TestSingleReadStream(t *testing.T) {
 	if testing.Short() {
 		t.Skip()

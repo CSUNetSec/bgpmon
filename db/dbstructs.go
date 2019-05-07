@@ -5,6 +5,8 @@ import (
 
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
+
+	"github.com/lib/pq"
 )
 
 // node is a representation of a machine that is used as a BGP vantage point. It can be either
@@ -62,5 +64,18 @@ type Entity struct {
 	name          string
 	email         string
 	ownedOrigins  []int
-	ownedPrefixes []net.IPNet
+	ownedPrefixes []*net.IPNet
+}
+
+// Values returns an array of interfaces that can be passed to a SQLExecutor
+// to insert this Entity
+func (e *Entity) Values() []interface{} {
+	pqPrefs := util.PrefixesToPQArray(e.ownedPrefixes)
+	vals := make([]interface{}, 4)
+	vals[0] = e.name
+	vals[1] = e.email
+	vals[2] = pq.Array(e.ownedOrigins)
+	vals[3] = pqPrefs
+
+	return vals
 }
