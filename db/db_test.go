@@ -66,7 +66,7 @@ func TestMakeSchema(t *testing.T) {
 	// Although Close is called later, it is deferred here in case theres
 	// a premature test failure.
 	defer db.Close()
-	sex := newSessionExecutor(db, queries)
+	sEx := newSessionExecutor(db, queries)
 	msg := newCustomMessage("dbs", "nodes", "entities")
 
 	t.Log("postgres opened for makeschema test")
