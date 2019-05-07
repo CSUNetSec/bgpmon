@@ -46,6 +46,7 @@ const (
 	getCaptureBinaryOp
 	getPrefixOp
 	makeEntityTableOp
+	insertEntityOp
 )
 
 // dbOps associates every generic database operation with an array that holds the correct SQL statements
@@ -148,6 +149,10 @@ var dbOps = map[dbOp][]string{
 			knownOrigins integer[] DEFAULT '{}'::integer[],
 			ownedPrefixes cidr[] DEFAULT '{}'::cidr[]
 		);`,
+	},
+	insertEntityOp: {
+		// postgres
+		`INSERT INTO %s VALUES($1, $2, $3, $4);`,
 	},
 }
 

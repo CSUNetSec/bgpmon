@@ -388,3 +388,14 @@ func getCaptureTables(ex SessionExecutor, dbTable, colName string, start, end ti
 	}
 	return tableNames, nil
 }
+
+func insertEntity(ex SessionExecutor, msg CommonMessage) CommonReply {
+	stmtTmpl := ex.getQuery(insertEntityOp)
+	stmt := fmt.Sprintf(stmtTmpl, msg.GetEntityTable())
+
+	entMsg := msg.(*entityMessage)
+	entity := entMsg.getEntity()
+
+	_, err := ex.Exec(stmt, entity.Values()...)
+	return newReply(err)
+}
