@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 	"net"
 
 	"github.com/CSUNetSec/bgpmon/config"
