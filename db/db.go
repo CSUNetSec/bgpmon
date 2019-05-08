@@ -47,6 +47,7 @@ const (
 	getPrefixOp
 	makeEntityTableOp
 	insertEntityOp
+	getEntityOp
 )
 
 // dbOps associates every generic database operation with an array that holds the correct SQL statements
@@ -153,6 +154,10 @@ var dbOps = map[dbOp][]string{
 	insertEntityOp: {
 		// postgres
 		`INSERT INTO %s VALUES($1, $2, $3, $4);`,
+	},
+	getEntityOp: {
+		// postgres
+		`SELECT name, email, knownorigins, ownedprefixes FROM %s %s;`,
 	},
 }
 

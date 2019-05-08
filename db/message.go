@@ -324,3 +324,30 @@ func (em *entityMessage) getEntity() *Entity {
 func newEntityMessage(ent *Entity) *entityMessage {
 	return &entityMessage{CommonMessage: newMessage(), entity: ent}
 }
+
+type entityReply struct {
+	CommonReply
+	entity *Entity
+}
+
+func (er *entityReply) getEntity() *Entity {
+	return er.entity
+}
+
+func newEntityReply(e *Entity, err error) *entityReply {
+	return &entityReply{CommonReply: newReply(err), entity: e}
+}
+
+type filterMessage struct {
+	CommonMessage
+
+	rf ReadFilter
+}
+
+func (fm *filterMessage) getFilter() ReadFilter {
+	return fm.rf
+}
+
+func newFilterMessage(rf ReadFilter) *filterMessage {
+	return &filterMessage{CommonMessage: newMessage(), rf: rf}
+}

@@ -399,3 +399,38 @@ func insertEntity(ex SessionExecutor, msg CommonMessage) CommonReply {
 	_, err := ex.Exec(stmt, entity.Values()...)
 	return newReply(err)
 }
+
+func getEntityStream(ctx context.Context, ex SessionExecutor, msg CommonMessage) chan CommonReply {
+	retC := make(chan CommonReply, 1)
+
+	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, rep chan CommonReply) {
+		defer close(rep)
+		stmtTmpl := ex.getQuery(getEntityOp)
+		filtMsg := msg.(*filterMessage)
+		filter := filtMsg.getFilter()
+
+		stmt := fmt.Sprintf(stmtTmpl, filtMsg.GetEntityTable(), filter.GetWhereClause())
+		rows, err := ex.Query(stmt)
+		if err != nil {
+			rep <- newReply(err)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			ent := &Entity{}
+			err = ent.Scan(rows)
+
+			reply := newEntityReply(ent, err)
+			select {
+			case <-ctx.Done():
+				rep <- newReply(fmt.Errorf("context closed"))
+				return
+			case rep <- reply:
+				break
+			}
+		}
+
+	}(ctx, ex, msg, retC)
+	return retC
+}
