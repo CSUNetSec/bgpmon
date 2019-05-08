@@ -160,3 +160,69 @@ func newReadPrefixStream(parStream *sessionStream, pCancel chan bool, rf ReadFil
 	r.dbResp = getPrefixStream(ctx, ex, newGetCapMessage(rf))
 	return r
 }
+
+type readEntityStream struct {
+	*sessionStream
+
+	lastRep *Entity
+	lastErr error
+
+	cancel chan bool
+	dbResp chan CommonReply
+}
+
+func (es *readEntityStream) Read() bool {
+	rep, ok := <-es.dbResp
+	if !ok {
+		es.lastErr = io.EOF
+		return false
+	}
+
+	if rep.Error() != nil {
+		es.lastErr = rep.Error()
+		return false
+	}
+
+	entRep := rep.(*entityReply)
+	es.lastRep = entRep.getEntity()
+	return true
+}
+
+func (es *readEntityStream) Data() interface{} {
+	return es.lastRep
+}
+
+func (es *readEntityStream) Bytes() []byte {
+	return []byte{}
+}
+
+func (es *readEntityStream) Err() error {
+	return es.lastErr
+}
+
+func (es *readEntityStream) Close() {
+	close(es.cancel)
+	es.wp.Done()
+}
+
+func newReadEntityStream(baseStream *sessionStream, pCancel chan bool, rf ReadFilter) *readEntityStream {
+	es := &readEntityStream{sessionStream: baseStream}
+	es.cancel = make(chan bool)
+	es.lastRep = nil
+	es.lastErr = nil
+
+	ctx, cf := context.WithCancel(context.Background())
+	go func(par chan bool, child chan bool, cf context.CancelFunc) {
+		select {
+		case <-par:
+			break
+		case <-child:
+			break
+		}
+		cf()
+	}(pCancel, es.cancel, cf)
+
+	ex := newSessionExecutor(es.db.DB(), es.oper)
+	es.dbResp = getEntityStream(ctx, ex, newFilterMessage(rf))
+	return es
+}

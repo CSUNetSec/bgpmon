@@ -1,6 +1,8 @@
 package db
 
 import (
+	"database/sql"
+	"fmt"
 	"net"
 
 	"github.com/CSUNetSec/bgpmon/config"
@@ -78,4 +80,31 @@ func (e *Entity) Values() []interface{} {
 	vals[3] = pqPrefs
 
 	return vals
+}
+
+// Scan populates this entity from a sql.Rows
+func (e *Entity) Scan(rows *sql.Rows) error {
+	name := ""
+	email := ""
+	var originsStr sql.NullString
+	var prefixStr sql.NullString
+
+	err := rows.Scan(&name, &email, &originsStr, &prefixStr)
+
+	e.name = name
+	e.email = email
+
+	if originsStr.Valid {
+
+	} else {
+		e.ownedOrigins = nil
+	}
+
+	if prefixStr.Valid {
+
+	} else {
+		e.ownedPrefixes = nil
+	}
+
+	return err
 }

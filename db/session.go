@@ -28,6 +28,10 @@ const (
 	// SessionWriteEntity is provided to a Sessions OpenWriteStream to open
 	// an entity write stream.
 	SessionWriteEntity
+
+	// SessionReadEntity is provided to a Sessions OpenReadStream to open
+	// an entity read stream.
+	SessionReadEntity
 )
 
 type sessionStream struct {
@@ -189,7 +193,7 @@ func (s *Session) OpenWriteStream(sType SessionType) (WriteStream, error) {
 		return ws, err
 	case SessionWriteEntity:
 		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
-		ws, err := newEntityStream(parStream, s.cancel)
+		ws, err := newWriteEntityStream(parStream, s.cancel)
 		if err != nil {
 			return nil, err
 		}
@@ -214,6 +218,11 @@ func (s *Session) OpenReadStream(sType SessionType, rf ReadFilter) (ReadStream, 
 		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
 		rs := newReadPrefixStream(parStream, s.cancel, rf)
 		return rs, nil
+	case SessionReadEntity:
+		s.wp.Add()
+		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
+		es := newReadEntityStream(parStream, s.cancel, rf)
+		return es, nil
 	default:
 		return nil, fmt.Errorf("unsupported read stream type")
 	}

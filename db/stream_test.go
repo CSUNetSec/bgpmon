@@ -16,6 +16,10 @@ func RunAndLog(s func() error) {
 	}
 }
 
+const (
+	maxWriteCt = 1000
+)
+
 func writeFileToStream(fName string, ws WriteStream) (int, error) {
 	mf, err := fileutil.NewMrtFileReader(fName, nil)
 	if err != nil {
@@ -24,7 +28,7 @@ func writeFileToStream(fName string, ws WriteStream) (int, error) {
 	defer mf.Close()
 
 	parsed := 0
-	for mf.Scan() {
+	for mf.Scan() && parsed < maxWriteCt {
 		cap, err := mf.GetCapture()
 		if err != nil {
 			// This is a parse error, and it doesn't matter
@@ -91,8 +95,9 @@ func TestEntityWriteStream(t *testing.T) {
 	defer stream.Close()
 
 	testEnt := Entity{
-		name:  "Test Entity",
-		email: "testentity@test.com",
+		name:         "Test Entity",
+		email:        "testentity@test.com",
+		ownedOrigins: []int{1, 2, 3},
 	}
 
 	err = stream.Write(&testEnt)
@@ -104,6 +109,35 @@ func TestEntityWriteStream(t *testing.T) {
 		t.Fatal(err)
 	}
 
+}
+
+func TestEntityReadStream(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	session, err := openTestSession(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+
+	stream, err := session.OpenReadStream(SessionReadEntity, ReadFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+
+	msgCt := 0
+	for stream.Read() {
+		msgCt++
+	}
+
+	if stream.Err() != io.EOF {
+		t.Fatal(stream.Err())
+	}
+
+	t.Logf("Total entities read: %d", msgCt)
 }
 
 func TestSingleReadStream(t *testing.T) {

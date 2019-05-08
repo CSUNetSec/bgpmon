@@ -221,8 +221,8 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 	return buf.Add(timestamp, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
 }
 
-// entityStream is a Write Stream that writes Entity structs into the database.
-type entityStream struct {
+// writeEntityStream is a Write Stream that writes Entity structs into the database.
+type writeEntityStream struct {
 	*sessionStream
 
 	cancel chan bool
@@ -230,7 +230,7 @@ type entityStream struct {
 }
 
 // Write will panic if ent is not an Entity struct.
-func (es *entityStream) Write(e interface{}) error {
+func (es *writeEntityStream) Write(e interface{}) error {
 	entity := e.(*Entity)
 
 	entMsg := newEntityMessage(entity)
@@ -239,23 +239,23 @@ func (es *entityStream) Write(e interface{}) error {
 	return rep.Error()
 }
 
-func (es *entityStream) Flush() error {
+func (es *writeEntityStream) Flush() error {
 	return es.ex.Commit()
 }
 
-func (es *entityStream) Cancel() {
+func (es *writeEntityStream) Cancel() {
 	err := es.ex.Rollback()
 	if err != nil {
-		dbLogger.Errorf("Error rolling back entityStream write: %s", err)
+		dbLogger.Errorf("Error rolling back writeEntityStream write: %s", err)
 	}
 }
 
-func (es *entityStream) Close() {
+func (es *writeEntityStream) Close() {
 	close(es.cancel)
 	es.wp.Done()
 }
 
-func (es *entityStream) waitForCancel(parent chan bool) {
+func (es *writeEntityStream) waitForCancel(parent chan bool) {
 	select {
 	case <-parent:
 		// Parent cancel by closing the session
@@ -266,8 +266,8 @@ func (es *entityStream) waitForCancel(parent chan bool) {
 	}
 }
 
-func newEntityStream(baseStream *sessionStream, pcancel chan bool) (*entityStream, error) {
-	es := &entityStream{sessionStream: baseStream}
+func newWriteEntityStream(baseStream *sessionStream, pcancel chan bool) (*writeEntityStream, error) {
+	es := &writeEntityStream{sessionStream: baseStream}
 	ctxEx, err := newCtxExecutor(baseStream.db)
 	if err != nil {
 		return nil, err
