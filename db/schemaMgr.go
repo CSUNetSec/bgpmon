@@ -164,7 +164,7 @@ func (s *schemaMgr) makeCapTable(msg CommonMessage) CommonReply {
 	return res
 }
 
-// Below this are the interface methods, called by the session streams
+// Below this are the schema manager client functions, called by the session streams
 
 // This doesn't need a dedicated close channel. With the way we use it,
 // none of the other interface methods will be called after stop is called.
@@ -173,11 +173,11 @@ func (s *schemaMgr) stop() {
 	s.daemonWG.Wait()
 }
 
-func (s *schemaMgr) checkSchema() (bool, error) {
+func (s *schemaMgr) checkSchema() error {
 	cmdin := newSchemaMessage(s.getCommonMessage(), mgrCheckSchemaOp)
 	s.req <- cmdin
 	sreply := <-s.resp
-	return sreply.Error() == nil, sreply.Error()
+	return sreply.Error()
 }
 
 func (s *schemaMgr) makeSchema() error {

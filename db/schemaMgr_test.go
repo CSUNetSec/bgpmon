@@ -44,8 +44,8 @@ func TestSchemaCheckSchema(t *testing.T) {
 	sx, _ := getEx()
 	sm := newSchemaMgr(sx, "dbs", "nodes", "entities")
 
-	ok, err := sm.checkSchema()
-	t.Logf("schema mgr checkSchema: [ok:%v , err:%v]", ok, err)
+	err := sm.checkSchema()
+	t.Logf("schema mgr checkSchema: [err:%v]", err)
 	sm.stop()
 	t.Log("schema mgr started and closed")
 }
