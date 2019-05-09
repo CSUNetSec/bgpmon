@@ -422,6 +422,10 @@ func genTableName(colName string, date time.Time, durMins int) string {
 	return fmt.Sprintf("%s_%s", colName, truncTime.Format("2006_01_02_15_04_05"))
 }
 
+type readFilter interface {
+	GetWhereClause() string
+}
+
 // ReadFilter is an object passed to ReadStream's so they know what to return
 type ReadFilter struct {
 	collector string
@@ -437,4 +441,40 @@ func NewReadFilter(collector string, s, e time.Time) ReadFilter {
 // GetWhereClause returns a where clause to describe the filter
 func (rf ReadFilter) GetWhereClause() string {
 	return ""
+}
+
+// FilterOptions is an empty interface. Only the implementations of it
+// are important.
+type FilterOptions interface{}
+
+// CaptureFilterOptions contains the options to filter by capture messages.
+type CaptureFilterOptions struct {
+	collector string
+	span      util.Timespan
+}
+
+type captureFilter struct {
+	CaptureFilterOptions
+}
+
+func (cf *captureFilter) GetWhereClause() string {
+	return ""
+}
+
+// EntityFilterOptions holds all the fields to filter entities.
+type EntityFilterOptions struct {
+	name string
+}
+
+type entityFilter struct {
+	*EntityFilterOptions
+}
+
+func (e *entityFilter) GetWhereClause() string {
+	return fmt.Sprintf("WHERE name='%s'", e.name)
+}
+
+// NewEntityFilterOptions returns FilterOptions for an Entity
+func NewEntityFilterOptions(name string) *EntityFilterOptions {
+	return &EntityFilterOptions{name: name}
 }
