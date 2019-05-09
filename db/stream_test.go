@@ -1,7 +1,7 @@
 package db
 
 import (
-	//	"fmt"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -9,6 +9,12 @@ import (
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/CSUNetSec/protoparse/fileutil"
 )
+
+func RunAndLog(s func() error) {
+	if err := s(); err != nil {
+		fmt.Printf("Session failed to close: %s\n", err)
+	}
+}
 
 func writeFileToStream(fName string, ws WriteStream) (int, error) {
 	mf, err := fileutil.NewMrtFileReader(fName, nil)
@@ -53,7 +59,7 @@ func TestSingleWriteStream(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer RunAndLog(session.Close)
 
 	stream, err := session.OpenWriteStream(SessionWriteCapture)
 	if err != nil {
@@ -76,8 +82,9 @@ func TestSingleReadStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error opening test session: %s", err)
 	}
-	defer session.Close()
+	defer RunAndLog(session.Close)
 
+	// These dates correspond to the data in the sample MRT file above.
 	rf := ReadFilter{
 		collector: "routeviews2",
 		start:     time.Date(2013, time.January, 1, 0, 0, 0, 0, time.UTC),
@@ -95,7 +102,7 @@ func TestSingleReadStream(t *testing.T) {
 		msgCt++
 	}
 
-	if stream.Err() != io.EOF {
+	if err := stream.Err(); err != nil && err != io.EOF {
 		t.Fatalf("Stream failed: %s", err)
 	}
 

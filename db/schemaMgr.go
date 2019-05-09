@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	slogger = util.NewLogger("system", "schema")
+	sLogger = util.NewLogger("system", "schema")
 )
 
 const (
@@ -23,9 +23,9 @@ const (
 )
 
 type schemaMgr struct {
-	iChan    chan schemaMessage
-	oChan    chan CommonReply
-	sex      SessionExecutor //this executor should be a dbSessionExecutor, not at tx.
+	req      chan schemaMessage
+	resp     chan CommonReply
+	sEx      SessionExecutor // This should not be a AtomicSQLExecutor
 	cache    *dbCache
 	daemonWG sync.WaitGroup
 
@@ -45,11 +45,11 @@ func (s *schemaMgr) setMessageTables(cm CommonMessage) {
 }
 
 // This function launches the run method in a separate goroutine
-func newSchemaMgr(sex SessionExecutor, main, node, entity string) *schemaMgr {
+func newSchemaMgr(sEx SessionExecutor, main, node, entity string) *schemaMgr {
 	sm := &schemaMgr{
-		iChan:       make(chan schemaMessage),
-		oChan:       make(chan CommonReply),
-		sex:         sex,
+		req:         make(chan schemaMessage),
+		resp:        make(chan CommonReply),
+		sEx:         sEx,
 		cache:       newDBCache(),
 		daemonWG:    sync.WaitGroup{},
 		mainTable:   main,
@@ -63,54 +63,56 @@ func newSchemaMgr(sex SessionExecutor, main, node, entity string) *schemaMgr {
 
 // Should be run in a separate goroutine
 func (s *schemaMgr) run() {
-	defer slogger.Infof("Schema manager closed successfully")
-	defer close(s.oChan)
+	defer sLogger.Infof("Schema manager closed successfully")
+	defer close(s.resp)
 	defer s.daemonWG.Done()
 
 	for {
 		select {
-		case icmd, ok := <-s.iChan:
+		case cmd, ok := <-s.req:
 			if !ok {
 				return
 			}
 			var ret CommonReply
 
-			switch icmd.getType() {
+			switch cmd.getType() {
 			case mgrCheckSchemaOp:
-				slogger.Infof("checking correctness of db schema")
-				ret = checkSchema(s.sex, icmd.getMessage())
+				sLogger.Infof("checking correctness of db schema")
+				ret = checkSchema(s.sEx, cmd.getMessage())
 			case mgrInitSchemaOp:
-				slogger.Infof("initializing db schema")
-				ret = makeSchema(s.sex, icmd.getMessage())
+				sLogger.Infof("initializing db schema")
+				ret = makeSchema(s.sEx, cmd.getMessage())
 			case mgrSyncNodesOp:
-				slogger.Infof("syncing node configs")
-				ret = syncNodes(s.sex, icmd.getMessage())
+				sLogger.Infof("syncing node configs")
+				ret = syncNodes(s.sEx, cmd.getMessage())
 			case mgrGetNodeOp:
-				slogger.Infof("getting node name")
-				nMsg := icmd.getMessage().(nodeMessage)
+				sLogger.Infof("getting node name")
+				nMsg := cmd.getMessage().(nodeMessage)
 				nodeIP := net.ParseIP(nMsg.getNodeIP())
 				node, err := s.cache.LookupNode(nodeIP)
 				if err == errNoNode {
-					slogger.Infof("Node cache miss. Looking up node for IP: %s", nMsg.getNodeIP())
-					ret = getNode(s.sex, icmd.getMessage())
+					sLogger.Infof("Node cache miss. Looking up node for IP: %s", nMsg.getNodeIP())
+					ret = getNode(s.sEx, cmd.getMessage())
 					if ret.Error() == nil {
 						s.cache.addNode(ret.(nodeReply).getNode())
 					} else {
-						slogger.Errorf("Error getting node: %s", ret.Error())
+						sLogger.Errorf("Error getting node: %s", ret.Error())
 					}
 				} else {
 					ret = newNodeReply(node, nil)
 				}
 			case mgrGetTableOp:
-				tMsg := icmd.getMessage().(tableMessage)
+				tMsg := cmd.getMessage().(tableMessage)
 				colIP := tMsg.getColIP()
 				date := tMsg.getDate()
 				tName, err := s.cache.LookupTable(net.ParseIP(colIP), date)
-				if err == errNoTable {
-					slogger.Infof("Table cache miss. Creating table for col: %s date: %s", colIP, date)
+				if err == errNoNode {
+					ret = newReply(err)
+				} else if err == errNoTable {
+					sLogger.Infof("Table cache miss. Creating table for col: %s date: %s", colIP, date)
 					ret = s.makeCapTable(tMsg)
 					if ret.Error() != nil {
-						slogger.Errorf("schemaMgr: %s", ret.Error())
+						sLogger.Errorf("schemaMgr: %s", ret.Error())
 					} else {
 						s.cache.addTable(net.ParseIP(colIP), date)
 					}
@@ -118,47 +120,46 @@ func (s *schemaMgr) run() {
 					ret = newTableReply(tName, time.Now(), time.Now(), nil, nil)
 				}
 			default:
-				ret = newReply(fmt.Errorf("unhandled schema manager command:%+v", icmd))
+				ret = newReply(fmt.Errorf("unhandled schema manager command:%+v", cmd))
 			}
 
 			// Send the result back on the channel
-			s.oChan <- ret
+			s.resp <- ret
 		}
 	}
 }
 
 func (s *schemaMgr) makeCapTable(msg CommonMessage) CommonReply {
-	res := getTable(s.sex, msg).(tableReply)
-	var (
-		node *node
-	)
+	res := getTable(s.sEx, msg).(tableReply)
+	var node *node
 
 	if err := res.Error(); err == errNoTable {
 		tMsg := msg.(tableMessage)
-		nodeip := tMsg.getColIP()
+		nodeIP := tMsg.getColIP()
 		date := tMsg.getDate()
 
-		node, err := s.cache.LookupNode(net.ParseIP(nodeip))
+		node, err := s.cache.LookupNode(net.ParseIP(nodeIP))
 		if err != nil {
 			return newReply(err)
 		}
-		ddm := time.Duration(node.duration) * time.Minute
-		start := date.Truncate(ddm)
+		dur := time.Duration(node.duration) * time.Minute
+		start := date.Truncate(dur)
 
 		tName := genTableName(node.name, date, node.duration)
-		cMsg := newCapTableMessage(tName, node.name, start, start.Add(ddm))
-		nsout := createCaptureTable(s.sex, cMsg).(capTableReply)
-		if err := nsout.Error(); err != nil {
+		cMsg := newCapTableMessage(tName, node.name, start, start.Add(dur))
+		capRep := createCaptureTable(s.sEx, cMsg).(capTableReply)
+		if err := capRep.Error(); err != nil {
 			return newReply(fmt.Errorf("makeCapTable: %s", err))
 		}
-		s, e := nsout.getDates()
-		res = newTableReply(nsout.getName(), s, e, node, nil)
-	} else if err == nil {
+
+		start, end := capRep.getDates()
+		res = newTableReply(capRep.getName(), start, end, node, nil)
+	} else if err != nil {
+		return newReply(fmt.Errorf("makeCapTable: %s", err))
+	} else {
 		// we have a node table already and res contains the correct vaules to be added in the cache
 		node = res.getNode()
 		s.cache.addNode(node)
-	} else {
-		return newReply(fmt.Errorf("makeCapTable: %s", err))
 	}
 	return res
 }
@@ -166,23 +167,23 @@ func (s *schemaMgr) makeCapTable(msg CommonMessage) CommonReply {
 // Below this are the interface methods, called by the session streams
 
 // This doesn't need a dedicated close channel. With the way we use it,
-// none of the other interface methods will be called after close is called.
+// none of the other interface methods will be called after stop is called.
 func (s *schemaMgr) stop() {
-	close(s.iChan)
+	close(s.req)
 	s.daemonWG.Wait()
 }
 
 func (s *schemaMgr) checkSchema() (bool, error) {
 	cmdin := newSchemaMessage(s.getCommonMessage(), mgrCheckSchemaOp)
-	s.iChan <- cmdin
-	sreply := <-s.oChan
+	s.req <- cmdin
+	sreply := <-s.resp
 	return sreply.Error() == nil, sreply.Error()
 }
 
 func (s *schemaMgr) makeSchema() error {
 	cmdin := newSchemaMessage(s.getCommonMessage(), mgrInitSchemaOp)
-	s.iChan <- cmdin
-	sreply := <-s.oChan
+	s.req <- cmdin
+	sreply := <-s.resp
 	return sreply.Error()
 }
 
@@ -191,30 +192,31 @@ func (s *schemaMgr) syncNodes(knownNodes map[string]config.NodeConfig) (map[stri
 	s.setMessageTables(nMsg)
 
 	cmdin := newSchemaMessage(nMsg, mgrSyncNodesOp)
-	s.iChan <- cmdin
-	sreply := <-s.oChan
+	s.req <- cmdin
+	sreply := <-s.resp
 	nRep := sreply.(nodesReply)
 
 	return nRep.getNodes(), nRep.Error()
 }
 
-func (s *schemaMgr) getTable(ipstr string, date time.Time) (string, time.Time, time.Time, error) {
-	tMsg := newTableMessage(ipstr, date)
+func (s *schemaMgr) getTable(ipStr string, date time.Time) (name string, start time.Time, end time.Time, err error) {
+	tMsg := newTableMessage(ipStr, date)
 	s.setMessageTables(tMsg)
 
 	cmdin := newSchemaMessage(tMsg, mgrGetTableOp)
-	s.iChan <- cmdin
-	sreply := <-s.oChan
+	s.req <- cmdin
+	sreply := <-s.resp
 
 	if sreply.Error() != nil {
 		return "", time.Time{}, time.Time{}, sreply.Error()
 	}
 
 	tRep := sreply.(tableReply)
-	tName := tRep.getName()
-	tStart, tEnd := tRep.getDates()
+	err = tRep.Error()
+	name = tRep.getName()
+	start, end = tRep.getDates()
 
-	return tName, tStart, tEnd, tRep.Error()
+	return
 }
 
 func (s *schemaMgr) getNode(nodeName string, nodeIP string) (*node, error) {
@@ -222,17 +224,19 @@ func (s *schemaMgr) getNode(nodeName string, nodeIP string) (*node, error) {
 	s.setMessageTables(nMsg)
 
 	cmdin := newSchemaMessage(nMsg, mgrGetNodeOp)
-	s.iChan <- cmdin
-	sreply := <-s.oChan
+	s.req <- cmdin
+	sreply := <-s.resp
 	nRep := sreply.(nodeReply)
 	return nRep.getNode(), nRep.Error()
 }
 
+// LookupTable allows schemaMgr to adhere to the tableCache interface
 func (s *schemaMgr) LookupTable(nodeIP net.IP, t time.Time) (string, error) {
 	tName, _, _, err := s.getTable(nodeIP.String(), t)
 	return tName, err
 }
 
+// LookupNode allows schemaMgr to adhere to the tableCache interface
 func (s *schemaMgr) LookupNode(nodeIP net.IP) (*node, error) {
 	n, err := s.getNode("", nodeIP.String())
 	return n, err
