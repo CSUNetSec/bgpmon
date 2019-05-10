@@ -185,7 +185,7 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 	if _, ok := w.buffers[tName]; !ok {
 		dbLogger.Infof("Creating new buffer for table: %s", tName)
 		stmt := fmt.Sprintf(w.oper.getQuery(insertCaptureTableOp), tName)
-		w.buffers[tName] = util.NewInsertBuffer(w.ex, stmt, bufferSize, 9, true)
+		w.buffers[tName] = util.NewInsertBuffer(w.ex, stmt, bufferSize, 8, true)
 	}
 	buf := w.buffers[tName]
 	// This actually returns a WriteRequest, not a BGPCapture, but all the utility functions were built around
@@ -213,12 +213,11 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 	// Here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
 	advertised, _ := util.GetAdvertisedPrefixes(cap)
 	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
-	protoMsg := util.GetProtoMsg(cap)
 
 	advArr := util.PrefixesToPQArray(advertised)
 	wdrArr := util.PrefixesToPQArray(withdrawn)
 
-	return buf.Add(timestamp, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
+	return buf.Add(timestamp, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr)
 }
 
 // writeEntityStream is a Write Stream that writes Entity structs into the database.

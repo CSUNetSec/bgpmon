@@ -105,13 +105,13 @@ var dbOps = map[dbOp][]string{
 		   next_hop inet DEFAULT '0.0.0.0'::inet,
 		   origin_as integer DEFAULT '0'::integer,
 		   adv_prefixes cidr[] DEFAULT '{}'::cidr[],
-		   wdr_prefixes cidr[] DEFAULT '{}'::cidr[],
-		   protomsg bytea NOT NULL);`,
+		   wdr_prefixes cidr[] DEFAULT '{}'::cidr[]
+		   );`,
 	},
 	// This template shouldn't need VALUES, because those will be provided by the buffer
 	insertCaptureTableOp: {
 		// postgres
-		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes, protomsg) VALUES `,
+		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes) VALUES `,
 	},
 	selectTableOp: {
 		// postgres
@@ -136,7 +136,7 @@ var dbOps = map[dbOp][]string{
 	},
 	getCaptureBinaryOp: {
 		// postgres
-		`SELECT update_id, origin_as, protomsg FROM %s %s;`,
+		`SELECT update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes FROM %s %s;`,
 	},
 	getPrefixOp: {
 		// postgres

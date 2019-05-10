@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"net"
+	"time"
 
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
@@ -47,8 +48,24 @@ func (n *node) nodeConfigFromNode() config.NodeConfig {
 type Capture struct {
 	fromTable string // mostly debug
 	id        string // the capture_id that together with the table makes it unique
-	origin    int    // origin as
-	protoMsg  []byte // the protobuf blob
+	timestamp time.Time
+	origin    int // origin as
+}
+
+// Scan populates this capture with data from rows.Scan
+func (c *Capture) Scan(rows *sql.Rows) error {
+	// These should be replaced with appropriate fields and types inside
+	// a capture.
+	var (
+		colIP      sql.NullString
+		peerIP     sql.NullString
+		asPath     sql.NullString
+		nextHop    sql.NullString
+		advertized sql.NullString
+		withdrawn  sql.NullString
+	)
+
+	return rows.Scan(&c.id, &c.timestamp, &colIP, &peerIP, &asPath, &nextHop, &c.origin, &advertized, &withdrawn)
 }
 
 // CaptureTable represents a row in the main table. It describes
