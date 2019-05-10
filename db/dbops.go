@@ -302,9 +302,12 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
 		defer close(repStream)
 
-		cMsg := msg.(getCapMessage)
-		start, end := cMsg.getDates()
-		tables, err := getCaptureTables(ex, cMsg.GetMainTable(), cMsg.getTableCol(), start, end)
+		fMsg := msg.(*filterMessage)
+		capFilt := fMsg.getFilter().(*captureFilter)
+
+		start, end := capFilt.span.Start, capFilt.span.End
+
+		tables, err := getCaptureTables(ex, fMsg.GetMainTable(), capFilt.collector, start, end)
 		if err != nil {
 			repStream <- newReply(err)
 			return
@@ -312,7 +315,7 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 
 		selectCapTmpl := ex.getQuery(getCaptureBinaryOp)
 		for _, tName := range tables {
-			stmt := fmt.Sprintf(selectCapTmpl, tName)
+			stmt := fmt.Sprintf(selectCapTmpl, tName, capFilt.getWhereClause())
 			rows, err := ex.Query(stmt)
 			if err != nil {
 				repStream <- newReply(err)
@@ -349,16 +352,19 @@ func getPrefixStream(ctx context.Context, ex SessionExecutor, msg CommonMessage)
 	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
 		defer close(repStream)
 
-		cMsg := msg.(getCapMessage)
-		start, end := cMsg.getDates()
-		tables, err := getCaptureTables(ex, cMsg.GetMainTable(), cMsg.getTableCol(), start, end)
+		fMsg := msg.(*filterMessage)
+		capFilt := fMsg.getFilter().(*captureFilter)
+
+		start, end := capFilt.span.Start, capFilt.span.End
+
+		tables, err := getCaptureTables(ex, fMsg.GetMainTable(), capFilt.collector, start, end)
 		if err != nil {
 			repStream <- newReply(err)
 		}
 
 		selectPrefixTmpl := ex.getQuery(getPrefixOp)
 		for _, tName := range tables {
-			stmt := fmt.Sprintf(selectPrefixTmpl, tName)
+			stmt := fmt.Sprintf(selectPrefixTmpl, tName, capFilt.getWhereClause())
 			rows, err := ex.Query(stmt)
 			if err != nil {
 				repStream <- newReply(err)
@@ -427,7 +433,7 @@ func getEntityStream(ctx context.Context, ex SessionExecutor, msg CommonMessage)
 		filtMsg := msg.(*filterMessage)
 		filter := filtMsg.getFilter()
 
-		stmt := fmt.Sprintf(stmtTmpl, filtMsg.GetEntityTable(), filter.GetWhereClause())
+		stmt := fmt.Sprintf(stmtTmpl, filtMsg.GetEntityTable(), filter.getWhereClause())
 		rows, err := ex.Query(stmt)
 		if err != nil {
 			rep <- newReply(err)

@@ -261,12 +261,13 @@ func (t tableReply) getNode() *node {
 	return t.node
 }
 
+// getCapMessage has been replaced by filterMessage
 type getCapMessage struct {
 	capTableMessage
 }
 
-func newGetCapMessage(rf ReadFilter) getCapMessage {
-	return getCapMessage{newCapTableMessage("", rf.collector, rf.start, rf.end)}
+func newGetCapMessage(rf *captureFilter) getCapMessage {
+	return getCapMessage{newCapTableMessage("", rf.collector, rf.span.Start, rf.span.End)}
 }
 
 type getCapReply struct {
@@ -341,13 +342,13 @@ func newEntityReply(e *Entity, err error) *entityReply {
 type filterMessage struct {
 	CommonMessage
 
-	rf ReadFilter
+	rf readFilter
 }
 
-func (fm *filterMessage) getFilter() ReadFilter {
+func (fm *filterMessage) getFilter() readFilter {
 	return fm.rf
 }
 
-func newFilterMessage(rf ReadFilter) *filterMessage {
+func newFilterMessage(rf readFilter) *filterMessage {
 	return &filterMessage{CommonMessage: newMessage(), rf: rf}
 }

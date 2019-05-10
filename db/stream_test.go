@@ -20,6 +20,21 @@ const (
 	maxWriteCt = 1000
 )
 
+var (
+	testEntities = []*Entity{
+		&Entity{
+			name:         "test1",
+			email:        "test1@test.com",
+			ownedOrigins: []int{1, 2, 3},
+		},
+		&Entity{
+			name:         "test2",
+			email:        "test2@test.com",
+			ownedOrigins: []int{4, 5, 6},
+		},
+	}
+)
+
 func writeFileToStream(fName string, ws WriteStream) (int, error) {
 	mf, err := fileutil.NewMrtFileReader(fName, nil)
 	if err != nil {
@@ -94,15 +109,11 @@ func TestEntityWriteStream(t *testing.T) {
 	}
 	defer stream.Close()
 
-	testEnt := Entity{
-		name:         "Test Entity",
-		email:        "testentity@test.com",
-		ownedOrigins: []int{1, 2, 3},
-	}
-
-	err = stream.Write(&testEnt)
-	if err != nil {
-		t.Fatal(err)
+	for _, e := range testEntities {
+		err = stream.Write(e)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if err = stream.Flush(); err != nil {
@@ -122,7 +133,7 @@ func TestEntityReadStream(t *testing.T) {
 	}
 	defer session.Close()
 
-	stream, err := session.OpenReadStream(SessionReadEntity, ReadFilter{})
+	stream, err := session.OpenReadStream(SessionReadEntity, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,11 +144,49 @@ func TestEntityReadStream(t *testing.T) {
 		msgCt++
 	}
 
-	if stream.Err() != io.EOF {
+	if stream.Err() != nil {
 		t.Fatal(stream.Err())
 	}
 
 	t.Logf("Total entities read: %d", msgCt)
+}
+
+func TestEntityNameFilters(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	session, err := openTestSession(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+
+	for _, v := range testEntities {
+		entOpts := NewEntityFilterOptions(v.name)
+
+		stream, err := session.OpenReadStream(SessionReadEntity, entOpts)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		hasData := stream.Read()
+		if !hasData {
+			t.Fatalf("Expected data from stream, found none. Error: %s", stream.Err())
+			stream.Close()
+		}
+		readEnt := stream.Data().(*Entity)
+
+		if readEnt.name != v.name {
+			t.Fatalf("Expected name: %s, Got: %s", v.name, readEnt.name)
+		}
+
+		hasData = stream.Read()
+		if hasData {
+			t.Fatalf("Expected no data, found some. Data: %+v", stream.Data())
+		}
+		stream.Close()
+	}
 }
 
 func TestSingleReadStream(t *testing.T) {
@@ -151,14 +200,14 @@ func TestSingleReadStream(t *testing.T) {
 	}
 	defer RunAndLog(session.Close)
 
+	collector := "routeviews2"
 	// These dates correspond to the data in the sample MRT file above.
-	rf := ReadFilter{
-		collector: "routeviews2",
-		start:     time.Date(2013, time.January, 1, 0, 0, 0, 0, time.UTC),
-		end:       time.Date(2013, time.January, 2, 1, 0, 0, 0, time.UTC),
-	}
+	start := time.Date(2013, time.January, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2013, time.January, 2, 1, 0, 0, 0, time.UTC)
 
-	stream, err := session.OpenReadStream(SessionReadCapture, rf)
+	cfo := NewCaptureFilterOptions(collector, start, end)
+
+	stream, err := session.OpenReadStream(SessionReadCapture, cfo)
 	if err != nil {
 		t.Fatalf("Error opening read stream: %s", err)
 	}

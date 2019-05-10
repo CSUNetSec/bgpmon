@@ -59,7 +59,7 @@ func (rcs *readCapStream) Close() {
 	rcs.wp.Done()
 }
 
-func newReadCapStream(parStream *sessionStream, pCancel chan bool, rf ReadFilter) *readCapStream {
+func newReadCapStream(parStream *sessionStream, pCancel chan bool, fo FilterOptions) (*readCapStream, error) {
 	r := &readCapStream{sessionStream: parStream}
 	r.cancel = make(chan bool)
 	r.lastRep = nil
@@ -77,9 +77,14 @@ func newReadCapStream(parStream *sessionStream, pCancel chan bool, rf ReadFilter
 		cf()
 	}(pCancel, r.cancel, cf)
 
+	filt, err := newCaptureFilter(fo)
+	if err != nil {
+		return nil, err
+	}
+
 	ex := newSessionExecutor(r.db.DB(), r.oper)
-	r.dbResp = getCaptureBinaryStream(ctx, ex, newGetCapMessage(rf))
-	return r
+	r.dbResp = getCaptureBinaryStream(ctx, ex, newFilterMessage(filt))
+	return r, nil
 }
 
 type readPrefixStream struct {
@@ -138,7 +143,7 @@ func (rps *readPrefixStream) Close() {
 	rps.wp.Done()
 }
 
-func newReadPrefixStream(parStream *sessionStream, pCancel chan bool, rf ReadFilter) *readPrefixStream {
+func newReadPrefixStream(parStream *sessionStream, pCancel chan bool, fo FilterOptions) (*readPrefixStream, error) {
 	r := &readPrefixStream{sessionStream: parStream}
 	r.cancel = make(chan bool)
 	r.lastRep = nil
@@ -157,8 +162,13 @@ func newReadPrefixStream(parStream *sessionStream, pCancel chan bool, rf ReadFil
 	}(pCancel, r.cancel, cf)
 
 	ex := newSessionExecutor(r.db.DB(), r.oper)
-	r.dbResp = getPrefixStream(ctx, ex, newGetCapMessage(rf))
-	return r
+
+	filt, err := newCaptureFilter(fo)
+	if err != nil {
+		return nil, err
+	}
+	r.dbResp = getPrefixStream(ctx, ex, newFilterMessage(filt))
+	return r, nil
 }
 
 type readEntityStream struct {
@@ -205,7 +215,7 @@ func (es *readEntityStream) Close() {
 	es.wp.Done()
 }
 
-func newReadEntityStream(baseStream *sessionStream, pCancel chan bool, rf ReadFilter) *readEntityStream {
+func newReadEntityStream(baseStream *sessionStream, pCancel chan bool, fo FilterOptions) (*readEntityStream, error) {
 	es := &readEntityStream{sessionStream: baseStream}
 	es.cancel = make(chan bool)
 	es.lastRep = nil
@@ -223,6 +233,12 @@ func newReadEntityStream(baseStream *sessionStream, pCancel chan bool, rf ReadFi
 	}(pCancel, es.cancel, cf)
 
 	ex := newSessionExecutor(es.db.DB(), es.oper)
-	es.dbResp = getEntityStream(ctx, ex, newFilterMessage(rf))
-	return es
+
+	filt, err := newEntityFilter(fo)
+	if err != nil {
+		return nil, err
+	}
+
+	es.dbResp = getEntityStream(ctx, ex, newFilterMessage(filt))
+	return es, nil
 }

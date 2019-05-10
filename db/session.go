@@ -206,22 +206,31 @@ func (s *Session) OpenWriteStream(sType SessionType) (WriteStream, error) {
 
 // OpenReadStream opens and returns a ReadStream with the given type, or an
 // error if no such type exists
-func (s *Session) OpenReadStream(sType SessionType, rf ReadFilter) (ReadStream, error) {
+func (s *Session) OpenReadStream(sType SessionType, fo FilterOptions) (ReadStream, error) {
 	switch sType {
 	case SessionReadCapture:
 		s.wp.Add()
 		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
-		rs := newReadCapStream(parStream, s.cancel, rf)
+		rs, err := newReadCapStream(parStream, s.cancel, fo)
+		if err != nil {
+			s.wp.Done()
+		}
 		return rs, nil
 	case SessionReadPrefix:
 		s.wp.Add()
 		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
-		rs := newReadPrefixStream(parStream, s.cancel, rf)
+		rs, err := newReadPrefixStream(parStream, s.cancel, fo)
+		if err != nil {
+			s.wp.Done()
+		}
 		return rs, nil
 	case SessionReadEntity:
 		s.wp.Add()
 		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
-		es := newReadEntityStream(parStream, s.cancel, rf)
+		es, err := newReadEntityStream(parStream, s.cancel, fo)
+		if err != nil {
+			s.wp.Done()
+		}
 		return es, nil
 	default:
 		return nil, fmt.Errorf("unsupported read stream type")
