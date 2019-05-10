@@ -2,13 +2,12 @@ package db
 
 import (
 	"context"
-	"io"
 )
 
 type readCapStream struct {
 	*sessionStream
 
-	lastRep *CommonReply
+	lastRep CommonReply
 	lastErr error
 
 	dbResp chan CommonReply
@@ -19,7 +18,7 @@ func (rcs *readCapStream) Read() bool {
 	msg, ok := <-rcs.dbResp
 
 	if !ok {
-		rcs.lastErr = io.EOF
+		rcs.lastErr = nil
 		return false
 	}
 
@@ -28,7 +27,8 @@ func (rcs *readCapStream) Read() bool {
 		return false
 	}
 
-	rcs.lastRep = &msg
+	rcs.lastRep = msg
+	rcs.lastErr = nil
 	return true
 }
 
@@ -37,7 +37,7 @@ func (rcs *readCapStream) Data() interface{} {
 		return nil
 	}
 
-	capMsg := (*rcs.lastRep).(getCapReply)
+	capMsg := rcs.lastRep.(getCapReply)
 	return capMsg.getCapture()
 }
 
@@ -46,7 +46,7 @@ func (rcs *readCapStream) Bytes() []byte {
 		return nil
 	}
 
-	capMsg := (*rcs.lastRep).(getCapReply)
+	capMsg := rcs.lastRep.(getCapReply)
 	return capMsg.getCapture().protoMsg
 }
 
@@ -59,7 +59,7 @@ func (rcs *readCapStream) Close() {
 	rcs.wp.Done()
 }
 
-func newReadCapStream(parStream *sessionStream, pcancel chan bool, rf ReadFilter) *readCapStream {
+func newReadCapStream(parStream *sessionStream, pCancel chan bool, rf ReadFilter) *readCapStream {
 	r := &readCapStream{sessionStream: parStream}
 	r.cancel = make(chan bool)
 	r.lastRep = nil
@@ -75,7 +75,7 @@ func newReadCapStream(parStream *sessionStream, pcancel chan bool, rf ReadFilter
 			break
 		}
 		cf()
-	}(pcancel, r.cancel, cf)
+	}(pCancel, r.cancel, cf)
 
 	ex := newSessionExecutor(r.db.DB(), r.oper)
 	r.dbResp = getCaptureBinaryStream(ctx, ex, newGetCapMessage(rf))
@@ -85,7 +85,7 @@ func newReadCapStream(parStream *sessionStream, pcancel chan bool, rf ReadFilter
 type readPrefixStream struct {
 	*sessionStream
 
-	lastRep *CommonReply
+	lastRep CommonReply
 	lastErr error
 
 	dbResp chan CommonReply
@@ -96,7 +96,7 @@ func (rps *readPrefixStream) Read() bool {
 	msg, ok := <-rps.dbResp
 
 	if !ok {
-		rps.lastErr = io.EOF
+		rps.lastErr = nil
 		return false
 	}
 
@@ -105,7 +105,8 @@ func (rps *readPrefixStream) Read() bool {
 		return false
 	}
 
-	rps.lastRep = &msg
+	rps.lastRep = msg
+	rps.lastErr = nil
 	return true
 
 }
@@ -115,7 +116,7 @@ func (rps *readPrefixStream) Data() interface{} {
 		return nil
 	}
 
-	prefRep := (*rps.lastRep).(*getPrefixReply)
+	prefRep := rps.lastRep.(*getPrefixReply)
 	return prefRep.getPrefix()
 }
 
@@ -124,7 +125,7 @@ func (rps *readPrefixStream) Bytes() []byte {
 		return nil
 	}
 
-	prefRep := (*rps.lastRep).(*getPrefixReply)
+	prefRep := rps.lastRep.(*getPrefixReply)
 	return []byte(prefRep.getPrefix().String())
 }
 
@@ -137,7 +138,7 @@ func (rps *readPrefixStream) Close() {
 	rps.wp.Done()
 }
 
-func newReadPrefixStream(parStream *sessionStream, pcancel chan bool, rf ReadFilter) *readPrefixStream {
+func newReadPrefixStream(parStream *sessionStream, pCancel chan bool, rf ReadFilter) *readPrefixStream {
 	r := &readPrefixStream{sessionStream: parStream}
 	r.cancel = make(chan bool)
 	r.lastRep = nil
@@ -153,7 +154,7 @@ func newReadPrefixStream(parStream *sessionStream, pcancel chan bool, rf ReadFil
 			break
 		}
 		cf()
-	}(pcancel, r.cancel, cf)
+	}(pCancel, r.cancel, cf)
 
 	ex := newSessionExecutor(r.db.DB(), r.oper)
 	r.dbResp = getPrefixStream(ctx, ex, newGetCapMessage(rf))

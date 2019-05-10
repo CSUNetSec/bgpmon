@@ -67,14 +67,16 @@ func TestSessionSetWorkers(t *testing.T) {
 		t.Skip()
 	}
 
-	session, err := openTestSession(8)
+	workers := 8
+
+	session, err := openTestSession(workers)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer session.Close()
 
-	if session.GetMaxWorkers() != 8 {
-		t.Fatalf("Expected: 8, Got: %d", session.GetMaxWorkers())
+	if session.GetMaxWorkers() != workers {
+		t.Fatalf("Expected: %d, Got: %d", workers, session.GetMaxWorkers())
 	}
 
 }
