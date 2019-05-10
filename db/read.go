@@ -174,7 +174,7 @@ type readEntityStream struct {
 func (es *readEntityStream) Read() bool {
 	rep, ok := <-es.dbResp
 	if !ok {
-		es.lastErr = io.EOF
+		es.lastErr = nil
 		return false
 	}
 
