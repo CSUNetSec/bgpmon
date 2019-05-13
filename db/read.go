@@ -37,7 +37,7 @@ func (rcs *readCapStream) Data() interface{} {
 		return nil
 	}
 
-	capMsg := rcs.lastRep.(getCapReply)
+	capMsg := rcs.lastRep.(*getCapReply)
 	return capMsg.getCapture()
 }
 

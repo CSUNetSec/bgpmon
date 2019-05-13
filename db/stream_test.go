@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"io"
+	"net"
 	"testing"
 	"time"
 
@@ -31,6 +32,12 @@ var (
 			name:         "test2",
 			email:        "test2@test.com",
 			ownedOrigins: []int{4, 5, 6},
+			ownedPrefixes: []*net.IPNet{
+				&net.IPNet{
+					IP:   net.IPv4(1, 2, 3, 0),
+					Mask: net.CIDRMask(24, 32),
+				},
+			},
 		},
 	}
 )
@@ -142,6 +149,7 @@ func TestEntityReadStream(t *testing.T) {
 	msgCt := 0
 	for stream.Read() {
 		msgCt++
+		t.Logf("Read entity: %+v", stream.Data())
 	}
 
 	if stream.Err() != nil {
@@ -215,6 +223,48 @@ func TestSingleReadStream(t *testing.T) {
 
 	msgCt := 0
 	for stream.Read() {
+		msgCt++
+	}
+
+	if err := stream.Err(); err != nil && err != io.EOF {
+		t.Fatalf("Stream failed: %s", err)
+	}
+
+	t.Logf("Total messages read: %d", msgCt)
+}
+
+func TestCaptureOriginFilter(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	session, err := openTestSession(1)
+	if err != nil {
+		t.Fatalf("Error opening test session: %s", err)
+	}
+	defer RunAndLog(session.Close)
+
+	collector := "routeviews2"
+	// These dates correspond to the data in the sample MRT file above.
+	start := time.Date(2013, time.January, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2013, time.January, 2, 1, 0, 0, 0, time.UTC)
+
+	cfo := NewCaptureFilterOptions(collector, start, end)
+	filterOrigin := 29838
+	cfo.SetOrigin(filterOrigin)
+
+	stream, err := session.OpenReadStream(SessionReadCapture, cfo)
+	if err != nil {
+		t.Fatalf("Error opening read stream: %s", err)
+	}
+	defer stream.Close()
+
+	msgCt := 0
+	for stream.Read() {
+		cap := stream.Data().(*Capture)
+		if cap.origin != filterOrigin {
+			t.Fatalf("[%d] Expected origin: %d, Got: %d", msgCt, filterOrigin, cap.origin)
+		}
 		msgCt++
 	}
 
