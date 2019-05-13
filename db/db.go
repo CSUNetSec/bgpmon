@@ -136,7 +136,7 @@ var dbOps = map[dbOp][]string{
 	},
 	getCaptureBinaryOp: {
 		// postgres
-		`SELECT update_id, timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes FROM %s %s;`,
+		`SELECT DISTINCT(update_id), timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes FROM %s %s;`,
 	},
 	getPrefixOp: {
 		// postgres

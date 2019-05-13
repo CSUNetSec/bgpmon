@@ -250,6 +250,7 @@ func TestCaptureOriginFilter(t *testing.T) {
 	end := time.Date(2013, time.January, 2, 1, 0, 0, 0, time.UTC)
 
 	cfo := NewCaptureFilterOptions(collector, start, end)
+	// This origin was manually observed in the data
 	filterOrigin := 29838
 	cfo.SetOrigin(filterOrigin)
 
@@ -268,7 +269,77 @@ func TestCaptureOriginFilter(t *testing.T) {
 		msgCt++
 	}
 
-	if err := stream.Err(); err != nil && err != io.EOF {
+	if err := stream.Err(); err != nil {
+		t.Fatalf("Stream failed: %s", err)
+	}
+
+	t.Logf("Total messages read: %d", msgCt)
+}
+
+func TestCapturePrefixFilter(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	session, err := openTestSession(1)
+	if err != nil {
+		t.Fatalf("Error opening test session: %s", err)
+	}
+	defer RunAndLog(session.Close)
+
+	collector := "routeviews2"
+	// These dates correspond to the data in the sample MRT file above.
+	start := time.Date(2013, time.January, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2013, time.January, 2, 1, 0, 0, 0, time.UTC)
+
+	cfo := NewCaptureFilterOptions(collector, start, end)
+	// This prefix was manually observed in the data
+	filterPrefs := []string{"49.248.72.0/21", "84.205.76.0/24"}
+	nets := make([]*net.IPNet, len(filterPrefs))
+	for i, v := range filterPrefs {
+		_, net, err := net.ParseCIDR(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nets[i] = net
+	}
+
+	cfo.AllowAdvPrefixes(nets...)
+
+	stream, err := session.OpenReadStream(SessionReadCapture, cfo)
+	if err != nil {
+		t.Fatalf("Error opening read stream: %s", err)
+	}
+	defer stream.Close()
+
+	msgCt := 0
+	for stream.Read() {
+		cap := stream.Data().(*Capture)
+
+		found := false
+		for _, v := range cap.advertized {
+			prefStr := v.String()
+
+			for _, v := range filterPrefs {
+				if prefStr == v {
+					found = true
+					break
+				}
+			}
+
+			if found {
+				break
+			}
+		}
+
+		if !found {
+			t.Fatalf("Didn't find any of the filtered prefixes.")
+		}
+
+		msgCt++
+	}
+
+	if err := stream.Err(); err != nil {
 		t.Fatalf("Stream failed: %s", err)
 	}
 

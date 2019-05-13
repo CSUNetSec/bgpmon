@@ -40,7 +40,7 @@ func (cfo *CaptureFilterOptions) SetOrigin(as int) {
 
 // AllowAdvPrefixes adds the provided prefixes to a list of prefixes to filter
 // by. If any prefix on that list appears, the Capture will pass the filter.
-func (cfo *CaptureFilterOptions) AllowAdvPrefixes(prefs []*net.IPNet) {
+func (cfo *CaptureFilterOptions) AllowAdvPrefixes(prefs ...*net.IPNet) {
 	cfo.hasExtraFilter = true
 	cfo.advPrefs = append(cfo.advPrefs, prefs...)
 }
@@ -81,7 +81,7 @@ func (cf *captureFilter) getWhereClause() string {
 		crossJoin = "CROSS JOIN UNNEST(adv_prefixes) as advPrefix"
 		var prefStr []string
 		for _, v := range cf.advPrefs {
-			prefStr = append(prefStr, v.String())
+			prefStr = append(prefStr, fmt.Sprintf("'%s'", v.String()))
 		}
 		advCond := fmt.Sprintf("advPrefix IN (%s)", strings.Join(prefStr, ","))
 		conditions = append(conditions, advCond)
