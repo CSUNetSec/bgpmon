@@ -153,7 +153,9 @@ var dbOps = map[dbOp][]string{
 	},
 	insertEntityOp: {
 		// postgres
-		`INSERT INTO %s VALUES($1, $2, $3, $4);`,
+		`INSERT INTO %s (name, email, knownorigins, ownedprefixes) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO 
+		UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email, knownorigins=EXCLUDED.knownorigins, 
+		ownedprefixes=EXCLUDED.ownedprefixes;`,
 	},
 	getEntityOp: {
 		// postgres
