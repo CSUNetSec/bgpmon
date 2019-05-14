@@ -76,12 +76,14 @@ func (h *hijackModule) Run(args map[string]string) {
 
 // isEvent determines whether or not a capture qualifies as a hijack.
 // Currently, a capture qualifies as a hijack if it contains a prefix owned
-// by the entity (as filtered above) but did not originate from one of the
-// origins owned by the entity.
+// by the entity (as filtered above) but does not contain one of the entities
+// ownedOrigins in it's AS path
 func (h *hijackModule) isEvent(ent *db.Entity, cap *db.Capture) bool {
 	for _, as := range ent.OwnedOrigins {
-		if cap.Origin == as {
-			return false
+		for _, asStep := range cap.ASPath {
+			if asStep == as {
+				return false
+			}
 		}
 	}
 
