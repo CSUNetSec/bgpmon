@@ -14,12 +14,23 @@ import (
 )
 
 var (
-	ErrNoIP                 = errors.New("could not decode IP from protobuf IP wrapper")
-	ErrNilCap               = errors.New("nil BGP capture provided")
-	ErrNilPrefWrap          = errors.New("nil Prefix wrapper provided")
-	ErrNoASPath             = errors.New("could not extract an Autonomous System Path")
+	// ErrNoIP is returned when a IPWrapper can't be parsed.
+	ErrNoIP = errors.New("could not decode IP from protobuf IP wrapper")
+
+	// ErrNilCap is returned when an invalid capture is passed.
+	ErrNilCap = errors.New("nil BGP capture provided")
+
+	// ErrNilPrefWrap is returned when an IPWrapper is nil
+	ErrNilPrefWrap = errors.New("nil Prefix wrapper provided")
+
+	// ErrNoASPath is returned when a capture has no AS path
+	ErrNoASPath = errors.New("could not extract an Autonomous System Path")
+
+	// ErrNoAdvertisedPrefixes is returned when a capture has no advertized prefixes
 	ErrNoAdvertisedPrefixes = errors.New("could not extract any Advertised Prefixes")
-	ErrNoWithdrawnPrefixes  = errors.New("could not extract any Withdrawn Prefixes")
+
+	// ErrNoWithdrawnPrefixes is returned when a capture has no withdrawn prefixes
+	ErrNoWithdrawnPrefixes = errors.New("could not extract any Withdrawn Prefixes")
 )
 
 // GetIPWrapper returns a net.IP and possibly an error  from the protobuf IP address wrapper.

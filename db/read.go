@@ -37,7 +37,7 @@ func (rcs *readCapStream) Data() interface{} {
 		return nil
 	}
 
-	capMsg := rcs.lastRep.(getCapReply)
+	capMsg := rcs.lastRep.(*getCapReply)
 	return capMsg.getCapture()
 }
 
@@ -46,8 +46,7 @@ func (rcs *readCapStream) Bytes() []byte {
 		return nil
 	}
 
-	capMsg := rcs.lastRep.(getCapReply)
-	return capMsg.getCapture().protoMsg
+	return []byte{}
 }
 
 func (rcs *readCapStream) Err() error {
@@ -59,7 +58,7 @@ func (rcs *readCapStream) Close() {
 	rcs.wp.Done()
 }
 
-func newReadCapStream(parStream *sessionStream, pCancel chan bool, rf ReadFilter) *readCapStream {
+func newReadCapStream(parStream *sessionStream, pCancel chan bool, fo FilterOptions) (*readCapStream, error) {
 	r := &readCapStream{sessionStream: parStream}
 	r.cancel = make(chan bool)
 	r.lastRep = nil
@@ -77,9 +76,14 @@ func newReadCapStream(parStream *sessionStream, pCancel chan bool, rf ReadFilter
 		cf()
 	}(pCancel, r.cancel, cf)
 
+	filt, err := newCaptureFilter(fo)
+	if err != nil {
+		return nil, err
+	}
+
 	ex := newSessionExecutor(r.db.DB(), r.oper)
-	r.dbResp = getCaptureBinaryStream(ctx, ex, newGetCapMessage(rf))
-	return r
+	r.dbResp = getCaptureBinaryStream(ctx, ex, newFilterMessage(filt))
+	return r, nil
 }
 
 type readPrefixStream struct {
@@ -138,7 +142,7 @@ func (rps *readPrefixStream) Close() {
 	rps.wp.Done()
 }
 
-func newReadPrefixStream(parStream *sessionStream, pCancel chan bool, rf ReadFilter) *readPrefixStream {
+func newReadPrefixStream(parStream *sessionStream, pCancel chan bool, fo FilterOptions) (*readPrefixStream, error) {
 	r := &readPrefixStream{sessionStream: parStream}
 	r.cancel = make(chan bool)
 	r.lastRep = nil
@@ -157,6 +161,83 @@ func newReadPrefixStream(parStream *sessionStream, pCancel chan bool, rf ReadFil
 	}(pCancel, r.cancel, cf)
 
 	ex := newSessionExecutor(r.db.DB(), r.oper)
-	r.dbResp = getPrefixStream(ctx, ex, newGetCapMessage(rf))
-	return r
+
+	filt, err := newCaptureFilter(fo)
+	if err != nil {
+		return nil, err
+	}
+	r.dbResp = getPrefixStream(ctx, ex, newFilterMessage(filt))
+	return r, nil
+}
+
+type readEntityStream struct {
+	*sessionStream
+
+	lastRep *Entity
+	lastErr error
+
+	cancel chan bool
+	dbResp chan CommonReply
+}
+
+func (es *readEntityStream) Read() bool {
+	rep, ok := <-es.dbResp
+	if !ok {
+		es.lastErr = nil
+		return false
+	}
+
+	if rep.Error() != nil {
+		es.lastErr = rep.Error()
+		return false
+	}
+
+	entRep := rep.(*entityReply)
+	es.lastRep = entRep.getEntity()
+	return true
+}
+
+func (es *readEntityStream) Data() interface{} {
+	return es.lastRep
+}
+
+func (es *readEntityStream) Bytes() []byte {
+	return []byte{}
+}
+
+func (es *readEntityStream) Err() error {
+	return es.lastErr
+}
+
+func (es *readEntityStream) Close() {
+	close(es.cancel)
+	es.wp.Done()
+}
+
+func newReadEntityStream(baseStream *sessionStream, pCancel chan bool, fo FilterOptions) (*readEntityStream, error) {
+	es := &readEntityStream{sessionStream: baseStream}
+	es.cancel = make(chan bool)
+	es.lastRep = nil
+	es.lastErr = nil
+
+	ctx, cf := context.WithCancel(context.Background())
+	go func(par chan bool, child chan bool, cf context.CancelFunc) {
+		select {
+		case <-par:
+			break
+		case <-child:
+			break
+		}
+		cf()
+	}(pCancel, es.cancel, cf)
+
+	ex := newSessionExecutor(es.db.DB(), es.oper)
+
+	filt, err := newEntityFilter(fo)
+	if err != nil {
+		return nil, err
+	}
+
+	es.dbResp = getEntityStream(ctx, ex, newFilterMessage(filt))
+	return es, nil
 }

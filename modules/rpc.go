@@ -101,14 +101,18 @@ func (r *rpcServer) Get(req *pb.GetRequest, rep pb.Bgpmond_GetServer) error {
 
 	switch req.Type {
 	case pb.GetRequest_CAPTURE:
-		rf := db.NewReadFilter(req.CollectorName, time.Unix(int64(req.StartTimestamp), 0), time.Unix(int64(req.EndTimestamp), 0))
-		stream, err = r.server.OpenReadStream(req.SessionId, db.SessionReadCapture, rf)
+		start := time.Unix(int64(req.StartTimestamp), 0)
+		end := time.Unix(int64(req.EndTimestamp), 0)
+		fo := db.NewCaptureFilterOptions(req.CollectorName, start, end)
+		stream, err = r.server.OpenReadStream(req.SessionId, db.SessionReadCapture, fo)
 		if err != nil {
 			return err
 		}
 	case pb.GetRequest_PREFIX:
-		rf := db.NewReadFilter(req.CollectorName, time.Unix(int64(req.StartTimestamp), 0), time.Unix(int64(req.EndTimestamp), 0))
-		stream, err = r.server.OpenReadStream(req.SessionId, db.SessionReadPrefix, rf)
+		start := time.Unix(int64(req.StartTimestamp), 0)
+		end := time.Unix(int64(req.EndTimestamp), 0)
+		fo := db.NewCaptureFilterOptions(req.CollectorName, start, end)
+		stream, err = r.server.OpenReadStream(req.SessionId, db.SessionReadPrefix, fo)
 		if err != nil {
 			return err
 		}

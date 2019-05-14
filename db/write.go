@@ -185,7 +185,7 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 	if _, ok := w.buffers[tName]; !ok {
 		dbLogger.Infof("Creating new buffer for table: %s", tName)
 		stmt := fmt.Sprintf(w.oper.getQuery(insertCaptureTableOp), tName)
-		w.buffers[tName] = util.NewInsertBuffer(w.ex, stmt, bufferSize, 9, true)
+		w.buffers[tName] = util.NewInsertBuffer(w.ex, stmt, bufferSize, 8, true)
 	}
 	buf := w.buffers[tName]
 	// This actually returns a WriteRequest, not a BGPCapture, but all the utility functions were built around
@@ -213,32 +213,68 @@ func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
 	// Here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
 	advertised, _ := util.GetAdvertisedPrefixes(cap)
 	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
-	protoMsg := util.GetProtoMsg(cap)
 
 	advArr := util.PrefixesToPQArray(advertised)
 	wdrArr := util.PrefixesToPQArray(withdrawn)
 
-	return buf.Add(timestamp, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr, protoMsg)
+	return buf.Add(timestamp, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr)
 }
 
-type entityStream struct {
+// writeEntityStream is a Write Stream that writes Entity structs into the database.
+type writeEntityStream struct {
 	*sessionStream
 
-	ex util.AtomicSQLExecutor
+	cancel chan bool
+	ex     util.AtomicSQLExecutor
 }
 
-func (es *entityStream) Write(ent interface{}) error {
-	return nil
+// Write will panic if ent is not an Entity struct.
+func (es *writeEntityStream) Write(e interface{}) error {
+	entity := e.(*Entity)
+
+	entMsg := newEntityMessage(entity)
+	rep := insertEntity(newSessionExecutor(es.ex, es.oper), entMsg)
+
+	return rep.Error()
 }
 
-func (es *entityStream) Flush() error {
-	return nil
+func (es *writeEntityStream) Flush() error {
+	return es.ex.Commit()
 }
 
-func (es *entityStream) Close() {
-
+func (es *writeEntityStream) Cancel() {
+	err := es.ex.Rollback()
+	if err != nil {
+		dbLogger.Errorf("Error rolling back writeEntityStream write: %s", err)
+	}
 }
 
-func newEntityStream(parStream *sessionStream, pcancel chan bool) *entityStream {
-	return &entityStream{}
+func (es *writeEntityStream) Close() {
+	close(es.cancel)
+	es.wp.Done()
+}
+
+func (es *writeEntityStream) waitForCancel(parent chan bool) {
+	select {
+	case <-parent:
+		// Parent cancel by closing the session
+		es.Cancel()
+	case <-es.cancel:
+		// Child cancel
+		es.Cancel()
+	}
+}
+
+func newWriteEntityStream(baseStream *sessionStream, pcancel chan bool) (*writeEntityStream, error) {
+	es := &writeEntityStream{sessionStream: baseStream}
+	ctxEx, err := newCtxExecutor(baseStream.db)
+	if err != nil {
+		return nil, err
+	}
+
+	es.ex = ctxEx
+	es.cancel = make(chan bool)
+	go es.waitForCancel(pcancel)
+
+	return es, nil
 }

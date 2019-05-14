@@ -24,6 +24,14 @@ const (
 	// SessionReadPrefix is provided to a Sessioner's OpenReadStream to open a
 	// read prefix stream.
 	SessionReadPrefix
+
+	// SessionWriteEntity is provided to a Sessions OpenWriteStream to open
+	// an entity write stream.
+	SessionWriteEntity
+
+	// SessionReadEntity is provided to a Sessions OpenReadStream to open
+	// an entity read stream.
+	SessionReadEntity
 )
 
 type sessionStream struct {
@@ -183,6 +191,14 @@ func (s *Session) OpenWriteStream(sType SessionType) (WriteStream, error) {
 			s.wp.Done()
 		}
 		return ws, err
+	case SessionWriteEntity:
+		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
+		ws, err := newWriteEntityStream(parStream, s.cancel)
+		if err != nil {
+			return nil, err
+		}
+		s.wp.Add()
+		return ws, err
 	default:
 		return nil, fmt.Errorf("unsupported write stream type")
 	}
@@ -190,18 +206,32 @@ func (s *Session) OpenWriteStream(sType SessionType) (WriteStream, error) {
 
 // OpenReadStream opens and returns a ReadStream with the given type, or an
 // error if no such type exists
-func (s *Session) OpenReadStream(sType SessionType, rf ReadFilter) (ReadStream, error) {
+func (s *Session) OpenReadStream(sType SessionType, fo FilterOptions) (ReadStream, error) {
 	switch sType {
 	case SessionReadCapture:
 		s.wp.Add()
 		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
-		rs := newReadCapStream(parStream, s.cancel, rf)
+		rs, err := newReadCapStream(parStream, s.cancel, fo)
+		if err != nil {
+			s.wp.Done()
+		}
 		return rs, nil
 	case SessionReadPrefix:
 		s.wp.Add()
 		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
-		rs := newReadPrefixStream(parStream, s.cancel, rf)
+		rs, err := newReadPrefixStream(parStream, s.cancel, fo)
+		if err != nil {
+			s.wp.Done()
+		}
 		return rs, nil
+	case SessionReadEntity:
+		s.wp.Add()
+		parStream := newSessionStream(s, s.dbo, s.schema, s.wp)
+		es, err := newReadEntityStream(parStream, s.cancel, fo)
+		if err != nil {
+			s.wp.Done()
+		}
+		return es, nil
 	default:
 		return nil, fmt.Errorf("unsupported read stream type")
 	}

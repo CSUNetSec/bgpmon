@@ -11,7 +11,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
 )
 
@@ -47,6 +46,8 @@ const (
 	getCaptureBinaryOp
 	getPrefixOp
 	makeEntityTableOp
+	insertEntityOp
+	getEntityOp
 )
 
 // dbOps associates every generic database operation with an array that holds the correct SQL statements
@@ -104,13 +105,13 @@ var dbOps = map[dbOp][]string{
 		   next_hop inet DEFAULT '0.0.0.0'::inet,
 		   origin_as integer DEFAULT '0'::integer,
 		   adv_prefixes cidr[] DEFAULT '{}'::cidr[],
-		   wdr_prefixes cidr[] DEFAULT '{}'::cidr[],
-		   protomsg bytea NOT NULL);`,
+		   wdr_prefixes cidr[] DEFAULT '{}'::cidr[]
+		   );`,
 	},
 	// This template shouldn't need VALUES, because those will be provided by the buffer
 	insertCaptureTableOp: {
 		// postgres
-		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes, protomsg) VALUES `,
+		`INSERT INTO %s (timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes) VALUES `,
 	},
 	selectTableOp: {
 		// postgres
@@ -131,15 +132,15 @@ var dbOps = map[dbOp][]string{
 	},
 	getCaptureTablesOp: {
 		// postgres
-		`SELECT dbname FROM %s WHERE collector='%s' AND dateFrom>='%s' AND dateTo<'%s' ;`,
+		`SELECT dbname FROM %s WHERE collector LIKE '%s' AND datefrom>='%s' AND dateto<'%s';`,
 	},
 	getCaptureBinaryOp: {
 		// postgres
-		`SELECT update_id, origin_as, protomsg FROM %s;`,
+		`SELECT DISTINCT(update_id), timestamp, collector_ip, peer_ip, as_path, next_hop, origin_as, adv_prefixes, wdr_prefixes FROM %s %s;`,
 	},
 	getPrefixOp: {
 		// postgres
-		`SELECT unnest(adv_prefixes) FROM %s`,
+		`SELECT unnest(adv_prefixes) FROM %s %s`,
 	},
 	makeEntityTableOp: {
 		// postgres
@@ -149,6 +150,16 @@ var dbOps = map[dbOp][]string{
 			knownOrigins integer[] DEFAULT '{}'::integer[],
 			ownedPrefixes cidr[] DEFAULT '{}'::cidr[]
 		);`,
+	},
+	insertEntityOp: {
+		// postgres
+		`INSERT INTO %s (name, email, knownorigins, ownedprefixes) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO 
+		UPDATE SET name=EXCLUDED.name, email=EXCLUDED.email, knownorigins=EXCLUDED.knownorigins, 
+		ownedprefixes=EXCLUDED.ownedprefixes;`,
+	},
+	getEntityOp: {
+		// postgres
+		`SELECT name, email, knownorigins, ownedprefixes FROM %s %s;`,
 	},
 }
 
@@ -268,38 +279,6 @@ func (c *ctxExecutor) Commit() error {
 func (c *ctxExecutor) Rollback() error {
 	defer c.cf()
 	return c.tx.Rollback()
-}
-
-// node is a representation of a machine that is used as a BGP vantage point. It can be either
-// a collector or a peer. If it is a collector, it is used to generate table names for captures
-// seen by that collector. It can also be geolocated. Nodes can be discovered from stored messages
-// or provided from a configuration file.
-type node struct {
-	name        string
-	ip          string
-	isCollector bool
-	duration    int
-	description string
-	coords      string
-	address     string
-}
-
-// newNode creates an empty node.
-func newNode() *node {
-	return &node{}
-}
-
-// nodeConfigFromNode creates a node configuration from a node.
-func (n *node) nodeConfigFromNode() config.NodeConfig {
-	return config.NodeConfig{
-		Name:                n.name,
-		IP:                  n.ip,
-		IsCollector:         n.isCollector,
-		DumpDurationMinutes: n.duration,
-		Description:         n.description,
-		Coords:              n.coords,
-		Location:            n.address,
-	}
 }
 
 // tableCache provides functions to lookup caches for existing table
@@ -443,29 +422,4 @@ func genTableName(colName string, date time.Time, durMins int) string {
 	dur := time.Duration(durMins) * time.Minute
 	truncTime := date.Truncate(dur).UTC()
 	return fmt.Sprintf("%s_%s", colName, truncTime.Format("2006_01_02_15_04_05"))
-}
-
-// ReadFilter is an object passed to ReadStream's so they know what to return
-type ReadFilter struct {
-	collector string
-	start     time.Time
-	end       time.Time
-}
-
-// NewReadFilter constructs a ReadFilter with the specified collector and time span
-func NewReadFilter(collector string, s, e time.Time) ReadFilter {
-	return ReadFilter{collector: collector, start: s, end: e}
-}
-
-// GetWhereClause returns a where clause to describe the filter
-func (rf ReadFilter) GetWhereClause() string {
-	return ""
-}
-
-// Capture represent a BGPCapture as it exists in the database
-type Capture struct {
-	fromTable string // mostly debug
-	id        string // the capture_id that together with the table makes it unique
-	origin    int    // origin as
-	protoMsg  []byte // the protobuf blob
 }

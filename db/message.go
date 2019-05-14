@@ -261,12 +261,13 @@ func (t tableReply) getNode() *node {
 	return t.node
 }
 
+// getCapMessage has been replaced by filterMessage
 type getCapMessage struct {
 	capTableMessage
 }
 
-func newGetCapMessage(rf ReadFilter) getCapMessage {
-	return getCapMessage{newCapTableMessage("", rf.collector, rf.start, rf.end)}
+func newGetCapMessage(rf *captureFilter) getCapMessage {
+	return getCapMessage{newCapTableMessage("", rf.collector, rf.span.Start, rf.span.End)}
 }
 
 type getCapReply struct {
@@ -310,4 +311,44 @@ func newGetPrefixReply(pref string, msgErr error) *getPrefixReply {
 		CommonReply: newReply(err),
 		net:         net,
 	}
+}
+
+type entityMessage struct {
+	CommonMessage
+	entity *Entity
+}
+
+func (em *entityMessage) getEntity() *Entity {
+	return em.entity
+}
+
+func newEntityMessage(ent *Entity) *entityMessage {
+	return &entityMessage{CommonMessage: newMessage(), entity: ent}
+}
+
+type entityReply struct {
+	CommonReply
+	entity *Entity
+}
+
+func (er *entityReply) getEntity() *Entity {
+	return er.entity
+}
+
+func newEntityReply(e *Entity, err error) *entityReply {
+	return &entityReply{CommonReply: newReply(err), entity: e}
+}
+
+type filterMessage struct {
+	CommonMessage
+
+	rf readFilter
+}
+
+func (fm *filterMessage) getFilter() readFilter {
+	return fm.rf
+}
+
+func newFilterMessage(rf readFilter) *filterMessage {
+	return &filterMessage{CommonMessage: newMessage(), rf: rf}
 }

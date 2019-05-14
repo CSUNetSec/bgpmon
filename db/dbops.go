@@ -257,41 +257,6 @@ func insertCapture(ex SessionExecutor, msg CommonMessage) CommonReply {
 	return newReply(nil)
 }
 
-// getCaptures returns a stream of Captures
-// Currently unused.
-func getCaptures(ex SessionExecutor, msg CommonMessage) chan CommonReply {
-	retC := make(chan CommonReply)
-	go func(ex SessionExecutor, msg CommonMessage, retC chan CommonReply) {
-		defer close(retC)
-		getCapTablesTmpl := ex.getQuery(getCaptureTablesOp)
-
-		cMsg := msg.(getCapMessage)
-		stmt := fmt.Sprintf(getCapTablesTmpl, msg.GetMainTable())
-		start, end := cMsg.getDates()
-
-		rows, err := ex.Query(stmt, cMsg.getTableCol(), start, end)
-		if err != nil {
-			dbLogger.Errorf("getTable query error:%s", err)
-			retC <- newGetCapReply(nil, err)
-			return
-		}
-		defer closeRowsAndLog(rows)
-
-		for rows.Next() {
-			tableName := ""
-			err := rows.Scan(&tableName)
-			if err != nil {
-				dbLogger.Errorf("getCaptures can't find tables to scan:%s", err)
-				retC <- newGetCapReply(nil, err)
-				return
-			}
-			dbLogger.Infof("opening table:%s to get captures", tableName)
-
-		}
-	}(ex, msg, retC)
-	return retC
-}
-
 // getCaptureBinaryStream returns a stream of Captures
 func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonMessage) chan CommonReply {
 
@@ -302,9 +267,12 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
 		defer close(repStream)
 
-		cMsg := msg.(getCapMessage)
-		start, end := cMsg.getDates()
-		tables, err := getCaptureTables(ex, cMsg.GetMainTable(), cMsg.getTableCol(), start, end)
+		fMsg := msg.(*filterMessage)
+		capFilt := fMsg.getFilter().(*captureFilter)
+
+		start, end := capFilt.span.Start, capFilt.span.End
+
+		tables, err := getCaptureTables(ex, fMsg.GetMainTable(), capFilt.collector, start, end)
 		if err != nil {
 			repStream <- newReply(err)
 			return
@@ -312,7 +280,8 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 
 		selectCapTmpl := ex.getQuery(getCaptureBinaryOp)
 		for _, tName := range tables {
-			stmt := fmt.Sprintf(selectCapTmpl, tName)
+			stmt := fmt.Sprintf(selectCapTmpl, tName, capFilt.getWhereClause())
+			//fmt.Printf("----QUERY----\n\n%s\n\n", stmt)
 			rows, err := ex.Query(stmt)
 			if err != nil {
 				repStream <- newReply(err)
@@ -324,7 +293,7 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 			// closed after the loop, or within the cancellation case.
 			for rows.Next() {
 				cap := &Capture{fromTable: tName}
-				err = rows.Scan(&cap.id, &cap.origin, &cap.protoMsg)
+				err = cap.Scan(rows)
 
 				select {
 				case <-ctx.Done():
@@ -349,16 +318,19 @@ func getPrefixStream(ctx context.Context, ex SessionExecutor, msg CommonMessage)
 	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, repStream chan CommonReply) {
 		defer close(repStream)
 
-		cMsg := msg.(getCapMessage)
-		start, end := cMsg.getDates()
-		tables, err := getCaptureTables(ex, cMsg.GetMainTable(), cMsg.getTableCol(), start, end)
+		fMsg := msg.(*filterMessage)
+		capFilt := fMsg.getFilter().(*captureFilter)
+
+		start, end := capFilt.span.Start, capFilt.span.End
+
+		tables, err := getCaptureTables(ex, fMsg.GetMainTable(), capFilt.collector, start, end)
 		if err != nil {
 			repStream <- newReply(err)
 		}
 
 		selectPrefixTmpl := ex.getQuery(getPrefixOp)
 		for _, tName := range tables {
-			stmt := fmt.Sprintf(selectPrefixTmpl, tName)
+			stmt := fmt.Sprintf(selectPrefixTmpl, tName, capFilt.getWhereClause())
 			rows, err := ex.Query(stmt)
 			if err != nil {
 				repStream <- newReply(err)
@@ -388,6 +360,7 @@ func getCaptureTables(ex SessionExecutor, dbTable, colName string, start, end ti
 	stmtTmpl := ex.getQuery(getCaptureTablesOp)
 	timeFormat := "2006-01-02 15:04:05"
 	stmt := fmt.Sprintf(stmtTmpl, dbTable, colName, start.Local().Format(timeFormat), end.Local().Format(timeFormat))
+	//fmt.Printf("----GET TABLES QUERY----\n\n%s\n\n", stmt)
 
 	var tableNames []string
 	rows, err := ex.Query(stmt)
@@ -405,4 +378,50 @@ func getCaptureTables(ex SessionExecutor, dbTable, colName string, start, end ti
 		tableNames = append(tableNames, tName)
 	}
 	return tableNames, nil
+}
+
+func insertEntity(ex SessionExecutor, msg CommonMessage) CommonReply {
+	stmtTmpl := ex.getQuery(insertEntityOp)
+	stmt := fmt.Sprintf(stmtTmpl, msg.GetEntityTable())
+
+	entMsg := msg.(*entityMessage)
+	entity := entMsg.getEntity()
+
+	_, err := ex.Exec(stmt, entity.Values()...)
+	return newReply(err)
+}
+
+func getEntityStream(ctx context.Context, ex SessionExecutor, msg CommonMessage) chan CommonReply {
+	retC := make(chan CommonReply, 1)
+
+	go func(ctx context.Context, ex SessionExecutor, msg CommonMessage, rep chan CommonReply) {
+		defer close(rep)
+		stmtTmpl := ex.getQuery(getEntityOp)
+		filtMsg := msg.(*filterMessage)
+		filter := filtMsg.getFilter()
+
+		stmt := fmt.Sprintf(stmtTmpl, filtMsg.GetEntityTable(), filter.getWhereClause())
+		rows, err := ex.Query(stmt)
+		if err != nil {
+			rep <- newReply(err)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			ent := &Entity{}
+			err = ent.Scan(rows)
+
+			reply := newEntityReply(ent, err)
+			select {
+			case <-ctx.Done():
+				rep <- newReply(fmt.Errorf("context closed"))
+				return
+			case rep <- reply:
+				break
+			}
+		}
+
+	}(ctx, ex, msg, retC)
+	return retC
 }
