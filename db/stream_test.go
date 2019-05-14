@@ -24,15 +24,15 @@ const (
 var (
 	testEntities = []*Entity{
 		&Entity{
-			name:         "test1",
-			email:        "test1@test.com",
-			ownedOrigins: []int{1, 2, 3},
+			Name:         "test1",
+			Email:        "test1@test.com",
+			OwnedOrigins: []int{1, 2, 3},
 		},
 		&Entity{
-			name:         "test2",
-			email:        "test2@test.com",
-			ownedOrigins: []int{4, 5, 6},
-			ownedPrefixes: []*net.IPNet{
+			Name:         "test2",
+			Email:        "test2@test.com",
+			OwnedOrigins: []int{4, 5, 6},
+			OwnedPrefixes: []*net.IPNet{
 				&net.IPNet{
 					IP:   net.IPv4(1, 2, 3, 0),
 					Mask: net.CIDRMask(24, 32),
@@ -171,7 +171,7 @@ func TestEntityNameFilters(t *testing.T) {
 	defer session.Close()
 
 	for _, v := range testEntities {
-		entOpts := NewEntityFilterOptions(v.name)
+		entOpts := NewEntityFilterOptions(v.Name)
 
 		stream, err := session.OpenReadStream(SessionReadEntity, entOpts)
 		if err != nil {
@@ -185,8 +185,8 @@ func TestEntityNameFilters(t *testing.T) {
 		}
 		readEnt := stream.Data().(*Entity)
 
-		if readEnt.name != v.name {
-			t.Fatalf("Expected name: %s, Got: %s", v.name, readEnt.name)
+		if readEnt.Name != v.Name {
+			t.Fatalf("Expected name: %s, Got: %s", v.Name, readEnt.Name)
 		}
 
 		hasData = stream.Read()
@@ -263,8 +263,8 @@ func TestCaptureOriginFilter(t *testing.T) {
 	msgCt := 0
 	for stream.Read() {
 		cap := stream.Data().(*Capture)
-		if cap.origin != filterOrigin {
-			t.Fatalf("[%d] Expected origin: %d, Got: %d", msgCt, filterOrigin, cap.origin)
+		if cap.Origin != filterOrigin {
+			t.Fatalf("[%d] Expected origin: %d, Got: %d", msgCt, filterOrigin, cap.Origin)
 		}
 		msgCt++
 	}
@@ -317,7 +317,7 @@ func TestCapturePrefixFilter(t *testing.T) {
 		cap := stream.Data().(*Capture)
 
 		found := false
-		for _, v := range cap.advertized {
+		for _, v := range cap.Advertized {
 			prefStr := v.String()
 
 			for _, v := range filterPrefs {

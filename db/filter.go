@@ -41,6 +41,10 @@ func (cfo *CaptureFilterOptions) SetOrigin(as int) {
 // AllowAdvPrefixes adds the provided prefixes to a list of prefixes to filter
 // by. If any prefix on that list appears, the Capture will pass the filter.
 func (cfo *CaptureFilterOptions) AllowAdvPrefixes(prefs ...*net.IPNet) {
+	if len(prefs) == 0 {
+		return
+	}
+
 	cfo.hasExtraFilter = true
 	cfo.advPrefs = append(cfo.advPrefs, prefs...)
 }

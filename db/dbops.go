@@ -281,7 +281,7 @@ func getCaptureBinaryStream(ctx context.Context, ex SessionExecutor, msg CommonM
 		selectCapTmpl := ex.getQuery(getCaptureBinaryOp)
 		for _, tName := range tables {
 			stmt := fmt.Sprintf(selectCapTmpl, tName, capFilt.getWhereClause())
-			fmt.Printf("----QUERY----\n\n%s\n\n", stmt)
+			//fmt.Printf("----QUERY----\n\n%s\n\n", stmt)
 			rows, err := ex.Query(stmt)
 			if err != nil {
 				repStream <- newReply(err)
@@ -360,6 +360,7 @@ func getCaptureTables(ex SessionExecutor, dbTable, colName string, start, end ti
 	stmtTmpl := ex.getQuery(getCaptureTablesOp)
 	timeFormat := "2006-01-02 15:04:05"
 	stmt := fmt.Sprintf(stmtTmpl, dbTable, colName, start.Local().Format(timeFormat), end.Local().Format(timeFormat))
+	//fmt.Printf("----GET TABLES QUERY----\n\n%s\n\n", stmt)
 
 	var tableNames []string
 	rows, err := ex.Query(stmt)

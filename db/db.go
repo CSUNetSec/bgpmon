@@ -132,7 +132,7 @@ var dbOps = map[dbOp][]string{
 	},
 	getCaptureTablesOp: {
 		// postgres
-		`SELECT dbname FROM %s WHERE collector='%s' AND datefrom>='%s' AND dateto<'%s';`,
+		`SELECT dbname FROM %s WHERE collector LIKE '%s' AND datefrom>='%s' AND dateto<'%s';`,
 	},
 	getCaptureBinaryOp: {
 		// postgres

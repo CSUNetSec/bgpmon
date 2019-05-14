@@ -49,15 +49,15 @@ func (n *node) nodeConfigFromNode() config.NodeConfig {
 // describes a single BGP event.
 type Capture struct {
 	fromTable  string // mostly debug
-	id         string // the capture_id that together with the table makes it unique
-	timestamp  time.Time
-	origin     int // origin as
-	advertized []*net.IPNet
-	withdrawn  []*net.IPNet
-	asPath     []int
-	colIP      net.IP
-	peerIP     net.IP
-	nextHop    net.IP
+	ID         string // the capture_id that together with the table makes it unique
+	Timestamp  time.Time
+	Origin     int // origin as
+	Advertized []*net.IPNet
+	Withdrawn  []*net.IPNet
+	ASPath     []int
+	ColIP      net.IP
+	PeerIP     net.IP
+	NextHop    net.IP
 }
 
 // Scan populates this capture with data from rows.Scan
@@ -73,54 +73,54 @@ func (c *Capture) Scan(rows *sql.Rows) error {
 		withdrawn  sql.NullString
 	)
 
-	err := rows.Scan(&c.id, &c.timestamp, &colIP, &peerIP, &asPath, &nextHop, &c.origin, &advertized, &withdrawn)
+	err := rows.Scan(&c.ID, &c.Timestamp, &colIP, &peerIP, &asPath, &nextHop, &c.Origin, &advertized, &withdrawn)
 	if err != nil {
 		return err
 	}
 
 	if colIP.Valid {
-		c.colIP = net.ParseIP(colIP.String)
+		c.ColIP = net.ParseIP(colIP.String)
 	} else {
-		c.colIP = nil
+		c.ColIP = nil
 	}
 
 	if peerIP.Valid {
-		c.peerIP = net.ParseIP(peerIP.String)
+		c.PeerIP = net.ParseIP(peerIP.String)
 	} else {
-		c.peerIP = nil
+		c.PeerIP = nil
 	}
 
 	if nextHop.Valid {
-		c.nextHop = net.ParseIP(nextHop.String)
+		c.NextHop = net.ParseIP(nextHop.String)
 	} else {
-		c.nextHop = nil
+		c.NextHop = nil
 	}
 
 	if asPath.Valid {
-		c.asPath, err = parseIntArray(asPath.String)
+		c.ASPath, err = parseIntArray(asPath.String)
 		if err != nil {
 			return err
 		}
 	} else {
-		c.asPath = nil
+		c.ASPath = nil
 	}
 
 	if advertized.Valid {
-		c.advertized, err = parsePrefixArray(advertized.String)
+		c.Advertized, err = parsePrefixArray(advertized.String)
 		if err != nil {
 			return err
 		}
 	} else {
-		c.advertized = nil
+		c.Advertized = nil
 	}
 
 	if withdrawn.Valid {
-		c.withdrawn, err = parsePrefixArray(withdrawn.String)
+		c.Withdrawn, err = parsePrefixArray(withdrawn.String)
 		if err != nil {
 			return err
 		}
 	} else {
-		c.withdrawn = nil
+		c.Withdrawn = nil
 	}
 
 	return nil
@@ -137,20 +137,20 @@ type CaptureTable struct {
 // Entity represents a row in the entities table. It describes a party interested
 // in particular BGP data, like the owner of a prefix.
 type Entity struct {
-	name          string
-	email         string
-	ownedOrigins  []int
-	ownedPrefixes []*net.IPNet
+	Name          string
+	Email         string
+	OwnedOrigins  []int
+	OwnedPrefixes []*net.IPNet
 }
 
 // Values returns an array of interfaces that can be passed to a SQLExecutor
 // to insert this Entity
 func (e *Entity) Values() []interface{} {
-	pqPrefs := util.PrefixesToPQArray(e.ownedPrefixes)
+	pqPrefs := util.PrefixesToPQArray(e.OwnedPrefixes)
 	vals := make([]interface{}, 4)
-	vals[0] = e.name
-	vals[1] = e.email
-	vals[2] = pq.Array(e.ownedOrigins)
+	vals[0] = e.Name
+	vals[1] = e.Email
+	vals[2] = pq.Array(e.OwnedOrigins)
 	vals[3] = pqPrefs
 
 	return vals
@@ -161,27 +161,27 @@ func (e *Entity) Scan(rows *sql.Rows) error {
 	var originsStr sql.NullString
 	var prefixStr sql.NullString
 
-	err := rows.Scan(&e.name, &e.email, &originsStr, &prefixStr)
+	err := rows.Scan(&e.Name, &e.Email, &originsStr, &prefixStr)
 	if err != nil {
 		return err
 	}
 
 	if originsStr.Valid {
-		e.ownedOrigins, err = parseIntArray(originsStr.String)
+		e.OwnedOrigins, err = parseIntArray(originsStr.String)
 		if err != nil {
 			return err
 		}
 	} else {
-		e.ownedOrigins = nil
+		e.OwnedOrigins = nil
 	}
 
 	if prefixStr.Valid {
-		e.ownedPrefixes, err = parsePrefixArray(prefixStr.String)
+		e.OwnedPrefixes, err = parsePrefixArray(prefixStr.String)
 		if err != nil {
 			return err
 		}
 	} else {
-		e.ownedPrefixes = nil
+		e.OwnedPrefixes = nil
 	}
 
 	return nil
