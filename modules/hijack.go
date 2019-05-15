@@ -8,6 +8,8 @@ import (
 	"github.com/araddon/dateparse"
 )
 
+// hijackModule is a module which will scan for Captures that qualify as
+// hijacks for a particular entity.
 type hijackModule struct {
 	*BaseTask
 }
@@ -46,6 +48,8 @@ func (h *hijackModule) Run(args map[string]string) {
 	}
 	h.logger.Infof("Successfully found entity: %+v", entity)
 
+	// This creates a filter for captures who have advertized prefixes which contain one
+	// of the entitys owned prefixes.
 	captureOptions := db.NewCaptureFilterOptions(db.AnyCollector, start.UTC(), end.UTC())
 	captureOptions.AllowAdvPrefixes(entity.OwnedPrefixes...)
 	capStream, err := h.server.OpenReadStream(sessionName, db.SessionReadCapture, captureOptions)
