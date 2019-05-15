@@ -84,7 +84,11 @@ func (w *writeCapStream) Write(arg interface{}) error {
 	if err != nil {
 		return dbLogger.Errorf("failed to get table from cache: %s", err)
 	}
-	w.req <- newCaptureMessage(table, wr)
+	capMsg := newCaptureMessage(table, wr)
+	// Make sure this message uses the same tables as the schema
+	w.schema.setMessageTables(capMsg)
+
+	w.req <- capMsg
 	resp, ok := <-w.resp
 	if !ok {
 		return fmt.Errorf("response channel closed")
@@ -233,6 +237,9 @@ func (es *writeEntityStream) Write(e interface{}) error {
 	entity := e.(*Entity)
 
 	entMsg := newEntityMessage(entity)
+	// Make sure this uses the same tables as the schema
+	es.schema.setMessageTables(entMsg)
+
 	rep := insertEntity(newSessionExecutor(es.ex, es.oper), entMsg)
 
 	return rep.Error()

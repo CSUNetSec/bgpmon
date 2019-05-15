@@ -82,7 +82,11 @@ func newReadCapStream(parStream *sessionStream, pCancel chan bool, fo FilterOpti
 	}
 
 	ex := newSessionExecutor(r.db.DB(), r.oper)
-	r.dbResp = getCaptureBinaryStream(ctx, ex, newFilterMessage(filt))
+	filtMsg := newFilterMessage(filt)
+	// Make sure this message uses the same tables as the schema
+	r.schema.setMessageTables(filtMsg)
+
+	r.dbResp = getCaptureBinaryStream(ctx, ex, filtMsg)
 	return r, nil
 }
 
@@ -166,7 +170,11 @@ func newReadPrefixStream(parStream *sessionStream, pCancel chan bool, fo FilterO
 	if err != nil {
 		return nil, err
 	}
-	r.dbResp = getPrefixStream(ctx, ex, newFilterMessage(filt))
+	filtMsg := newFilterMessage(filt)
+	// Make sure this message uses the same tables as the schema
+	r.schema.setMessageTables(filtMsg)
+
+	r.dbResp = getPrefixStream(ctx, ex, filtMsg)
 	return r, nil
 }
 
@@ -238,6 +246,10 @@ func newReadEntityStream(baseStream *sessionStream, pCancel chan bool, fo Filter
 		return nil, err
 	}
 
-	es.dbResp = getEntityStream(ctx, ex, newFilterMessage(filt))
+	filtMsg := newFilterMessage(filt)
+	// Make sure this message uses the same tables as the schema
+	es.schema.setMessageTables(filtMsg)
+
+	es.dbResp = getEntityStream(ctx, ex, filtMsg)
 	return es, nil
 }

@@ -147,6 +147,9 @@ func (s *schemaMgr) makeCapTable(msg CommonMessage) CommonReply {
 
 		tName := genTableName(node.name, date, node.duration)
 		cMsg := newCapTableMessage(tName, node.name, start, start.Add(dur))
+		// Make sure this message uses the same tables as the schema
+		s.setMessageTables(cMsg)
+
 		capRep := createCaptureTable(s.sEx, cMsg).(capTableReply)
 		if err := capRep.Error(); err != nil {
 			return newReply(fmt.Errorf("makeCapTable: %s", err))
