@@ -244,6 +244,7 @@ func newCtxExecutor(tdb TimeoutDBer) (*ctxExecutor, error) {
 	tx, err := db.BeginTx(ctx, nil)
 
 	if err != nil {
+		cf()
 		return nil, err
 	}
 

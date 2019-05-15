@@ -23,17 +23,17 @@ const (
 
 var (
 	testEntities = []*Entity{
-		&Entity{
+		{
 			Name:         "test1",
 			Email:        "test1@test.com",
 			OwnedOrigins: []int{1, 2, 3},
 		},
-		&Entity{
+		{
 			Name:         "test2",
 			Email:        "test2@test.com",
 			OwnedOrigins: []int{4, 5, 6},
 			OwnedPrefixes: []*net.IPNet{
-				&net.IPNet{
+				{
 					IP:   net.IPv4(1, 2, 3, 0),
 					Mask: net.CIDRMask(24, 32),
 				},
