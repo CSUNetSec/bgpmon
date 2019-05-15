@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/CSUNetSec/bgpmon/config"
+	"github.com/CSUNetSec/bgpmon/util"
 
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 )
@@ -37,23 +38,19 @@ func (m *msg) GetMainTable() string   { return m.mainTable }
 func (m *msg) GetNodeTable() string   { return m.nodeTable }
 func (m *msg) GetEntityTable() string { return m.entityTable }
 
-func (m *msg) SetMainTable(n string)   { m.mainTable = n }
-func (m *msg) SetNodeTable(n string)   { m.nodeTable = n }
-func (m *msg) SetEntityTable(n string) { m.entityTable = n }
+func (m *msg) SetMainTable(n string)   { m.mainTable = util.SanitizeDBString(n) }
+func (m *msg) SetNodeTable(n string)   { m.nodeTable = util.SanitizeDBString(n) }
+func (m *msg) SetEntityTable(n string) { m.entityTable = util.SanitizeDBString(n) }
 
 func newMessage() CommonMessage {
-	return &msg{
-		mainTable:   defaultMainTable,
-		nodeTable:   defaultNodeTable,
-		entityTable: defaultEntityTable,
-	}
+	return newCustomMessage(defaultMainTable, defaultNodeTable, defaultEntityTable)
 }
 
 func newCustomMessage(main, node, entity string) CommonMessage {
 	return &msg{
-		mainTable:   main,
-		nodeTable:   node,
-		entityTable: entity,
+		mainTable:   util.SanitizeDBString(main),
+		nodeTable:   util.SanitizeDBString(node),
+		entityTable: util.SanitizeDBString(entity),
 	}
 }
 

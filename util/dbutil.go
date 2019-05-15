@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"net"
+	"strings"
 
 	"github.com/lib/pq"
 )
@@ -58,4 +59,31 @@ func PrefixesToPQArray(n []*net.IPNet) interface {
 		}
 	}
 	return pq.Array(ret)
+}
+
+// SanitizeDBString removes any characters from s that might be intended
+// for a SQL injection attack.
+func SanitizeDBString(s string) string {
+	bad := []string{"'", ";", "\"", "DROP", "TRUNCATE", "DELETE", " "}
+	ret := s
+	problem := true
+
+	// This outer loop checks for a nested problem strings.
+	// Ex. DDROPROP
+	// With only one iteration, the interior drop would be
+	// removed, leaving an outer drop. This way, if the string
+	// changes between iterations, it will keep going.
+	for problem {
+		prevRet := ret
+		// This loop removes all instances of bad strings
+		for _, v := range bad {
+			ret = strings.Replace(ret, v, "", -1)
+		}
+
+		if ret == prevRet {
+			problem = false
+		}
+	}
+
+	return ret
 }

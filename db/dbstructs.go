@@ -148,8 +148,8 @@ type Entity struct {
 func (e *Entity) Values() []interface{} {
 	pqPrefs := util.PrefixesToPQArray(e.OwnedPrefixes)
 	vals := make([]interface{}, 4)
-	vals[0] = e.Name
-	vals[1] = e.Email
+	vals[0] = util.SanitizeDBString(e.Name)
+	vals[1] = util.SanitizeDBString(e.Email)
 	vals[2] = pq.Array(e.OwnedOrigins)
 	vals[3] = pqPrefs
 

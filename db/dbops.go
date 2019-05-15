@@ -9,7 +9,6 @@ import (
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
 
-	"github.com/lib/pq"
 	"github.com/pkg/errors"
 )
 
@@ -84,13 +83,13 @@ func syncNodes(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 	allNodes := config.SumNodeConfs(nodesMsg.getNodes(), dbNodes)
 	for _, v := range allNodes {
 		_, err := ex.Exec(fmt.Sprintf(insertNodeTmpl, nodesMsg.GetNodeTable()),
-			v.Name,
-			v.IP,
+			util.SanitizeDBString(v.Name),
+			util.SanitizeDBString(v.IP),
 			v.IsCollector,
 			v.DumpDurationMinutes,
-			v.Description,
-			v.Coords,
-			v.Location)
+			util.SanitizeDBString(v.Description),
+			util.SanitizeDBString(v.Coords),
+			util.SanitizeDBString(v.Location))
 		if err != nil {
 			dbLogger.Errorf("failed to insert node config. %s", err)
 		} else {
@@ -136,7 +135,7 @@ func createCaptureTable(ex SessionExecutor, msg CommonMessage) (rep CommonReply)
 	createCapTmpl := ex.getQuery(makeCaptureTableOp)
 
 	cMsg := msg.(capTableMessage)
-	name := cMsg.getTableName()
+	name := util.SanitizeDBString(cMsg.getTableName())
 
 	stmt := fmt.Sprintf(createCapTmpl, name)
 	_, err := ex.Exec(stmt)
@@ -218,42 +217,6 @@ func makeSchema(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 // insertCapture inserts a capture onto the appropriate table.
 // Currently unused.
 func insertCapture(ex SessionExecutor, msg CommonMessage) CommonReply {
-	cMsg := msg.(captureMessage)
-
-	insertTmpl := ex.getQuery(insertCaptureTableOp)
-	stmt := fmt.Sprintf(insertTmpl, cMsg.getTableName())
-
-	advPrefixes, _ := util.GetAdvertisedPrefixes(cMsg.getCapture())
-	wdrPrefixes, _ := util.GetWithdrawnPrefixes(cMsg.getCapture())
-
-	adv := util.PrefixesToPQArray(advPrefixes)
-	wdr := util.PrefixesToPQArray(wdrPrefixes)
-
-	capTime, colIP, _ := util.GetTimeColIP(cMsg.getCapture())
-	peerIP, errPeerIP := util.GetPeerIP(cMsg.getCapture())
-	if errPeerIP != nil {
-		return newReply(errors.Wrap(errPeerIP, "insertCapture with no peer"))
-	}
-	asPath, errASpath := util.GetASPath(cMsg.getCapture())
-	if errASpath != nil && advPrefixes != nil {
-		return newReply(errors.Wrap(errASpath, "insertCapture, advertised prefixes but no AS-path"))
-	}
-	nextHop, errNextHop := util.GetNextHop(cMsg.getCapture())
-	if errNextHop != nil && advPrefixes != nil {
-		return newReply(errors.Wrap(errNextHop, "insertCapture, advertised prefixes but no next hop"))
-	}
-	origin, errOrigin := util.GetOriginAS(cMsg.getCapture())
-	if errOrigin != nil && advPrefixes != nil { // this case should be caught by errASpath but anyway.
-		return newReply(errors.Wrap(errOrigin, "insertCapture, advertised prefixes but no origin AS"))
-	}
-	protoMsg := util.GetProtoMsg(cMsg.getCapture())
-
-	_, err := ex.Exec(stmt, capTime, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, adv, wdr, protoMsg)
-	if err != nil {
-		dbLogger.Infof("failing to insert capture: time:%s colip:%s  aspath:%v oas:%v ", capTime, colIP.String(), asPath, origin)
-		return newReply(errors.Wrap(err, "insertCapture"))
-	}
-
 	return newReply(nil)
 }
 
@@ -359,6 +322,9 @@ func getPrefixStream(ctx context.Context, ex SessionExecutor, msg CommonMessage)
 func getCaptureTables(ex SessionExecutor, dbTable, colName string, start, end time.Time) ([]string, error) {
 	stmtTmpl := ex.getQuery(getCaptureTablesOp)
 	timeFormat := "2006-01-02 15:04:05"
+
+	colName = util.SanitizeDBString(colName)
+
 	stmt := fmt.Sprintf(stmtTmpl, dbTable, colName, start.Local().Format(timeFormat), end.Local().Format(timeFormat))
 	//fmt.Printf("----GET TABLES QUERY----\n\n%s\n\n", stmt)
 
