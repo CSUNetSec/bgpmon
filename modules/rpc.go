@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"strconv"
-	"sync"
 	"time"
 
 	core "github.com/CSUNetSec/bgpmon"
@@ -197,52 +196,95 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 	timeoutCtx, cf := context.WithTimeout(r.ctx, r.GetTimeout())
 	defer cf()
 
-	var dbStream db.WriteStream
-	var once sync.Once
-	for {
+	first, err := stream.Recv()
+	if err != nil {
+		return err
+	}
 
-		writeRequest, err := stream.Recv()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			if dbStream != nil {
-				dbStream.Cancel()
-			}
-			return err
+	var writeType db.SessionType
+	var objectFunc func(*pb.WriteRequest) interface{}
+
+	switch first.Type {
+	case pb.WriteRequest_BGP_CAPTURE:
+		writeType = db.SessionWriteCapture
+		objectFunc = func(wr *pb.WriteRequest) interface{} {
+			return wr
 		}
-
-		once.Do(func() {
-			var err error
-			dbStream, err = r.server.OpenWriteStream(writeRequest.SessionId)
+	case pb.WriteRequest_ENTITY:
+		writeType = db.SessionWriteEntity
+		objectFunc = func(wr *pb.WriteRequest) interface{} {
+			ent, err := db.NewEntityFromPB(wr.Entity)
 			if err != nil {
-				cf()
-				r.logger.Errorf("Error opening stream: %s", err)
-				return
+				fmt.Printf("Error parsing entity: %s\n", err)
+				return nil
 			}
-			defer dbStream.Close()
-		})
-
-		if util.IsClosed(timeoutCtx) {
-			if dbStream != nil {
-				dbStream.Cancel()
-			}
-			return r.logger.Errorf("context closed, aborting write")
+			return ent
 		}
-
-		if err := dbStream.Write(writeRequest); err != nil {
-			dbStream.Cancel()
-			return r.logger.Errorf("error writing on session(%s): %s", writeRequest.SessionId, err)
-		}
-	}
-	if dbStream == nil {
-		return r.logger.Errorf("session stream never created")
+	default:
+		return r.logger.Errorf("invalid write type")
 	}
 
-	if err := dbStream.Flush(); err != nil {
-		return r.logger.Errorf("write stream failed to flush: %s", err)
+	err = r.WriteStream(timeoutCtx, stream, first, writeType, objectFunc)
+	if err != nil {
+		return err
+	}
+	rep := &pb.WriteReply{}
+	err = stream.SendAndClose(rep)
+	if err != nil {
+		return err
 	}
 
 	r.logger.Infof("Write stream success")
+	return nil
+}
+
+// WriteStream is a general purpose write method.
+func (r *rpcServer) WriteStream(ctx context.Context,
+	writeSrv pb.Bgpmond_WriteServer,
+	firstMsg *pb.WriteRequest,
+	writeType db.SessionType,
+	getWriteObject func(*pb.WriteRequest) interface{}) error {
+
+	stream, err := r.server.OpenWriteStream(firstMsg.SessionId, writeType)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	obj := getWriteObject(firstMsg)
+
+	err = stream.Write(obj)
+	if err != nil {
+		return err
+	}
+
+	for {
+		if util.IsClosed(ctx) {
+			stream.Cancel()
+			return r.logger.Errorf("context closed")
+		}
+
+		wr, err := writeSrv.Recv()
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				stream.Cancel()
+				return err
+			}
+		}
+
+		obj = getWriteObject(wr)
+		if err = stream.Write(obj); err != nil {
+			stream.Cancel()
+			return err
+		}
+	}
+
+	if err = stream.Flush(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

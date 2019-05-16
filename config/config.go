@@ -3,6 +3,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -200,6 +201,34 @@ func (s sessionConfig) GetWorkerCt() int {
 
 func (s sessionConfig) GetDBTimeoutSecs() int {
 	return s.DBTimeoutSecs
+}
+
+// EntityConfig contains an entity that was specified in a configuration
+// file.
+type EntityConfig struct {
+	Name          string
+	Email         string
+	OwnedOrigins  []int
+	OwnedPrefixes []string
+}
+
+// NewEntityConfigFromJSONFile populates an entity config specified
+// in the provided JSON file.
+func NewEntityConfigFromJSONFile(fName string) (*EntityConfig, error) {
+	ec := EntityConfig{}
+
+	fd, err := os.Open(fName)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+
+	dec := json.NewDecoder(fd)
+	err = dec.Decode(&ec)
+	if err != nil {
+		return nil, err
+	}
+	return &ec, nil
 }
 
 // helper function to sanity check the config file.

@@ -229,6 +229,7 @@ type writeEntityStream struct {
 	*sessionStream
 
 	cancel chan bool
+	done   bool
 	ex     util.AtomicSQLExecutor
 }
 
@@ -246,14 +247,24 @@ func (es *writeEntityStream) Write(e interface{}) error {
 }
 
 func (es *writeEntityStream) Flush() error {
+	if es.done {
+		return nil
+	}
+
+	es.done = true
 	return es.ex.Commit()
 }
 
 func (es *writeEntityStream) Cancel() {
+	if es.done {
+		return
+	}
+
 	err := es.ex.Rollback()
 	if err != nil {
 		dbLogger.Errorf("Error rolling back writeEntityStream write: %s", err)
 	}
+	es.done = true
 }
 
 func (es *writeEntityStream) Close() {

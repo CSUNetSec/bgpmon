@@ -45,7 +45,7 @@ type BgpmondServer interface {
 	// OpenWriteStream tries to open a write stream on the provided session ID with
 	// the provided type. If the session doesn't exist or the WriteStream fails to
 	// open, this will return an error.
-	OpenWriteStream(string) (db.WriteStream, error)
+	OpenWriteStream(string, db.SessionType) (db.WriteStream, error)
 
 	// OpenReadStream tries to open a read stream on the provided session ID with
 	// the provided type and filter options. If the session doesn't exist or the ReadStream
@@ -246,7 +246,7 @@ func (s *server) ListSessions() []SessionHandle {
 // OpenWriteStream will look up the session with ID sID and create/return a WriteStream
 // on that session. This function can block if the session is already saturated with
 // Streams.
-func (s *server) OpenWriteStream(sID string) (db.WriteStream, error) {
+func (s *server) OpenWriteStream(sID string, writeType db.SessionType) (db.WriteStream, error) {
 
 	// The sessions are only locked here because the OpenWriteStream function below
 	// can be blocking. If it blocked while the mutex was locked, this would lock
@@ -259,7 +259,7 @@ func (s *server) OpenWriteStream(sID string) (db.WriteStream, error) {
 		return nil, coreLogger.Errorf("Can't open stream on nonexistant session: %s", sID)
 	}
 
-	stream, err := sh.Session.OpenWriteStream(db.SessionWriteCapture)
+	stream, err := sh.Session.OpenWriteStream(writeType)
 	if err != nil {
 		return nil, coreLogger.Errorf("Failed to open stream on session(%s): %s", sID, err)
 	}

@@ -5,6 +5,9 @@ import (
 	"io"
 	"sync"
 
+	"github.com/CSUNetSec/bgpmon/config"
+	"github.com/CSUNetSec/bgpmon/db"
+
 	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/CSUNetSec/protoparse/fileutil"
 	"github.com/CSUNetSec/protoparse/filter"
@@ -13,11 +16,18 @@ import (
 )
 
 var writeCmd = &cobra.Command{
-	Use:   "write SESS_ID FILES...",
+	Use:              "write",
+	Short:            "Write BGP captures or Entities to the server.",
+	Long:             "Write BGP captures or Entities to the server.",
+	TraverseChildren: true,
+}
+
+var writeCapCmd = &cobra.Command{
+	Use:   "capture SESS_ID FILES...",
 	Short: "Writes BGP captures from a file(s) to a session.",
 	Long:  "Opens a write stream(s) on the provided session and writes <workers> files concurrently. Write generates a report upon completion of the success or failure of individual files.",
 	Args:  cobra.MinimumNArgs(2),
-	Run:   writeFunc,
+	Run:   writeCapFunc,
 }
 
 var (
@@ -35,7 +45,7 @@ type writeMRTResult struct {
 }
 
 // The cobra.Command is necessary for cobra, but it isn't used.
-func writeFunc(_ *cobra.Command, args []string) {
+func writeCapFunc(_ *cobra.Command, args []string) {
 	sessID := args[0]
 
 	bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
@@ -170,8 +180,72 @@ func writeMRTFile(bc *bgpmonCli, fileName, sessID string, filts []filter.Filter)
 	return parsed, nil
 }
 
+var writeEntityCmd = &cobra.Command{
+	Use:   "entity SESS_ID FILES...",
+	Short: "Writes Entities from a file(s) to a session.",
+	Long:  "Opens a write stream(s) on the provided session and writes entities described in the provided files.",
+	Args:  cobra.MinimumNArgs(2),
+	Run:   writeEntityFunc,
+}
+
+func writeEntityFunc(_ *cobra.Command, args []string) {
+	sessID := args[0]
+
+	bc, clierr := newBgpmonCli(bgpmondHost, bgpmondPort)
+	if clierr != nil {
+		fmt.Printf("Error: %s\n", clierr)
+		return
+	}
+	defer bc.close()
+
+	ctx, cancel := getBackgroundCtxWithCancel()
+	defer cancel()
+
+	stream, err := bc.cli.Write(ctx)
+	if err != nil {
+		fmt.Printf("Error opening write stream: %s\n", err)
+		return
+	}
+
+	for _, v := range args[1:] {
+		ec, err := config.NewEntityConfigFromJSONFile(v)
+		if err != nil {
+			fmt.Printf("Error reading file: %s\n", err)
+			return
+		}
+
+		entity, err := db.NewEntityFromConfig(ec)
+		if err != nil {
+			fmt.Printf("Error parsing Entity from EntityConfig: %s", err)
+		}
+
+		pbEnt := entity.ToProtobuf()
+		writeRequest := &pb.WriteRequest{
+			Type:      pb.WriteRequest_ENTITY,
+			SessionId: sessID,
+			Entity:    pbEnt,
+		}
+
+		if err = stream.Send(writeRequest); err != nil {
+			fmt.Printf("Error sending write request: %s\n", err)
+			return
+		}
+
+	}
+
+	rep, err := stream.CloseAndRecv()
+	if rep != nil && rep.Error != "" {
+		fmt.Printf("Write stream server error: %s\n", rep.Error)
+	} else if err != nil && err != io.EOF {
+		fmt.Printf("Write stream server error: %s\n", err)
+	}
+
+}
+
 func init() {
 	rootCmd.AddCommand(writeCmd)
-	writeCmd.PersistentFlags().IntVarP(&workerCt, "workers", "w", 0, "Override the number of workers writing files.")
-	writeCmd.PersistentFlags().StringVarP(&filterFile, "filterFile", "f", "", "The file to read filters from.")
+	writeCmd.AddCommand(writeCapCmd)
+	writeCmd.AddCommand(writeEntityCmd)
+	writeCapCmd.PersistentFlags().IntVarP(&workerCt, "workers", "w", 0, "Override the number of workers writing files.")
+	writeCapCmd.PersistentFlags().StringVarP(&filterFile, "filterFile", "f", "", "The file to read filters from.")
 }

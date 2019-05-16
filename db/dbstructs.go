@@ -10,6 +10,7 @@ import (
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
 
+	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/lib/pq"
 )
 
@@ -185,6 +186,60 @@ func (e *Entity) Scan(rows *sql.Rows) error {
 	}
 
 	return nil
+}
+
+// ToProtobuf returns a protobuf Entity with the same
+// values as this entity
+func (e *Entity) ToProtobuf() *pb.Entity {
+	pbEnt := &pb.Entity{}
+	pbEnt.Name = e.Name
+	pbEnt.Email = e.Email
+
+	pbEnt.OwnedOrigins = make([]int32, len(e.OwnedOrigins))
+	for i, v := range e.OwnedOrigins {
+		pbEnt.OwnedOrigins[i] = int32(v)
+	}
+
+	pbEnt.OwnedPrefixes = util.GetIPNetsAsPrefixList(e.OwnedPrefixes)
+
+	return pbEnt
+}
+
+// NewEntityFromConfig returns an Entity populated from an EntityConfig.
+func NewEntityFromConfig(ec *config.EntityConfig) (e *Entity, err error) {
+	e = &Entity{}
+	e.Name = ec.Name
+	e.Email = ec.Email
+	e.OwnedOrigins = ec.OwnedOrigins
+
+	e.OwnedPrefixes = make([]*net.IPNet, len(ec.OwnedPrefixes))
+	for i := range ec.OwnedPrefixes {
+		_, e.OwnedPrefixes[i], err = net.ParseCIDR(ec.OwnedPrefixes[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return
+}
+
+// NewEntityFromPB returns an Entity populated from a protobuf.
+func NewEntityFromPB(pbEnt *pb.Entity) (e *Entity, err error) {
+	e = &Entity{}
+	e.Name = pbEnt.Name
+	e.Email = pbEnt.Email
+
+	e.OwnedOrigins = make([]int, len(pbEnt.OwnedOrigins))
+	for i, v := range pbEnt.OwnedOrigins {
+		e.OwnedOrigins[i] = int(v)
+	}
+
+	e.OwnedPrefixes, err = util.GetPrefixListAsIPNet(pbEnt.OwnedPrefixes)
+	if err != nil {
+		return nil, err
+	}
+
+	return e, nil
 }
 
 // parseIntArray takes a DB array string and returns an int array from that.

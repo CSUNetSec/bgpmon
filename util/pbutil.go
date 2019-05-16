@@ -137,7 +137,7 @@ func GetAdvertisedPrefixes(cap *pb.BGPCapture) ([]*net.IPNet, error) {
 		return nil, ErrNoAdvertisedPrefixes
 	}
 
-	return getPrefixListAsIPNet(routes.Prefixes)
+	return GetPrefixListAsIPNet(routes.Prefixes)
 }
 
 // GetWithdrawnPrefixes returns the withdrawn routes as a slice of IPNet and possibly an error
@@ -152,15 +152,15 @@ func GetWithdrawnPrefixes(cap *pb.BGPCapture) ([]*net.IPNet, error) {
 		return nil, ErrNoWithdrawnPrefixes
 	}
 
-	return getPrefixListAsIPNet(routes.Prefixes)
+	return GetPrefixListAsIPNet(routes.Prefixes)
 }
 
-// getPrefixListAsIPNet returns the slice of IPNet and possibly an error from a
+// GetPrefixListAsIPNet returns the slice of IPNet and possibly an error from a
 // slice of protobuf PrefixWrapper. In case an error is found during the decoding of any
 // part of the prefix list, this function will return that error and an empty slice.
-func getPrefixListAsIPNet(prefs []*pbcomm.PrefixWrapper) ([]*net.IPNet, error) {
+func GetPrefixListAsIPNet(prefs []*pbcomm.PrefixWrapper) ([]*net.IPNet, error) {
 	if prefs == nil {
-		return nil, ErrNilPrefWrap
+		return nil, nil
 	}
 	var ret []*net.IPNet
 	for _, pref := range prefs {
@@ -175,6 +175,17 @@ func getPrefixListAsIPNet(prefs []*pbcomm.PrefixWrapper) ([]*net.IPNet, error) {
 	}
 
 	return ret, nil
+}
+
+// GetIPNetsAsPrefixList returns []*PrefixWrapper from a []*net.IPNet
+func GetIPNetsAsPrefixList(nets []*net.IPNet) []*pbcomm.PrefixWrapper {
+	ret := make([]*pbcomm.PrefixWrapper, len(nets))
+	for i, v := range nets {
+		mask, _ := v.Mask.Size()
+		ipWrapper := &pbcomm.IPAddressWrapper{IPv4: v.IP.To4()}
+		ret[i] = &pbcomm.PrefixWrapper{Prefix: ipWrapper, Mask: uint32(mask)}
+	}
+	return ret
 }
 
 // getPrefixAsIPNet returns the protobuf prefixwrapper to a native net.IPNet
