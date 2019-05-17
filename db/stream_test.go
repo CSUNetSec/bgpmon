@@ -50,16 +50,16 @@ func writeFileToStream(fName string, ws WriteStream) (int, error) {
 
 	parsed := 0
 	for mf.Scan() && parsed < maxWriteCt {
-		cap, err := mf.GetCapture()
+		pbCap, err := mf.GetCapture()
 		if err != nil {
 			// This is a parse error, and it doesn't matter
 			continue
 		}
 
-		if cap != nil {
+		if pbCap != nil {
 			parsed++
 
-			cap, err := NewCaptureFromPB(cap)
+			cap, err := NewCaptureFromPB(pbCap)
 			if err != nil {
 				continue
 			}
