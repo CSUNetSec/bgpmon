@@ -1,6 +1,8 @@
 package modules
 
 import (
+	"fmt"
+
 	core "github.com/CSUNetSec/bgpmon"
 	"github.com/CSUNetSec/bgpmon/db"
 	"github.com/CSUNetSec/bgpmon/util"
@@ -105,7 +107,12 @@ func (h *hijackModule) readEntity(session, entName string) (*db.Entity, error) {
 	defer entityStream.Close()
 
 	if !entityStream.Read() {
-		return nil, entityStream.Err()
+		err = entityStream.Err()
+		if err == nil {
+			return nil, fmt.Errorf("no entity found")
+		}
+
+		return nil, err
 	}
 
 	entity := entityStream.Data().(*db.Entity)
