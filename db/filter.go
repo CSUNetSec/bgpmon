@@ -28,8 +28,9 @@ type CaptureFilterOptions struct {
 	span           util.Timespan
 	hasExtraFilter bool
 
-	origin   int
-	advPrefs []*net.IPNet
+	origin     int
+	advPrefs   []*net.IPNet
+	advSubnets []*net.IPNet
 }
 
 // SetOrigin filters by the provided origin autonomous system (AS).
@@ -47,6 +48,15 @@ func (cfo *CaptureFilterOptions) AllowAdvPrefixes(prefs ...*net.IPNet) {
 
 	cfo.hasExtraFilter = true
 	cfo.advPrefs = append(cfo.advPrefs, prefs...)
+}
+
+// AllowSubnets will allow captures to pass this filter if they have an advertized
+// prefix that falls under one of the provided prefixes.
+func (cfo *CaptureFilterOptions) AllowSubnets(prefs ...*net.IPNet) {
+	if len(prefs) != 0 {
+		cfo.hasExtraFilter = true
+		cfo.advSubnets = append(cfo.advSubnets, prefs...)
+	}
 }
 
 // NewCaptureFilterOptions returns a FilterOptions interface for filtering
@@ -78,11 +88,11 @@ func (cf *captureFilter) getWhereClause() string {
 		return ""
 	}
 
-	crossJoin := ""
+	doCrossJoin := false
 	var conditions []string
 
 	if cf.advPrefs != nil {
-		crossJoin = "CROSS JOIN UNNEST(adv_prefixes) as advPrefix"
+		doCrossJoin = true
 		var prefStr []string
 		for _, v := range cf.advPrefs {
 			prefStr = append(prefStr, fmt.Sprintf("'%s'", v.String()))
@@ -91,8 +101,24 @@ func (cf *captureFilter) getWhereClause() string {
 		conditions = append(conditions, advCond)
 	}
 
+	if cf.advSubnets != nil {
+		doCrossJoin = true
+		var orConds []string
+
+		for _, v := range cf.advSubnets {
+			orConds = append(orConds, fmt.Sprintf("advPrefix <<= '%s'", v.String()))
+		}
+		cond := fmt.Sprintf("(%s)", strings.Join(orConds, " OR "))
+		conditions = append(conditions, cond)
+	}
+
 	if cf.origin != -1 {
 		conditions = append(conditions, fmt.Sprintf("origin_as = %d", cf.origin))
+	}
+
+	crossJoin := ""
+	if doCrossJoin {
+		crossJoin = "CROSS JOIN UNNEST(adv_prefixes) as advPrefix"
 	}
 
 	return fmt.Sprintf("%s WHERE %s", crossJoin, strings.Join(conditions, " AND "))

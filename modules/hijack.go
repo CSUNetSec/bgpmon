@@ -53,7 +53,7 @@ func (h *hijackModule) Run(args map[string]string) {
 	// This creates a filter for captures who have advertized prefixes which contain one
 	// of the entitys owned prefixes.
 	captureOptions := db.NewCaptureFilterOptions(db.AnyCollector, start.UTC(), end.UTC())
-	captureOptions.AllowAdvPrefixes(entity.OwnedPrefixes...)
+	captureOptions.AllowSubnets(entity.OwnedPrefixes...)
 	capStream, err := h.server.OpenReadStream(sessionName, db.SessionReadCapture, captureOptions)
 	if err != nil {
 		h.logger.Errorf("Error opening capture stream: %s", err)
