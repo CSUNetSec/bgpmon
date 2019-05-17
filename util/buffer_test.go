@@ -64,15 +64,15 @@ func (te *TestExecutor) QueryRow(query string, args ...interface{}) *sql.Row {
 func TestInsertBuffer(t *testing.T) {
 	base := "INSERT INTO testTable VALUES"
 	testEx := &TestExecutor{t: t}
-	buf := NewInsertBuffer(testEx, base, 2, 3, false)
+	buf := NewInsertBuffer(testEx, 2, false)
 
-	if err := buf.Add(1, 2, 3); err != nil {
+	if _, err := buf.Exec(base, 1, 2, 3); err != nil {
 		t.Fatalf("Error adding (1,2,3) to buffer: %s", err)
 	}
-	if err := buf.Add(4, 5, 6); err != nil {
+	if _, err := buf.Exec(base, 4, 5, 6); err != nil {
 		t.Fatalf("Error adding (4,5,6) to buffer: %s", err)
 	}
-	if err := buf.Add(8, 10, 12); err != nil {
+	if _, err := buf.Exec(base, 8, 10, 12); err != nil {
 		t.Fatalf("Error adding (8,10,12) to buffer: %s", err)
 	}
 
@@ -82,7 +82,7 @@ func TestInsertBuffer(t *testing.T) {
 		t.Fatalf("Received: %s %v", testEx.lastStmt, testEx.lastVals)
 	}
 
-	if err := buf.Flush(); err != nil {
+	if err := buf.Commit(); err != nil {
 		t.Fatalf("Error flushing buffer: %s", err)
 	}
 
@@ -97,16 +97,16 @@ func TestInsertBuffer(t *testing.T) {
 func TestTimedBuffer(t *testing.T) {
 	base := "INSERT INTO timed VALUES"
 	testEx := &TestExecutor{t: t}
-	buf := NewInsertBuffer(testEx, base, 2, 3, false)
+	buf := NewInsertBuffer(testEx, 2, false)
 	tbuf := NewTimedBuffer(buf, 3*time.Second)
 
-	if err := tbuf.Add(11, 13, 15); err != nil {
+	if _, err := tbuf.Exec(base, 11, 13, 15); err != nil {
 		t.Fatalf("Error adding (11, 13, 15) to TimedBuffer: %s", err)
 	}
-	if err := tbuf.Add(17, 19, 21); err != nil { // Should get flushed here
+	if _, err := tbuf.Exec(base, 17, 19, 21); err != nil { // Should get flushed here
 		t.Fatalf("Error adding (17, 19, 21) to TimedBuffer: %s", err)
 	}
-	if err := tbuf.Add(23, 25, 27); err != nil { // These values should stay in the buffer until at least 3 seconds have passed
+	if _, err := tbuf.Exec(base, 23, 25, 27); err != nil { // These values should stay in the buffer until at least 3 seconds have passed
 		t.Fatalf("Error adding (23, 25, 27) to TimedBuffer: %s", err)
 	}
 
@@ -186,22 +186,22 @@ func teardownTestTable(db *sql.DB) error {
 // dbBufferTest will check the InsertBuffer on an actual DB connection.
 func dbBufferTest(t *testing.T, db *sql.DB) {
 	baseStmt := "INSERT INTO test VALUES"
-	buf := NewInsertBuffer(db, baseStmt, 2, 3, true)
+	buf := NewInsertBuffer(db, 2, true)
 
 	sum := 0
-	if err := buf.Add(21, 22, 23); err != nil {
+	if _, err := buf.Exec(baseStmt, 21, 22, 23); err != nil {
 		t.Fatalf("Error adding (21, 22, 23) to DB: %s", err)
 	}
 	sum += 21 + 22 + 23
-	if err := buf.Add(34, 35, 36); err != nil {
+	if _, err := buf.Exec(baseStmt, 34, 35, 36); err != nil {
 		t.Fatalf("Error adding (34, 35, 36) to DB: %s", err)
 	}
 	sum += 34 + 35 + 36
-	if err := buf.Add(47, 48, 49); err != nil {
+	if _, err := buf.Exec(baseStmt, 47, 48, 49); err != nil {
 		t.Fatalf("Error adding (47, 48, 49) to DB: %s", err)
 	}
 	sum += 47 + 48 + 49
-	if err := buf.Flush(); err != nil {
+	if err := buf.Commit(); err != nil {
 		t.Fatalf("Error flushing to DB: %s", err)
 	}
 
@@ -221,17 +221,37 @@ func getDbConnection() (*sql.DB, error) {
 // TestBufferBatchSize checks there will be an error if a batch size rule is violated.
 func TestBufferBatchSize(t *testing.T) {
 	testEx := &TestExecutor{t: t}
-	buf := NewInsertBuffer(testEx, "", 2, 3, false)
-	if err := buf.Add(1, 2, 3); err != nil {
+	buf := NewInsertBuffer(testEx, 2, false)
+	if _, err := buf.Exec("", 1, 2, 3); err != nil {
 		t.Fatalf("Error adding (1, 2, 3) for batch size 3: %s", err)
 	}
-	if err := buf.Add(4, 5, 6); err != nil {
+	if _, err := buf.Exec("", 4, 5, 6); err != nil {
 		t.Fatalf("Error adding (4, 5, 6) for batch size 3: %s", err)
 	}
-	if err := buf.Add(6, 7, 8, 9, 10); err == nil {
+	if _, err := buf.Exec("", 6, 7, 8, 9, 10); err == nil {
 		t.Fatal("Error expected but not received")
 	}
-	if err := buf.Add(11, 12); err == nil {
+	if _, err := buf.Exec("", 11, 12); err == nil {
 		t.Fatal("Error expected but not received")
+	}
+}
+
+func TestBufferQuery(t *testing.T) {
+	testEx := &TestExecutor{t: t}
+	buf := NewInsertBuffer(testEx, 2, false)
+
+	stmt1 := "INSERT INTO test1"
+	stmt2 := "INSERT INTO test2"
+
+	if _, err := buf.Exec(stmt1, 1, 2); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := buf.Exec(stmt2, 2, 3); err == nil {
+		t.Fatalf("Expected new statement error")
+	}
+
+	if _, err := buf.Exec(stmt1, 1, 2, 3); err == nil {
+		t.Fatalf("Expected batch size error")
 	}
 }

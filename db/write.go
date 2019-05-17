@@ -2,13 +2,9 @@ package db
 
 import (
 	"fmt"
-	"net"
 	"sync"
 
 	"github.com/CSUNetSec/bgpmon/util"
-
-	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
-	"github.com/lib/pq"
 )
 
 const (
@@ -73,18 +69,15 @@ func newWriteCapStream(baseStream *sessionStream, pCancel chan bool) (*writeCapS
 // Write performs a type of send on the sessionstream with an arbitrary argument.
 // WARNING, sending after a close will cause a panic, and may hang.
 func (w *writeCapStream) Write(arg interface{}) error {
-	wr := arg.(*pb.WriteRequest)
-	mTime, cIP, err := util.GetTimeColIP(wr.GetBgpCapture())
-	if err != nil {
-		dbLogger.Errorf("failed to get Collector IP:%v", err)
-		return err
-	}
+	cap := arg.(*Capture)
+
 	// Check our local cache first, otherwise contact schemaMgr.
-	table, err := w.cache.LookupTable(cIP, mTime)
+	table, err := w.cache.LookupTable(cap.ColIP, cap.Timestamp)
 	if err != nil {
 		return dbLogger.Errorf("failed to get table from cache: %s", err)
 	}
-	capMsg := newCaptureMessage(table, wr)
+
+	capMsg := newCaptureMessage(table, cap)
 	// Make sure this message uses the same tables as the schema
 	w.schema.setMessageTables(capMsg)
 
@@ -174,54 +167,22 @@ func (w *writeCapStream) listen(cancel chan bool) {
 			// it has been closed, that's the same as a normal closure, and this
 			// can just return
 			if ok {
-				w.resp <- newReply(w.addToBuffer(val))
+				capMsg := val.(*captureMessage)
+				tName := capMsg.getTableName()
+
+				buf, ok := w.buffers[tName]
+				if !ok {
+					buf = util.NewInsertBuffer(w.ex, bufferSize, true)
+					w.buffers[tName] = buf
+				}
+
+				rep := insertCapture(newSessionExecutor(buf, w.oper), capMsg)
+				w.resp <- rep
 			} else {
 				return
 			}
 		}
 	}
-}
-
-func (w *writeCapStream) addToBuffer(msg CommonMessage) error {
-	cMsg := msg.(captureMessage)
-
-	tName := cMsg.getTableName()
-	if _, ok := w.buffers[tName]; !ok {
-		dbLogger.Infof("Creating new buffer for table: %s", tName)
-		stmt := fmt.Sprintf(w.oper.getQuery(insertCaptureTableOp), tName)
-		w.buffers[tName] = util.NewInsertBuffer(w.ex, stmt, bufferSize, 8, true)
-	}
-	buf := w.buffers[tName]
-	// This actually returns a WriteRequest, not a BGPCapture, but all the utility functions were built around
-	// WriteRequests
-	cap := cMsg.getCapture()
-
-	timestamp, colIP, _ := util.GetTimeColIP(cap)
-	peerIP, err := util.GetPeerIP(cap)
-	if err != nil {
-		dbLogger.Infof("Unable to parse peer ip, ignoring message")
-		return nil
-	}
-
-	asPath, _ := util.GetASPath(cap) // Ignoring the error here as this message could only have withdraws.
-	nextHop, err := util.GetNextHop(cap)
-	if err != nil {
-		nextHop = net.IPv4(0, 0, 0, 0)
-	}
-	origin := 0
-	if len(asPath) != 0 {
-		origin = asPath[len(asPath)-1]
-	} else {
-		origin = 0
-	}
-	// Here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
-	advertised, _ := util.GetAdvertisedPrefixes(cap)
-	withdrawn, _ := util.GetWithdrawnPrefixes(cap)
-
-	advArr := util.PrefixesToPQArray(advertised)
-	wdrArr := util.PrefixesToPQArray(withdrawn)
-
-	return buf.Add(timestamp, colIP.String(), peerIP.String(), pq.Array(asPath), nextHop.String(), origin, advArr, wdrArr)
 }
 
 // writeEntityStream is a Write Stream that writes Entity structs into the database.

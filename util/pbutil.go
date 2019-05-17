@@ -63,7 +63,7 @@ func GetTimeColIP(cap *pb.BGPCapture) (time.Time, net.IP, error) {
 }
 
 // GetPeerIP returns a PeerIP and possibly and error  from a protobuf
-// capture WriteRequest.
+// capture.
 func GetPeerIP(cap *pb.BGPCapture) (net.IP, error) {
 	if cap == nil {
 		return nil, ErrNilCap
@@ -74,7 +74,7 @@ func GetPeerIP(cap *pb.BGPCapture) (net.IP, error) {
 }
 
 // GetASPath returns an Autonomous System path as an array of integers
-// from a protobuf capture WriteRequest.
+// from a protobuf capture.
 func GetASPath(cap *pb.BGPCapture) ([]int, error) {
 	if cap == nil {
 		return nil, ErrNilCap
@@ -104,7 +104,7 @@ func GetASPath(cap *pb.BGPCapture) ([]int, error) {
 }
 
 // GetNextHop returns the IP and possibly an error  of the next hop
-// from a protobuf capture WriteRequest.
+// from a protobuf capture.
 func GetNextHop(cap *pb.BGPCapture) (net.IP, error) {
 	if cap == nil {
 		return nil, ErrNilCap
@@ -115,18 +115,18 @@ func GetNextHop(cap *pb.BGPCapture) (net.IP, error) {
 	return nhIP, err
 }
 
-// GetOriginAS returns the origin AS as an integer (the AS at index 0 of the AS-Path)
-// of the ASPath from a capture WriteRequest or possibly an error.
+// GetOriginAS returns the origin AS as an integer (the AS at the last index of the AS-Path)
+// of the ASPath from a capture or possibly an error.
 func GetOriginAS(cap *pb.BGPCapture) (int, error) {
 	path, err := GetASPath(cap)
 	if err != nil {
 		return 0, err
 	}
-	return path[0], nil
+	return path[len(path)-1], nil
 }
 
 // GetAdvertisedPrefixes returns the advertised routes as a slice of IPNet and possibly an error
-// from a protobuf capture WriteRequest.
+// from a protobuf capture.
 func GetAdvertisedPrefixes(cap *pb.BGPCapture) ([]*net.IPNet, error) {
 	if cap == nil {
 		return nil, ErrNilCap
@@ -141,7 +141,7 @@ func GetAdvertisedPrefixes(cap *pb.BGPCapture) ([]*net.IPNet, error) {
 }
 
 // GetWithdrawnPrefixes returns the withdrawn routes as a slice of IPNet and possibly an error
-// from a protobuf capture WriteRequest
+// from a protobuf capture.
 func GetWithdrawnPrefixes(cap *pb.BGPCapture) ([]*net.IPNet, error) {
 	if cap == nil {
 		return nil, ErrNilCap
@@ -206,7 +206,7 @@ func getPrefixAsIPNet(pw *pbcomm.PrefixWrapper) (*net.IPNet, error) {
 	return &net.IPNet{IP: ip, Mask: mask}, nil
 }
 
-// GetProtoMsg returns a byte array representing the capture from a protobuf capture WriteRequest.
+// GetProtoMsg returns a byte array representing the capture from a protobuf capture.
 func GetProtoMsg(cap *pb.BGPCapture) []byte {
 	if cap == nil {
 		return nil

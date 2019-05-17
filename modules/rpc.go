@@ -202,23 +202,20 @@ func (r *rpcServer) Write(stream pb.Bgpmond_WriteServer) error {
 	}
 
 	var writeType db.SessionType
-	var objectFunc func(*pb.WriteRequest) interface{}
+	var objectFunc func(*pb.WriteRequest) (interface{}, error)
 
 	switch first.Type {
 	case pb.WriteRequest_BGP_CAPTURE:
 		writeType = db.SessionWriteCapture
-		objectFunc = func(wr *pb.WriteRequest) interface{} {
-			return wr
+		objectFunc = func(wr *pb.WriteRequest) (interface{}, error) {
+			cap, err := db.NewCaptureFromPB(wr.BgpCapture)
+			return cap, err
 		}
 	case pb.WriteRequest_ENTITY:
 		writeType = db.SessionWriteEntity
-		objectFunc = func(wr *pb.WriteRequest) interface{} {
+		objectFunc = func(wr *pb.WriteRequest) (interface{}, error) {
 			ent, err := db.NewEntityFromPB(wr.Entity)
-			if err != nil {
-				fmt.Printf("Error parsing entity: %s\n", err)
-				return nil
-			}
-			return ent
+			return ent, err
 		}
 	default:
 		return r.logger.Errorf("invalid write type")
@@ -243,7 +240,7 @@ func (r *rpcServer) WriteStream(ctx context.Context,
 	writeSrv pb.Bgpmond_WriteServer,
 	firstMsg *pb.WriteRequest,
 	writeType db.SessionType,
-	getWriteObject func(*pb.WriteRequest) interface{}) error {
+	getWriteObject func(*pb.WriteRequest) (interface{}, error)) error {
 
 	stream, err := r.server.OpenWriteStream(firstMsg.SessionId, writeType)
 	if err != nil {
@@ -251,11 +248,14 @@ func (r *rpcServer) WriteStream(ctx context.Context,
 	}
 	defer stream.Close()
 
-	obj := getWriteObject(firstMsg)
-
-	err = stream.Write(obj)
-	if err != nil {
-		return err
+	obj, err := getWriteObject(firstMsg)
+	if err == nil {
+		err = stream.Write(obj)
+		if err != nil {
+			return err
+		}
+	} else {
+		r.logger.Errorf("Error parsing object: %s", err)
 	}
 
 	for {
@@ -274,7 +274,12 @@ func (r *rpcServer) WriteStream(ctx context.Context,
 			}
 		}
 
-		obj = getWriteObject(wr)
+		obj, err = getWriteObject(wr)
+		if err != nil {
+			r.logger.Errorf("Error parsing object: %s", err)
+			continue
+		}
+
 		if err = stream.Write(obj); err != nil {
 			stream.Cancel()
 			return err
