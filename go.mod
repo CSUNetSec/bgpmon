@@ -2,7 +2,7 @@ module github.com/CSUNetSec/bgpmon
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/CSUNetSec/netsec-protobufs v0.1.4
+	github.com/CSUNetSec/netsec-protobufs v0.1.5
 	github.com/CSUNetSec/protoparse v0.1.3
 	github.com/araddon/dateparse v0.0.0-20181123171228-21df004e09ca
 	github.com/google/uuid v1.1.0
