@@ -6,8 +6,6 @@ import (
 
 	"github.com/CSUNetSec/bgpmon/config"
 	"github.com/CSUNetSec/bgpmon/util"
-
-	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 )
 
 // CommonMessage is a basic interface which allows the getting and setting of the the main
@@ -133,23 +131,18 @@ func (t tableMessage) getDate() time.Time {
 type captureMessage struct {
 	CommonMessage
 	tableName string
-	capture   *pb.BGPCapture
+	capture   *Capture
 }
 
-func newCaptureMessage(name string, wr *pb.WriteRequest) captureMessage {
-	var cap *pb.BGPCapture
-	// This is necessary to unwrap the capture from the WriteRequest
-	if wr != nil {
-		cap = wr.GetBgpCapture()
-	}
-	return captureMessage{CommonMessage: newMessage(), tableName: name, capture: cap}
+func newCaptureMessage(name string, cap *Capture) *captureMessage {
+	return &captureMessage{CommonMessage: newMessage(), tableName: name, capture: cap}
 }
 
-func (c captureMessage) getTableName() string {
+func (c *captureMessage) getTableName() string {
 	return c.tableName
 }
 
-func (c captureMessage) getCapture() *pb.BGPCapture {
+func (c *captureMessage) getCapture() *Capture {
 	return c.capture
 }
 

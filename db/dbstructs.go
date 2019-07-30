@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -53,7 +54,7 @@ type Capture struct {
 	ID         string // the capture_id that together with the table makes it unique
 	Timestamp  time.Time
 	Origin     int // origin as
-	Advertized []*net.IPNet
+	Advertised []*net.IPNet
 	Withdrawn  []*net.IPNet
 	ASPath     []int
 	ColIP      net.IP
@@ -107,12 +108,12 @@ func (c *Capture) Scan(rows *sql.Rows) error {
 	}
 
 	if advertized.Valid {
-		c.Advertized, err = parsePrefixArray(advertized.String)
+		c.Advertised, err = parsePrefixArray(advertized.String)
 		if err != nil {
 			return err
 		}
 	} else {
-		c.Advertized = nil
+		c.Advertised = nil
 	}
 
 	if withdrawn.Valid {
@@ -125,6 +126,60 @@ func (c *Capture) Scan(rows *sql.Rows) error {
 	}
 
 	return nil
+}
+
+// Values supplies values to a SQLExecutor
+func (c *Capture) Values() []interface{} {
+	ret := make([]interface{}, 8)
+
+	ret[0] = c.Timestamp
+	ret[1] = c.ColIP.String()
+	ret[2] = c.PeerIP.String()
+	ret[3] = pq.Array(c.ASPath)
+	ret[4] = c.NextHop.String()
+	ret[5] = c.Origin
+
+	advArr := util.PrefixesToPQArray(c.Advertised)
+	wdrArr := util.PrefixesToPQArray(c.Withdrawn)
+	ret[6] = advArr
+	ret[7] = wdrArr
+
+	return ret
+}
+
+// NewCaptureFromPB returns a *Capture populated from a pb.BGPCapture
+func NewCaptureFromPB(pbCap *pb.BGPCapture) (*Capture, error) {
+	cap := &Capture{fromTable: "", ID: ""}
+	var err error
+
+	cap.Timestamp, cap.ColIP, err = util.GetTimeColIP(pbCap)
+	if err != nil {
+		return nil, dbLogger.Errorf("unable to parse collector IP: %s", err)
+	}
+
+	cap.PeerIP, err = util.GetPeerIP(pbCap)
+	if err != nil {
+		return nil, dbLogger.Errorf("unable to parse peer IP: %s", err)
+	}
+
+	// Ignoring the error here as this message could only have withdraws.
+	cap.ASPath, _ = util.GetASPath(pbCap)
+
+	cap.Origin = 0
+	if len(cap.ASPath) != 0 {
+		cap.Origin = cap.ASPath[len(cap.ASPath)-1]
+	}
+
+	cap.NextHop, err = util.GetNextHop(pbCap)
+	if err != nil {
+		cap.NextHop = net.IPv4(0, 0, 0, 0)
+	}
+
+	// Here if it errors and the return is nil, PrefixToPQArray should leave it and the schema should insert the default
+	cap.Advertised, _ = util.GetAdvertisedPrefixes(pbCap)
+	cap.Withdrawn, _ = util.GetWithdrawnPrefixes(pbCap)
+
+	return cap, nil
 }
 
 // CaptureTable represents a row in the main table. It describes
@@ -225,6 +280,9 @@ func NewEntityFromConfig(ec *config.EntityConfig) (e *Entity, err error) {
 
 // NewEntityFromPB returns an Entity populated from a protobuf.
 func NewEntityFromPB(pbEnt *pb.Entity) (e *Entity, err error) {
+	if pbEnt == nil {
+		return nil, fmt.Errorf("nil pb.Entity")
+	}
 	e = &Entity{}
 	e.Name = pbEnt.Name
 	e.Email = pbEnt.Email

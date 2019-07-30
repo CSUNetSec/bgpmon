@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/CSUNetSec/netsec-protobufs/bgpmon/v2"
 	"github.com/CSUNetSec/protoparse/fileutil"
 )
 
@@ -51,19 +50,21 @@ func writeFileToStream(fName string, ws WriteStream) (int, error) {
 
 	parsed := 0
 	for mf.Scan() && parsed < maxWriteCt {
-		cap, err := mf.GetCapture()
+		pbCap, err := mf.GetCapture()
 		if err != nil {
 			// This is a parse error, and it doesn't matter
 			continue
 		}
 
-		if cap != nil {
+		if pbCap != nil {
 			parsed++
-			writeRequest := new(pb.WriteRequest)
-			writeRequest.Type = pb.WriteRequest_BGP_CAPTURE
-			writeRequest.BgpCapture = cap
 
-			err = ws.Write(writeRequest)
+			cap, err := NewCaptureFromPB(pbCap)
+			if err != nil {
+				continue
+			}
+
+			err = ws.Write(cap)
 			if err != nil {
 				return parsed, err
 			}
@@ -317,7 +318,7 @@ func TestCapturePrefixFilter(t *testing.T) {
 		cap := stream.Data().(*Capture)
 
 		found := false
-		for _, v := range cap.Advertized {
+		for _, v := range cap.Advertised {
 			prefStr := v.String()
 
 			for _, v := range filterPrefs {

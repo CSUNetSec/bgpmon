@@ -217,7 +217,17 @@ func makeSchema(ex SessionExecutor, msg CommonMessage) (rep CommonReply) {
 // insertCapture inserts a capture onto the appropriate table.
 // Currently unused.
 func insertCapture(ex SessionExecutor, msg CommonMessage) CommonReply {
-	return newReply(nil)
+	stmtTmpl := ex.getQuery(insertCaptureTableOp)
+
+	capMsg := (msg).(*captureMessage)
+	tName := capMsg.getTableName()
+	cap := capMsg.getCapture()
+
+	stmt := fmt.Sprintf(stmtTmpl, tName)
+
+	_, err := ex.Exec(stmt, cap.Values()...)
+
+	return newReply(err)
 }
 
 // getCaptureBinaryStream returns a stream of Captures
